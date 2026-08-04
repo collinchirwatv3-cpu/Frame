@@ -29,6 +29,15 @@ export const uploadMetadataSchema = z
     // obviously-malformed dimensions before that check ever runs.
     width: z.number().int().positive(),
     height: z.number().int().positive(),
+    durationSeconds: z.number().positive(),
+    // Cloudflare Stream's TUS session needs the byte length up front
+    // (`Upload-Length` header) — capped well above any real phone-recorded
+    // clip so a crafted request can't claim an absurd size.
+    fileSizeBytes: z
+      .number()
+      .int()
+      .positive()
+      .max(20 * 1024 * 1024 * 1024, "File is too large"),
   })
   .refine((data) => data.width > data.height, {
     message: "FRAME is landscape-only",

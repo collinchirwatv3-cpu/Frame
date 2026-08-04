@@ -2,16 +2,36 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { AlertCircle, CheckCircle2, Film, Loader2, RectangleHorizontal, UploadCloud } from "lucide-react";
+import { Upload as TusUpload } from "tus-js-client";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Film,
+  Loader2,
+  RectangleHorizontal,
+  UploadCloud,
+  X,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { categories } from "@/lib/mock-data";
 import { checkUpload, qualityLabel, type UploadCheck } from "@/lib/video-validation";
 import { deriveTitleFromFilename } from "@/lib/upload";
 import { useUploadDraftStore } from "@/store/upload-draft-store";
+import { createClient } from "@/lib/supabase/client";
 import { UploadRejection } from "./UploadRejection";
 import type { AspectRatioDef } from "@/lib/aspect-ratio";
 
-type Status = "idle" | "reading" | "rejected" | "unsupported" | "valid" | "publishing" | "published";
+type Status =
+  | "idle"
+  | "reading"
+  | "rejected"
+  | "unsupported"
+  | "valid"
+  | "minting"
+  | "uploading"
+  | "processing"
+  | "failed"
+  | "published";
 
 // `file.type` is frequently empty or unreliable on mobile — Android content
 // resolvers (Google Photos, some file managers) often hand back a File with
@@ -21,6 +41,10 @@ const VIDEO_EXTENSION = /\.(mp4|mov|m4v|webm|avi|mkv|3gp)$/i;
 function looksLikeVideo(file: File) {
   return file.type.startsWith("video/") || VIDEO_EXTENSION.test(file.name);
 }
+
+// How often to check whether Stream's webhook has flipped the video to
+// ready/failed while the creator waits on the "processing" screen.
+const POLL_INTERVAL_MS = 3000;
 
 type Probe = {
   width: number;
@@ -34,6 +58,7 @@ type AppliedFix = { type: "rotate" } | { type: "crop"; target: AspectRatioDef } 
 export function UploadDropzone() {
   const [status, setStatus] = useState<Status>("idle");
   const [dragOver, setDragOver] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
   const [probe, setProbe] = useState<Probe | null>(null);
   const [effectiveDims, setEffectiveDims] = useState<{ width: number; height: number } | null>(
     null
@@ -41,7 +66,12 @@ export function UploadDropzone() {
   const [check, setCheck] = useState<UploadCheck | null>(null);
   const [appliedFix, setAppliedFix] = useState<AppliedFix>(null);
   const [fileName, setFileName] = useState("");
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [videoId, setVideoId] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const tusUploadRef = useRef<TusUpload | null>(null);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const hasHydrated = useUploadDraftStore((s) => s.hasHydrated);
   const draftTitle = useUploadDraftStore((s) => s.title);
@@ -66,10 +96,17 @@ export function UploadDropzone() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, hasHydrated]);
 
-  const analyzeFile = useCallback((file: File) => {
-    setFileName(file.name);
+  // Stop polling if the creator navigates away mid-encode.
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
+  }, []);
 
-    if (!looksLikeVideo(file)) {
+  const analyzeFile = useCallback((pickedFile: File) => {
+    setFileName(pickedFile.name);
+
+    if (!looksLikeVideo(pickedFile)) {
       setStatus("unsupported");
       return;
     }
@@ -77,13 +114,14 @@ export function UploadDropzone() {
     setStatus("reading");
     setAppliedFix(null);
 
-    const url = URL.createObjectURL(file);
+    const url = URL.createObjectURL(pickedFile);
     const probeEl = document.createElement("video");
     probeEl.preload = "metadata";
     probeEl.src = url;
 
     probeEl.onloadedmetadata = () => {
       const { videoWidth: width, videoHeight: height, duration } = probeEl;
+      setFile(pickedFile);
       setProbe({ width, height, duration, url });
       setEffectiveDims({ width, height });
       const result = checkUpload(width, height);
@@ -99,18 +137,23 @@ export function UploadDropzone() {
   }, []);
 
   function handleFiles(files: FileList | null) {
-    const file = files?.[0];
-    if (file) analyzeFile(file);
+    const picked = files?.[0];
+    if (picked) analyzeFile(picked);
   }
 
   function reset() {
     if (probe) URL.revokeObjectURL(probe.url);
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     setStatus("idle");
+    setFile(null);
     setProbe(null);
     setEffectiveDims(null);
     setCheck(null);
     setAppliedFix(null);
     setFileName("");
+    setUploadProgress(0);
+    setVideoId(null);
+    setErrorMessage("");
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -129,16 +172,97 @@ export function UploadDropzone() {
     setStatus("valid");
   }
 
-  function publish() {
-    setStatus("publishing");
-    // Phase 1: no live encoding pipeline — this is where we'd POST to
-    // /api/uploads, which mints a direct-upload URL from Cloudflare Stream
-    // (carrying the rotate/crop decision so the transcode job applies it)
-    // and hands the client an upload id to attach title/description/category to.
-    window.setTimeout(() => {
-      setStatus("published");
-      clearDraft();
-    }, 1400);
+  function pollForReady(id: string) {
+    const supabase = createClient();
+    pollIntervalRef.current = setInterval(async () => {
+      const { data, error } = await supabase
+        .from("videos")
+        .select("processing_status")
+        .eq("id", id)
+        .single();
+
+      if (error) return; // transient — try again on the next tick
+
+      if (data.processing_status === "ready") {
+        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+        setStatus("published");
+        clearDraft();
+      } else if (data.processing_status === "failed") {
+        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+        setErrorMessage("Cloudflare Stream couldn't encode this video.");
+        setStatus("failed");
+      }
+    }, POLL_INTERVAL_MS);
+  }
+
+  async function publish() {
+    if (!file || !effectiveDims || !check?.ok) return;
+    setStatus("minting");
+    setErrorMessage("");
+
+    try {
+      const res = await fetch("/api/uploads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: draftTitle,
+          description: draftDescription,
+          category,
+          width: effectiveDims.width,
+          height: effectiveDims.height,
+          durationSeconds: probe?.duration ?? 0,
+          fileSizeBytes: file.size,
+        }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(
+          typeof body?.error === "string" ? body.error : "Could not start the upload"
+        );
+      }
+
+      const { uploadUrl, videoId: newVideoId } = (await res.json()) as {
+        uploadUrl: string;
+        videoId: string;
+      };
+      setVideoId(newVideoId);
+      setStatus("uploading");
+      setUploadProgress(0);
+
+      const upload = new TusUpload(file, {
+        uploadUrl,
+        retryDelays: [0, 1000, 3000, 5000, 10000],
+        onProgress(bytesUploaded, bytesTotal) {
+          setUploadProgress(Math.round((bytesUploaded / bytesTotal) * 100));
+        },
+        onError(err) {
+          setErrorMessage(err.message || "The upload was interrupted.");
+          setStatus("failed");
+        },
+        onSuccess() {
+          setStatus("processing");
+          if (newVideoId) pollForReady(newVideoId);
+        },
+      });
+      tusUploadRef.current = upload;
+      upload.start();
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : "Could not start the upload");
+      setStatus("failed");
+    }
+  }
+
+  async function cancelUpload() {
+    tusUploadRef.current?.abort();
+    tusUploadRef.current = null;
+    if (videoId) {
+      const supabase = createClient();
+      await supabase.from("videos").delete().eq("id", videoId);
+    }
+    setVideoId(null);
+    setUploadProgress(0);
+    setStatus("valid");
   }
 
   if (status === "published") {
@@ -151,16 +275,80 @@ export function UploadDropzone() {
         >
           <CheckCircle2 size={56} className="text-primary" />
         </motion.div>
-        <h2 className="text-xl font-bold">Processing your upload</h2>
+        <h2 className="text-xl font-bold">You&apos;re live on FRAME</h2>
+        <p className="text-text-secondary text-sm max-w-sm">{fileName} finished encoding and is ready to watch.</p>
+        <div className="flex gap-3 mt-2">
+          {videoId && (
+            <a
+              href={`/?v=${videoId}`}
+              className="px-5 py-2.5 rounded-full bg-primary text-bg text-sm font-semibold"
+            >
+              Watch it now
+            </a>
+          )}
+          <button
+            onClick={reset}
+            className="px-5 py-2.5 rounded-full border border-border text-sm font-medium hover:bg-card transition-colors"
+          >
+            Upload another
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "uploading") {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 h-[60vh] text-center px-6">
+        <div className="w-full max-w-xs">
+          <div className="flex justify-between text-xs text-text-secondary mb-2">
+            <span>Uploading {fileName}</span>
+            <span>{uploadProgress}%</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-card overflow-hidden">
+            <div
+              className="h-full bg-primary transition-[width] duration-150 ease-linear"
+              style={{ width: `${uploadProgress}%` }}
+            />
+          </div>
+        </div>
+        <button
+          onClick={cancelUpload}
+          className="mt-2 flex items-center gap-1.5 px-5 py-2.5 rounded-full border border-border text-sm font-medium hover:bg-card transition-colors"
+        >
+          <X size={14} />
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  if (status === "processing") {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 h-[60vh] text-center px-6">
+        <Loader2 size={40} className="animate-spin text-primary" />
+        <h2 className="text-lg font-semibold">Encoding your video</h2>
         <p className="text-text-secondary text-sm max-w-sm">
-          {fileName} is being transcoded to adaptive HLS. You&apos;ll get a notification the moment
-          it&apos;s live on FRAME.
+          {fileName} finished uploading and is being transcoded to adaptive HLS. This usually
+          takes a few minutes.
+        </p>
+      </div>
+    );
+  }
+
+  if (status === "failed") {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 text-center h-[60vh] px-6">
+        <AlertCircle size={40} className="text-primary" />
+        <h2 className="text-lg font-semibold">Upload failed</h2>
+        <p className="text-sm text-text-secondary max-w-sm">
+          {errorMessage || "Something went wrong during upload."}
         </p>
         <button
           onClick={reset}
           className="mt-2 px-5 py-2.5 rounded-full border border-border text-sm font-medium hover:bg-card transition-colors"
         >
-          Upload another
+          Try again
         </button>
       </div>
     );
@@ -198,7 +386,7 @@ export function UploadDropzone() {
     );
   }
 
-  if ((status === "valid" || status === "publishing") && check?.ok) {
+  if ((status === "valid" || status === "minting") && check?.ok) {
     const dims = appliedFix?.type === "crop" ? null : effectiveDims;
 
     return (
@@ -311,18 +499,18 @@ export function UploadDropzone() {
             <button
               type="button"
               onClick={reset}
-              disabled={status === "publishing"}
+              disabled={status === "minting"}
               className="flex-1 py-2.5 rounded-full border border-border text-sm font-medium hover:bg-card transition-colors disabled:opacity-40"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={status === "publishing"}
+              disabled={status === "minting"}
               className="flex-1 py-2.5 rounded-full bg-primary text-bg text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-70"
             >
-              {status === "publishing" && <Loader2 size={16} className="animate-spin" />}
-              {status === "publishing" ? "Publishing…" : "Publish to FRAME"}
+              {status === "minting" && <Loader2 size={16} className="animate-spin" />}
+              {status === "minting" ? "Starting upload…" : "Publish to FRAME"}
             </button>
           </div>
         </form>

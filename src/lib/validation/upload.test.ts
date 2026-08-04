@@ -7,6 +7,8 @@ const validInput = {
   category: "Travel",
   width: 1920,
   height: 1080,
+  durationSeconds: 34,
+  fileSizeBytes: 52_428_800,
 };
 
 describe("uploadMetadataSchema", () => {
@@ -44,6 +46,19 @@ describe("uploadMetadataSchema", () => {
 
   it("rejects non-positive dimensions", () => {
     const result = uploadMetadataSchema.safeParse({ ...validInput, width: 0, height: 1080 });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a non-positive duration", () => {
+    const result = uploadMetadataSchema.safeParse({ ...validInput, durationSeconds: 0 });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a file size over the 20GB cap", () => {
+    const result = uploadMetadataSchema.safeParse({
+      ...validInput,
+      fileSizeBytes: 21 * 1024 * 1024 * 1024,
+    });
     expect(result.success).toBe(false);
   });
 });
