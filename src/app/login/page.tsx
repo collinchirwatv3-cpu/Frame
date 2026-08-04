@@ -47,13 +47,13 @@ export default function LoginPage() {
       const supabase = createClient();
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
-        options: { redirectTo: `${window.location.origin}/` },
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
       });
       if (error) throw error;
-    } catch {
+    } catch (err) {
       setMessage({
         type: "error",
-        text: "Auth isn't configured yet — add your Supabase keys to .env.local.",
+        text: err instanceof Error ? err.message : "Something went wrong — try again.",
       });
     } finally {
       setLoading(null);
@@ -68,14 +68,14 @@ export default function LoginPage() {
       const supabase = createClient();
       const { error } = await supabase.auth.signInWithOtp({
         email,
-        options: { emailRedirectTo: `${window.location.origin}/` },
+        options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
       });
       if (error) throw error;
       setMessage({ type: "success", text: `Magic link sent to ${email}.` });
-    } catch {
+    } catch (err) {
       setMessage({
         type: "error",
-        text: "Auth isn't configured yet — add your Supabase keys to .env.local.",
+        text: err instanceof Error ? err.message : "Something went wrong — try again.",
       });
     } finally {
       setLoading(null);

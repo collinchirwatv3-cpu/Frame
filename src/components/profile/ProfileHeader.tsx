@@ -36,8 +36,10 @@ export function ProfileHeader({ creator }: { creator: Creator }) {
 
   return (
     <div>
-      <div className="relative h-36 md:h-48 w-full">
-        <Image src={creator.bannerUrl} alt="" fill className="object-cover" />
+      <div className="relative h-36 md:h-48 w-full bg-card">
+        {creator.bannerUrl && (
+          <Image src={creator.bannerUrl} alt="" fill className="object-cover" />
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-bg via-transparent to-bg/20" />
         <Link
           href="/settings"

@@ -1,19 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
+import { UserCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CHROME_FADE_TRANSITION } from "@/lib/motion";
 import { navItems } from "./nav-items";
-import { currentUser } from "@/lib/mock-data";
 import { Logo } from "@/components/ui/Logo";
+import { Avatar } from "@/components/ui/Avatar";
 import { usePlayerStore } from "@/store/player-store";
+import { useCurrentUserStore } from "@/store/current-user-store";
 
 export function SideRail() {
   const pathname = usePathname();
   const directorMode = usePlayerStore((s) => s.directorMode);
+  const profile = useCurrentUserStore((s) => s.profile);
 
   return (
     <motion.aside
@@ -53,22 +55,26 @@ export function SideRail() {
         </ul>
       </div>
 
-      <Link
-        href="/profile"
-        className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-card/60 transition-colors"
-      >
-        <Image
-          src={currentUser.avatarUrl}
-          alt={currentUser.displayName}
-          width={32}
-          height={32}
-          className="rounded-full object-cover"
-        />
-        <div className="min-w-0">
-          <p className="text-sm font-medium truncate">{currentUser.displayName}</p>
-          <p className="text-xs text-text-secondary truncate">@{currentUser.username}</p>
-        </div>
-      </Link>
+      {profile ? (
+        <Link
+          href="/profile"
+          className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-card/60 transition-colors"
+        >
+          <Avatar src={profile.avatarUrl} alt={profile.displayName} size={32} />
+          <div className="min-w-0">
+            <p className="text-sm font-medium truncate">{profile.displayName}</p>
+            <p className="text-xs text-text-secondary truncate">@{profile.username}</p>
+          </div>
+        </Link>
+      ) : (
+        <Link
+          href="/login"
+          className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-card/60 transition-colors text-sm font-medium text-text-secondary hover:text-accent"
+        >
+          <UserCircle2 size={32} className="shrink-0" />
+          Log in
+        </Link>
+      )}
     </motion.aside>
   );
 }

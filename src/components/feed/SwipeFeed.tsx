@@ -6,6 +6,7 @@ import Link from "next/link";
 import { VideoCard, type VideoCardHandle } from "./VideoCard";
 import { VideoPlaceholder } from "./VideoPlaceholder";
 import { FeedTabs, type FeedTab } from "./FeedTabs";
+import { RotateDevicePrompt } from "./RotateDevicePrompt";
 
 // How many cards stay fully mounted on either side of the active one. Real
 // <video> elements, Framer Motion instances, and sheet components are not
@@ -13,6 +14,10 @@ import { FeedTabs, type FeedTab } from "./FeedTabs";
 // mounting every card in the DOM at once is a genuine memory/perf problem.
 // Cards outside the window render as a lightweight VideoPlaceholder instead.
 const RENDER_WINDOW = 2;
+// How long chrome (nav, action rail, creator info) stays visible before
+// Director Mode auto-engages — long enough to read the title/creator, short
+// enough that the feed reads as cinematic rather than app-chrome-heavy.
+const AUTO_DIRECTOR_MODE_DELAY_MS = 2500;
 import { usePlayerStore } from "@/store/player-store";
 import { useEngagementStore } from "@/store/engagement-store";
 import type { Video } from "@/lib/types";
@@ -22,6 +27,9 @@ export function SwipeFeed({ videos }: { videos: Video[] }) {
   const sectionRefs = useRef<(HTMLDivElement | null)[]>([]);
   const cardRefs = useRef<(VideoCardHandle | null)[]>([]);
   const toggleMuted = usePlayerStore((s) => s.toggleMuted);
+  const directorMode = usePlayerStore((s) => s.directorMode);
+  const isScrubbing = usePlayerStore((s) => s.isScrubbing);
+  const enterDirectorMode = usePlayerStore((s) => s.enterDirectorMode);
   const exitDirectorMode = usePlayerStore((s) => s.exitDirectorMode);
   const followedCreators = useEngagementStore((s) => s.followedCreators);
 
@@ -91,6 +99,23 @@ export function SwipeFeed({ videos }: { videos: Video[] }) {
     return () => observer.disconnect();
   }, [displayedVideos.length, feedTab]);
 
+  // Scrolling to a new scene always brings chrome back — never let someone
+  // land on a video with the nav/action rail already hidden.
+  useEffect(() => {
+    exitDirectorMode();
+  }, [activeIndex, exitDirectorMode]);
+
+  // Auto-engage Director Mode after a beat so the feed defaults to
+  // cinematic, chrome-free viewing rather than requiring an explicit tap.
+  // Never while scrubbing (chrome fading mid-drag would yank the scrub bar
+  // out from under the user's finger) or with nothing playing — no point
+  // hiding the nav over an empty state.
+  useEffect(() => {
+    if (directorMode || isScrubbing || displayedVideos.length === 0) return;
+    const timer = window.setTimeout(enterDirectorMode, AUTO_DIRECTOR_MODE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [activeIndex, directorMode, isScrubbing, displayedVideos.length, enterDirectorMode]);
+
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const container = containerRef.current;
@@ -116,20 +141,38 @@ export function SwipeFeed({ videos }: { videos: Video[] }) {
 
   return (
     <div className="relative h-dvh w-full">
+      <RotateDevicePrompt />
       <FeedTabs active={feedTab} onChange={setFeedTab} />
 
       {displayedVideos.length === 0 ? (
         <div className="h-dvh w-full flex flex-col items-center justify-center gap-3 text-center px-6">
-          <p className="text-lg font-semibold">Follow creators to see them here</p>
-          <p className="text-sm text-text-secondary max-w-xs">
-            Videos from creators you follow will show up in this tab.
-          </p>
-          <Link
-            href="/explore"
-            className="mt-2 px-5 py-2.5 rounded-full bg-primary text-bg text-sm font-semibold"
-          >
-            Find creators to follow
-          </Link>
+          {feedTab === "forYou" ? (
+            <>
+              <p className="text-lg font-semibold">No videos yet</p>
+              <p className="text-sm text-text-secondary max-w-xs">
+                FRAME is just getting started — be the first to upload something worth watching.
+              </p>
+              <Link
+                href="/upload"
+                className="mt-2 px-5 py-2.5 rounded-full bg-primary text-bg text-sm font-semibold"
+              >
+                Upload a video
+              </Link>
+            </>
+          ) : (
+            <>
+              <p className="text-lg font-semibold">Follow creators to see them here</p>
+              <p className="text-sm text-text-secondary max-w-xs">
+                Videos from creators you follow will show up in this tab.
+              </p>
+              <Link
+                href="/explore"
+                className="mt-2 px-5 py-2.5 rounded-full bg-primary text-bg text-sm font-semibold"
+              >
+                Find creators to follow
+              </Link>
+            </>
+          )}
         </div>
       ) : (
         <div

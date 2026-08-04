@@ -30,7 +30,10 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
   ref
 ) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const scrubBarRef = useRef<HTMLDivElement>(null);
   const [progress, setProgress] = useState(0);
+  const [seeking, setSeeking] = useState(false);
+  const [scrubProgress, setScrubProgress] = useState(0);
   const [showPauseGlyph, setShowPauseGlyph] = useState(false);
   const [manuallyPaused, setManuallyPaused] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -40,6 +43,8 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
   const toggleMuted = usePlayerStore((s) => s.toggleMuted);
   const directorMode = usePlayerStore((s) => s.directorMode);
   const toggleDirectorMode = usePlayerStore((s) => s.toggleDirectorMode);
+  const setScrubbing = usePlayerStore((s) => s.setScrubbing);
+  const displayProgress = seeking ? scrubProgress : progress;
 
   useEffect(() => {
     const el = videoRef.current;
@@ -86,6 +91,38 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
     setManuallyPaused((v) => !v);
     setShowPauseGlyph(true);
     window.setTimeout(() => setShowPauseGlyph(false), 500);
+  }
+
+  function seekFromPointer(clientX: number) {
+    const el = videoRef.current;
+    const bar = scrubBarRef.current;
+    if (!el || !bar || !el.duration) return;
+    const rect = bar.getBoundingClientRect();
+    const fraction = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    setScrubProgress(fraction);
+    el.currentTime = fraction * el.duration;
+  }
+
+  function handleScrubStart(e: React.PointerEvent<HTMLDivElement>) {
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setSeeking(true);
+    setScrubbing(true);
+    seekFromPointer(e.clientX);
+  }
+
+  function handleScrubMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!seeking) return;
+    e.stopPropagation();
+    seekFromPointer(e.clientX);
+  }
+
+  function handleScrubEnd(e: React.PointerEvent<HTMLDivElement>) {
+    if (!seeking) return;
+    e.stopPropagation();
+    setSeeking(false);
+    setScrubbing(false);
+    setProgress(scrubProgress);
   }
 
   useImperativeHandle(ref, () => ({ togglePlay }));
@@ -201,12 +238,39 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
                 />
               </div>
 
-              {/* playback progress indicator — sits above the mobile bottom nav */}
-              <div className="pointer-events-auto absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4rem)] md:bottom-0 h-[2px] bg-border/60">
-                <div
-                  className="h-full bg-primary transition-[width] duration-150 ease-linear"
-                  style={{ width: `${progress * 100}%` }}
-                />
+              {/* playback scrub bar — sits above the mobile bottom nav. The
+                  outer div is a taller invisible hit target (a 2px line is
+                  too thin to reliably grab); the thin track stays visually
+                  centered inside it. touch-none stops mobile browsers from
+                  interpreting a drag here as a page-scroll gesture. */}
+              <div
+                ref={scrubBarRef}
+                onPointerDown={handleScrubStart}
+                onPointerMove={handleScrubMove}
+                onPointerUp={handleScrubEnd}
+                onPointerCancel={handleScrubEnd}
+                onClick={(e) => e.stopPropagation()}
+                className="pointer-events-auto absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+3.75rem)] md:bottom-0 h-5 md:h-4 flex items-center cursor-pointer touch-none"
+              >
+                <div className="relative w-full h-[2px] bg-border/60">
+                  <div
+                    className="h-full bg-primary"
+                    style={{
+                      width: `${displayProgress * 100}%`,
+                      transition: seeking ? "none" : "width 150ms linear",
+                    }}
+                  />
+                  <div
+                    className="absolute top-1/2 rounded-full bg-primary transition-opacity"
+                    style={{
+                      left: `${displayProgress * 100}%`,
+                      width: 12,
+                      height: 12,
+                      transform: "translate(-50%, -50%)",
+                      opacity: seeking ? 1 : 0,
+                    }}
+                  />
+                </div>
               </div>
             </div>
           </motion.div>

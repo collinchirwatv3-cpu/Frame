@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Bookmark, Check, Heart, Link2, MessageCircle, MoreHorizontal, Share2 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
@@ -8,7 +8,6 @@ import { cn, formatCount, shareContent } from "@/lib/utils";
 import { DURATION } from "@/lib/motion";
 import { useEngagementStore } from "@/store/engagement-store";
 import { useCommentsStore } from "@/store/comments-store";
-import { mockComments } from "@/lib/mock-data";
 import type { Video } from "@/lib/types";
 
 function RailButton({
@@ -70,13 +69,18 @@ export function ActionRail({
   const toggleLike = useEngagementStore((s) => s.toggleLike);
   const toggleSave = useEngagementStore((s) => s.toggleSave);
   const toggleFollow = useEngagementStore((s) => s.toggleFollow);
-  const localCommentCount = useCommentsStore((s) => s.byVideoId[video.id]?.length ?? 0);
+  const fetchComments = useCommentsStore((s) => s.fetchComments);
+  const liveCommentCount = useCommentsStore((s) => s.byVideoId[video.id]?.length ?? 0);
+
+  useEffect(() => {
+    fetchComments(video.id);
+  }, [video.id, fetchComments]);
 
   const [likePulse, setLikePulse] = useState(0);
   const [shareState, setShareState] = useState<"idle" | "done">("idle");
 
   const likeCount = video.likes + (liked ? 1 : 0);
-  const commentCount = video.comments + (mockComments[video.id]?.length ?? 0) + localCommentCount;
+  const commentCount = video.comments + liveCommentCount;
 
   function handleLike() {
     toggleLike(video.id);

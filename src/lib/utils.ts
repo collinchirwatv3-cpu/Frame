@@ -11,6 +11,19 @@ export function formatCount(n: number): string {
   return `${n}`;
 }
 
+/** Matches the "2h"/"1d" shorthand style already used across the app's mock
+ * timestamps (dmThreads, seeded comments) so real and seeded data read the same. */
+export function formatRelativeTime(date: string | Date): string {
+  const ms = Date.now() - new Date(date).getTime();
+  const minutes = Math.floor(ms / 60_000);
+  if (minutes < 1) return "now";
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}d`;
+}
+
 export type ShareResult = "shared" | "copied" | "cancelled" | "unsupported";
 
 export async function shareContent(data: {

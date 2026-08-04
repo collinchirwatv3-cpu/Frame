@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Send, X } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
-import { mockComments } from "@/lib/mock-data";
 import { useCommentsStore, type Comment } from "@/store/comments-store";
 import type { Video } from "@/lib/types";
 
@@ -20,10 +19,13 @@ export function CommentDrawer({
   onClose: () => void;
 }) {
   const [draft, setDraft] = useState("");
-  const localComments = useCommentsStore((s) => s.byVideoId[video.id] ?? EMPTY_COMMENTS);
+  const allComments = useCommentsStore((s) => s.byVideoId[video.id] ?? EMPTY_COMMENTS);
+  const fetchComments = useCommentsStore((s) => s.fetchComments);
   const addComment = useCommentsStore((s) => s.addComment);
-  const seeded = mockComments[video.id] ?? [];
-  const allComments = [...seeded, ...localComments];
+
+  useEffect(() => {
+    if (open) fetchComments(video.id);
+  }, [open, video.id, fetchComments]);
 
   function submit(e: React.FormEvent) {
     e.preventDefault();

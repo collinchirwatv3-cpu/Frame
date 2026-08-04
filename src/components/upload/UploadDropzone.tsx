@@ -4,14 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { CheckCircle2, Film, Loader2, RectangleHorizontal, UploadCloud } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { categories, currentUser, videos } from "@/lib/mock-data";
+import { categories } from "@/lib/mock-data";
 import { checkUpload, qualityLabel, type UploadCheck } from "@/lib/video-validation";
-import { deriveTitleFromFilename, mostUsedCategory } from "@/lib/upload";
+import { deriveTitleFromFilename } from "@/lib/upload";
 import { useUploadDraftStore } from "@/store/upload-draft-store";
 import { UploadRejection } from "./UploadRejection";
 import type { AspectRatioDef } from "@/lib/aspect-ratio";
-
-const ownVideos = videos.filter((v) => v.creator.id === currentUser.id);
 
 type Status = "idle" | "reading" | "rejected" | "valid" | "publishing" | "published";
 
@@ -44,7 +42,9 @@ export function UploadDropzone() {
   const setDraftDescription = useUploadDraftStore((s) => s.setDescription);
   const setDraftCategory = useUploadDraftStore((s) => s.setCategory);
   const clearDraft = useUploadDraftStore((s) => s.clearDraft);
-  const category = draftCategory ?? mostUsedCategory(ownVideos, categories[0]);
+  // No real per-creator upload history exists yet (that's Milestone 2 —
+  // real video data replacing mock-data.ts) to derive a smarter default from.
+  const category = draftCategory ?? categories[0];
 
   // Pre-fill the title from the filename the moment the upload validates —
   // one fewer required action before a creator can publish. Only seeds an
