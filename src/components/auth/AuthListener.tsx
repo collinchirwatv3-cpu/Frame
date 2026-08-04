@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useEngagementStore } from "@/store/engagement-store";
 import { useCurrentUserStore } from "@/store/current-user-store";
+import { useInviteStore } from "@/store/invite-store";
 import type { Creator } from "@/lib/types";
 
 type ProfileRow = {
@@ -21,6 +22,7 @@ type ProfileRow = {
   followers_count: number;
   following_count: number;
   total_views: number;
+  invite_redeemed_at: string | null;
 };
 
 function toCreator(row: ProfileRow): Creator {
@@ -43,12 +45,12 @@ function toCreator(row: ProfileRow): Creator {
 }
 
 /**
- * Mounted once at the root layout. Two stores need to know who `auth.uid()`
- * is — engagement-store to hydrate/scope likes/saves/follows/saved-
- * collections, current-user-store to render the real logged-in identity
- * (SideRail, own profile) instead of a mock one. There's no other place in
- * the tree that observes auth state today, since the app is fully browsable
- * without logging in.
+ * Mounted once at the root layout. Three stores need to know who
+ * `auth.uid()` is — engagement-store to hydrate/scope likes/saves/follows/
+ * saved-collections, current-user-store to render the real logged-in
+ * identity (SideRail, own profile) instead of a mock one, and this is also
+ * where a pending invite code (InviteGate validated it pre-auth, but never
+ * consumed it) gets redeemed for real the moment a session exists.
  */
 export function AuthListener() {
   useEffect(() => {
@@ -59,11 +61,27 @@ export function AuthListener() {
     async function syncProfile(userId: string | null) {
       setUser(userId);
       if (!userId) {
-        setProfile(null);
+        setProfile(null, null);
         return;
       }
-      const { data } = await supabase.from("profiles").select("*").eq("id", userId).single();
-      setProfile(data ? toCreator(data as ProfileRow) : null);
+
+      let { data } = await supabase.from("profiles").select("*").eq("id", userId).single();
+
+      const pendingCode = useInviteStore.getState().validatedCode;
+      if (data && !data.invite_redeemed_at && pendingCode) {
+        const res = await fetch("/api/invite/redeem", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: pendingCode }),
+        });
+        if (res.ok) {
+          useInviteStore.getState().clearValidatedCode();
+          ({ data } = await supabase.from("profiles").select("*").eq("id", userId).single());
+        }
+      }
+
+      const row = data as ProfileRow | null;
+      setProfile(row ? toCreator(row) : null, row?.invite_redeemed_at ?? null);
     }
 
     supabase.auth.getUser().then(({ data }) => syncProfile(data.user?.id ?? null));

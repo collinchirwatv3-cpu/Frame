@@ -6,10 +6,15 @@ type CurrentUserState = {
    * Null both when signed out and before AuthListener has resolved the
    * session — UI treats both as "not logged in" until proven otherwise. */
   profile: Creator | null;
-  setProfile: (profile: Creator | null) => void;
+  /** Null until an authenticated profile has actually been fetched — check
+   * engagement-store's `hydrated` (the shared "auth check finished" signal)
+   * before treating a null here as "hasn't redeemed," not just "unknown." */
+  inviteRedeemedAt: string | null;
+  setProfile: (profile: Creator | null, inviteRedeemedAt: string | null) => void;
 };
 
 export const useCurrentUserStore = create<CurrentUserState>()((set) => ({
   profile: null,
-  setProfile: (profile) => set({ profile }),
+  inviteRedeemedAt: null,
+  setProfile: (profile, inviteRedeemedAt) => set({ profile, inviteRedeemedAt }),
 }));

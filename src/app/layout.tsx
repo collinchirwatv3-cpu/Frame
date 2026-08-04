@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { MotionConfig } from "framer-motion";
 import { AuthListener } from "@/components/auth/AuthListener";
+import { InviteGate } from "@/components/auth/InviteGate";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -43,7 +44,9 @@ export default function RootLayout({
             reduced-motion setting from this one place, instead of needing to
             be threaded through individually. */}
         <AuthListener />
-        <MotionConfig reducedMotion="user">{children}</MotionConfig>
+        <MotionConfig reducedMotion="user">
+          <InviteGate>{children}</InviteGate>
+        </MotionConfig>
       </body>
     </html>
   );
