@@ -527,6 +527,9 @@ export function UploadDropzone() {
       </p>
 
       <div
+        role="button"
+        tabIndex={0}
+        aria-label="Choose a video file to upload"
         onDragOver={(e) => {
           e.preventDefault();
           setDragOver(true);
@@ -538,8 +541,14 @@ export function UploadDropzone() {
           handleFiles(e.dataTransfer.files);
         }}
         onClick={() => inputRef.current?.click()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            inputRef.current?.click();
+          }
+        }}
         className={cn(
-          "border-2 border-dashed rounded-2xl aspect-video flex flex-col items-center justify-center gap-3 cursor-pointer transition-colors",
+          "border-2 border-dashed rounded-2xl aspect-video flex flex-col items-center justify-center gap-3 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
           dragOver ? "border-primary bg-primary/5" : "border-border bg-card/40 hover:bg-card/70"
         )}
       >

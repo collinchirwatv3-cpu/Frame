@@ -1,0 +1,16 @@
+-- FRAME — fix a real security defect: redeem_invite_code was publicly callable
+--
+-- Supabase grants EXECUTE on newly created functions to the `anon` and
+-- `authenticated` roles by default — never explicitly revoked here, so
+-- redeem_invite_code(p_code) was callable directly via PostgREST's RPC
+-- endpoint by anyone holding just the public anon key, completely bypassing
+-- /api/invite/redeem's auth check and rate limiting. Confirmed live: an
+-- unauthenticated request successfully invoked it. Since the function is
+-- `security definer` (intentionally, so it can bypass RLS to do its atomic
+-- update), this meant anyone could consume/exhaust a known or leaked invite
+-- code without ever creating an account, denying it to the real invitee.
+--
+-- This function is only ever meant to be called from
+-- src/app/api/invite/redeem/route.ts using the service-role key, which
+-- bypasses RLS/grants entirely and is unaffected by this revoke.
+revoke execute on function redeem_invite_code(text) from anon, authenticated;

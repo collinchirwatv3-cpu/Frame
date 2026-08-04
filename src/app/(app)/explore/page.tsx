@@ -83,12 +83,13 @@ export default function ExplorePage() {
       ) : (
         <div className="flex flex-col gap-4">
           <div className="px-6">
-            <div className="flex items-center gap-2 bg-card border border-border rounded-full px-4 py-2.5">
+            <div className="flex items-center gap-2 bg-card border border-border rounded-full px-4 py-2.5 focus-within:border-primary transition-colors">
               <Search size={16} className="text-text-secondary" />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search creators, titles…"
+                aria-label="Search creators, titles"
                 className="bg-transparent outline-none text-sm w-full placeholder:text-text-secondary"
               />
             </div>

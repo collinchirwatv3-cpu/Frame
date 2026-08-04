@@ -1,0 +1,23 @@
+-- FRAME — CRITICAL: adjust_video_counter was publicly callable and exploitable
+--
+-- Confirmed live and exploitable as of this audit: adjust_video_counter(uuid,
+-- text, integer) is `security definer` (so it can bypass RLS to update
+-- denormalized counters from the likes/saves/comments triggers) but was
+-- never explicitly revoked from the `anon` role, which Supabase grants
+-- EXECUTE to by default on every new function. Unlike the on_*_change
+-- trigger functions (safely excluded from PostgREST's RPC exposure because
+-- they `returns trigger`), this one `returns void` — a normal, directly
+-- callable type — and takes the target COLUMN NAME as a raw text argument.
+--
+-- Confirmed via a real unauthenticated request: anyone holding just the
+-- public anon key (embedded in the client bundle by design, so genuinely
+-- public) could call this directly against any video, targeting ANY numeric
+-- column on the videos table — including quality_score, which
+-- MIGRATION_PLAN.md is explicit must never be client-influenced. This is
+-- the most severe finding in this audit: a live, currently-exploitable data-
+-- integrity vulnerability, not something theoretical.
+--
+-- Only ever meant to be called from the on_like_change/on_save_change/
+-- on_comment_change trigger functions, which run as the table owner and are
+-- entirely unaffected by this revoke.
+revoke execute on function adjust_video_counter(uuid, text, integer) from anon, authenticated;

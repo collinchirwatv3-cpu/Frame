@@ -117,7 +117,7 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={withEmail} className="flex flex-col gap-3">
-          <div className="flex items-center gap-2 bg-card border border-border rounded-full px-4 py-3">
+          <div className="flex items-center gap-2 bg-card border border-border rounded-full px-4 py-3 focus-within:border-primary transition-colors">
             <Mail size={16} className="text-text-secondary" />
             <input
               required
