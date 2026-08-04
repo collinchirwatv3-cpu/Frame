@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LogOut, Volume2, VolumeX } from "lucide-react";
+import { LogOut, Trash2, Volume2, VolumeX } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { categories } from "@/lib/mock-data";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePlayerStore } from "@/store/player-store";
 import { createClient } from "@/lib/supabase/client";
+import { DeleteAccountDialog } from "@/components/settings/DeleteAccountDialog";
 import type { Category } from "@/lib/types";
 
 function SettingsSection({ title, children }: { title: string; children: React.ReactNode }) {
@@ -28,6 +30,7 @@ export default function SettingsPage() {
   const muted = usePlayerStore((s) => s.muted);
   const toggleMuted = usePlayerStore((s) => s.toggleMuted);
   const [signingOut, setSigningOut] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   function toggleInterest(category: Category) {
     setInterests(
@@ -42,8 +45,13 @@ export default function SettingsPage() {
     try {
       const supabase = createClient();
       await supabase.auth.signOut();
-    } catch {
-      // Auth isn't configured with real keys yet — nothing to sign out of.
+    } catch (err) {
+      // The SDK clears local session state as part of signOut() regardless
+      // of whether the server-side invalidation call succeeds, so leaving
+      // the user stuck on Settings after a network hiccup would be worse
+      // than redirecting with a possibly-still-valid server session — that
+      // session expires on its own, and the client no longer presents it.
+      console.error("Sign out request failed, redirecting anyway:", err);
     }
     router.replace("/login");
   }
@@ -92,10 +100,35 @@ export default function SettingsPage() {
       </SettingsSection>
 
       <SettingsSection title="About">
-        <ul className="flex flex-col gap-2.5 text-sm text-text-secondary">
-          <li>Terms of Service — coming soon</li>
-          <li>Privacy Policy — coming soon</li>
-          <li>Content & DMCA Policy — coming soon</li>
+        <ul className="flex flex-col gap-2.5 text-sm">
+          <li>
+            <Link href="/terms" className="text-text-secondary hover:text-accent transition-colors">
+              Terms of Service
+            </Link>
+          </li>
+          <li>
+            <Link href="/privacy" className="text-text-secondary hover:text-accent transition-colors">
+              Privacy Policy
+            </Link>
+          </li>
+          <li>
+            <Link
+              href="/community-guidelines"
+              className="text-text-secondary hover:text-accent transition-colors"
+            >
+              Community Guidelines
+            </Link>
+          </li>
+          <li>
+            <Link href="/cookies" className="text-text-secondary hover:text-accent transition-colors">
+              Cookie Policy
+            </Link>
+          </li>
+          <li>
+            <Link href="/contact" className="text-text-secondary hover:text-accent transition-colors">
+              Contact
+            </Link>
+          </li>
         </ul>
       </SettingsSection>
 
@@ -109,6 +142,21 @@ export default function SettingsPage() {
           {signingOut ? "Signing out…" : "Sign out"}
         </button>
       </div>
+
+      <SettingsSection title="Danger zone">
+        <p className="text-sm text-text-secondary mb-3">
+          Permanently delete your account, videos, and all activity. This can&apos;t be undone.
+        </p>
+        <button
+          onClick={() => setDeleteDialogOpen(true)}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-full border border-primary/40 text-sm font-medium text-primary hover:bg-primary/10 transition-colors"
+        >
+          <Trash2 size={15} />
+          Delete account
+        </button>
+      </SettingsSection>
+
+      <DeleteAccountDialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} />
     </div>
   );
 }

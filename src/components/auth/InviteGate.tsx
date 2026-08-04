@@ -8,11 +8,22 @@ import { useEngagementStore } from "@/store/engagement-store";
 import { useCurrentUserStore } from "@/store/current-user-store";
 import { useInviteStore } from "@/store/invite-store";
 
-// Public share links are the one deliberate exception to "nothing is
-// reachable without a code" — they're designed to work for people who
-// aren't on FRAME at all (see /s/[token], /watch/[id]'s Open Graph unfurl).
-// Gating those would silently break an already-shipped feature.
-const BYPASS_PREFIXES = ["/s/", "/watch"];
+// Public share links and legal/informational pages are the deliberate
+// exceptions to "nothing is reachable without a code" — share links are
+// designed to work for people who aren't on FRAME at all (see /s/[token],
+// /watch/[id]'s Open Graph unfurl), and legal pages need to be publicly
+// readable (someone deciding whether to request an invite, or verifying
+// FRAME's policies, shouldn't need one first) — gating either would
+// silently break an already-shipped feature or basic transparency.
+const BYPASS_PREFIXES = [
+  "/s/",
+  "/watch",
+  "/privacy",
+  "/terms",
+  "/community-guidelines",
+  "/cookies",
+  "/contact",
+];
 
 export function InviteGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

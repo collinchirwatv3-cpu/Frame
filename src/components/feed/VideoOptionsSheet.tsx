@@ -6,9 +6,6 @@ import { Check, EyeOff, Flag } from "lucide-react";
 import type { Video } from "@/lib/types";
 
 export function VideoOptionsSheet({
-  // Reserved for real report wiring (POSTing { videoId: video.id, reason }
-  // once reports persist server-side — see MIGRATION_PLAN.md § Moderation).
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   video,
   open,
   onClose,
@@ -18,6 +15,7 @@ export function VideoOptionsSheet({
   onClose: () => void;
 }) {
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [reporting, setReporting] = useState(false);
 
   function closeSoon() {
     window.setTimeout(() => {
@@ -31,9 +29,26 @@ export function VideoOptionsSheet({
     closeSoon();
   }
 
-  function handleReport() {
-    setFeedback("Reported — thanks for helping keep FRAME safe");
-    closeSoon();
+  async function handleReport() {
+    setReporting(true);
+    try {
+      const res = await fetch("/api/reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ videoId: video.id }),
+      });
+      if (res.status === 401) {
+        window.location.assign("/login");
+        return;
+      }
+      if (!res.ok) throw new Error();
+      setFeedback("Reported — thanks for helping keep FRAME safe");
+    } catch {
+      setFeedback("Couldn't submit your report — try again");
+    } finally {
+      setReporting(false);
+      closeSoon();
+    }
   }
 
   return (
@@ -71,7 +86,8 @@ export function VideoOptionsSheet({
                 </button>
                 <button
                   onClick={handleReport}
-                  className="flex items-center gap-3 px-5 py-3.5 text-sm font-medium hover:bg-bg transition-colors text-left text-primary"
+                  disabled={reporting}
+                  className="flex items-center gap-3 px-5 py-3.5 text-sm font-medium hover:bg-bg transition-colors text-left text-primary disabled:opacity-50"
                 >
                   <Flag size={18} />
                   Report video

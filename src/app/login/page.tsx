@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Loader2, Mail } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/ui/Logo";
@@ -146,6 +147,18 @@ export default function LoginPage() {
             {message.text}
           </p>
         )}
+
+        <p className="text-[11px] text-center text-text-secondary mt-6">
+          By continuing, you agree to FRAME&apos;s{" "}
+          <Link href="/terms" className="text-primary underline underline-offset-2">
+            Terms
+          </Link>{" "}
+          and{" "}
+          <Link href="/privacy" className="text-primary underline underline-offset-2">
+            Privacy Policy
+          </Link>
+          .
+        </p>
       </div>
     </div>
   );

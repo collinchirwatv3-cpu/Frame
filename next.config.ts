@@ -21,10 +21,12 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
-      { protocol: "https", hostname: "picsum.photos" },
       { protocol: "https", hostname: "*.supabase.co" },
       { protocol: "https", hostname: "*.r2.dev" },
-      { protocol: "https", hostname: "videodelivery.net" },
+      // Cloudflare Stream serves thumbnails from a per-account
+      // customer-<code>.cloudflarestream.com subdomain — see
+      // src/lib/security-headers.ts for why this replaced videodelivery.net.
+      { protocol: "https", hostname: "*.cloudflarestream.com" },
     ],
   },
   async headers() {

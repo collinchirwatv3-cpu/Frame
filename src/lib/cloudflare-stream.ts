@@ -117,6 +117,20 @@ export async function getStreamVideoDetails(uid: string): Promise<StreamVideoDet
   return parseVideoDetails(body.result);
 }
 
+/** Deletes a video and its copies from Stream — called on account deletion
+ * so a removed creator's storage doesn't keep silently costing money.
+ * Best-effort by design at the call site: one video's Stream cleanup
+ * failing should never block deleting the account itself. */
+export async function deleteStreamVideo(uid: string): Promise<void> {
+  const res = await fetch(`${baseUrl()}/${uid}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${authToken()}` },
+  });
+  if (!res.ok && res.status !== 404) {
+    throw new Error(`Cloudflare Stream refused to delete ${uid} (${res.status})`);
+  }
+}
+
 /** Registers (or re-registers — only one subscription is allowed per
  * account) the account-wide webhook endpoint. One-time setup, run via
  * scripts/register-stream-webhook.mjs, not called from application code. */

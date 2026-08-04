@@ -1,49 +1,39 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "@playwright/test";
+import { skipOnboarding } from "./test-utils";
 
-async function skipOnboarding(page: Page) {
-  await page.goto("/");
-  // "/" client-redirects to "/onboarding" for first-time visitors, but only
-  // after a post-navigation effect runs — race the two possible landing
-  // states instead of trusting page.url() immediately after goto().
-  const continueButton = page.getByRole("button", { name: "Continue" });
-  const likeButton = page.getByRole("button", { name: "Like" }).first();
-  await expect(continueButton.or(likeButton)).toBeVisible();
+// Real engagement (liking, following) now writes to Supabase via RLS-scoped
+// queries — CI intentionally runs against a placeholder Supabase URL (see
+// ci.yml), and no seeded video/creator content exists in this environment
+// (mock data was deliberately removed — see MIGRATION_PLAN.md), so there is
+// nothing on screen to like or follow here. What's real and reachable
+// without either of those is the tab-aware empty state itself, which is
+// exactly what these tests cover instead.
 
-  if (await continueButton.isVisible()) {
-    await continueButton.click();
-    await page.getByRole("button", { name: "Skip for now" }).click();
-    await expect(page).toHaveURL("/");
-  }
-}
-
-test("liking the active video updates the count and persists across reload", async ({ page }) => {
+test("the For You tab shows the honest empty state with an upload CTA", async ({ page }) => {
   await skipOnboarding(page);
 
-  const likeButton = page.getByRole("button", { name: "Like" }).first();
-  await expect(likeButton).toBeVisible();
-  await expect(likeButton).toHaveAttribute("aria-pressed", "false");
-
-  await likeButton.click();
-
-  const unlikeButton = page.getByRole("button", { name: "Unlike" }).first();
-  await expect(unlikeButton).toBeVisible();
-  await expect(unlikeButton).toHaveAttribute("aria-pressed", "true");
-
-  // Engagement state lives in a persisted Zustand store, not just component state.
-  await page.reload();
-  await expect(page.getByRole("button", { name: "Unlike" }).first()).toBeVisible();
+  await expect(page.getByText("No videos yet")).toBeVisible();
+  await expect(
+    page.getByText("FRAME is just getting started", { exact: false })
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Upload a video" })).toHaveAttribute(
+    "href",
+    "/upload"
+  );
 });
 
-test("following a creator hides the Follow button", async ({ page }) => {
+test("the Following tab shows a distinct empty state from For You", async ({ page }) => {
   await skipOnboarding(page);
 
-  const followButton = page.getByRole("button", { name: /^Follow @/ }).first();
-  await expect(followButton).toBeVisible();
-  const creatorLabel = await followButton.getAttribute("aria-label");
+  await page.getByRole("button", { name: "Following" }).click();
 
-  await followButton.click();
+  await expect(page.getByText("Follow creators to see them here")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Find creators to follow" })).toHaveAttribute(
+    "href",
+    "/explore"
+  );
 
-  // Re-select by the captured label — `.first()` would otherwise re-match a
-  // different creator's still-visible Follow button once this one unmounts.
-  await expect(page.getByRole("button", { name: creatorLabel! })).toBeHidden();
+  // Distinct copy from For You — a real test that the tab actually switched
+  // state rather than reusing the same empty state for both.
+  await expect(page.getByText("No videos yet")).toBeHidden();
 });
