@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { CheckCircle2, Film, Loader2, RectangleHorizontal, UploadCloud } from "lucide-react";
+import { AlertCircle, CheckCircle2, Film, Loader2, RectangleHorizontal, UploadCloud } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { categories } from "@/lib/mock-data";
 import { checkUpload, qualityLabel, type UploadCheck } from "@/lib/video-validation";
@@ -11,7 +11,16 @@ import { useUploadDraftStore } from "@/store/upload-draft-store";
 import { UploadRejection } from "./UploadRejection";
 import type { AspectRatioDef } from "@/lib/aspect-ratio";
 
-type Status = "idle" | "reading" | "rejected" | "valid" | "publishing" | "published";
+type Status = "idle" | "reading" | "rejected" | "unsupported" | "valid" | "publishing" | "published";
+
+// `file.type` is frequently empty or unreliable on mobile — Android content
+// resolvers (Google Photos, some file managers) often hand back a File with
+// no MIME type even though the OS picker only showed video files. Falling
+// back to the extension avoids silently dropping a real video pick.
+const VIDEO_EXTENSION = /\.(mp4|mov|m4v|webm|avi|mkv|3gp)$/i;
+function looksLikeVideo(file: File) {
+  return file.type.startsWith("video/") || VIDEO_EXTENSION.test(file.name);
+}
 
 type Probe = {
   width: number;
@@ -58,9 +67,13 @@ export function UploadDropzone() {
   }, [status, hasHydrated]);
 
   const analyzeFile = useCallback((file: File) => {
-    if (!file.type.startsWith("video/")) return;
-
     setFileName(file.name);
+
+    if (!looksLikeVideo(file)) {
+      setStatus("unsupported");
+      return;
+    }
+
     setStatus("reading");
     setAppliedFix(null);
 
@@ -79,7 +92,8 @@ export function UploadDropzone() {
     };
 
     probeEl.onerror = () => {
-      setStatus("rejected");
+      URL.revokeObjectURL(url);
+      setStatus("unsupported");
       setProbe(null);
     };
   }, []);
@@ -147,6 +161,26 @@ export function UploadDropzone() {
           className="mt-2 px-5 py-2.5 rounded-full border border-border text-sm font-medium hover:bg-card transition-colors"
         >
           Upload another
+        </button>
+      </div>
+    );
+  }
+
+  if (status === "unsupported") {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 text-center h-[60vh] px-6">
+        <AlertCircle size={40} className="text-primary" />
+        <h2 className="text-lg font-semibold">Couldn&apos;t read that file</h2>
+        <p className="text-sm text-text-secondary max-w-sm">
+          {fileName ? `"${fileName}" ` : "That file "}
+          doesn&apos;t look like a playable video, or uses a format this browser can&apos;t
+          preview. Try exporting as MP4 (H.264) and uploading again.
+        </p>
+        <button
+          onClick={reset}
+          className="mt-2 px-5 py-2.5 rounded-full border border-border text-sm font-medium hover:bg-card transition-colors"
+        >
+          Try another file
         </button>
       </div>
     );
