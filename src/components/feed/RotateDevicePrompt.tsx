@@ -1,15 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { RotateCw } from "lucide-react";
 import { DURATION } from "@/lib/motion";
-
-// Matches the `md` breakpoint used elsewhere (SideRail, BottomNav) to draw
-// the same mobile/desktop line — this is a phone-only nudge, tablets and
-// desktops already get the cinematic layout regardless of window shape.
-const MOBILE_QUERY = "(max-width: 767px)";
-const PORTRAIT_QUERY = "(orientation: portrait)";
+import { useIsPortraitMobile } from "@/lib/use-portrait-mobile";
 
 /** Can't force rotation — iOS Safari doesn't reliably support the Screen
  * Orientation lock API — so this is persuasion, not enforcement. Dismissing
@@ -17,22 +12,8 @@ const PORTRAIT_QUERY = "(orientation: portrait)";
  * away and back to portrait later shows it again, since that's a fresh
  * decision each time rather than nagging. */
 export function RotateDevicePrompt() {
-  const [shouldRotate, setShouldRotate] = useState(false);
+  const shouldRotate = useIsPortraitMobile();
   const [dismissed, setDismissed] = useState(false);
-
-  useEffect(() => {
-    const mobile = window.matchMedia(MOBILE_QUERY);
-    const portrait = window.matchMedia(PORTRAIT_QUERY);
-    const update = () => setShouldRotate(mobile.matches && portrait.matches);
-
-    update();
-    mobile.addEventListener("change", update);
-    portrait.addEventListener("change", update);
-    return () => {
-      mobile.removeEventListener("change", update);
-      portrait.removeEventListener("change", update);
-    };
-  }, []);
 
   const visible = shouldRotate && !dismissed;
 

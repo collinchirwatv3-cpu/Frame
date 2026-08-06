@@ -1,11 +1,11 @@
 import { Suspense } from "react";
-import { SwipeFeed } from "@/components/feed/SwipeFeed";
+import { FeedRoot } from "@/components/feed/FeedRoot";
 import { videos } from "@/lib/mock-data";
 
 export default function HomePage() {
   return (
     <Suspense fallback={null}>
-      <SwipeFeed videos={videos} />
+      <FeedRoot videos={videos} />
     </Suspense>
   );
 }
