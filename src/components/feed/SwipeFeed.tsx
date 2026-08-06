@@ -22,7 +22,7 @@ import { usePlayerStore } from "@/store/player-store";
 import { useEngagementStore } from "@/store/engagement-store";
 import type { Video } from "@/lib/types";
 
-export function SwipeFeed({ videos }: { videos: Video[] }) {
+export function SwipeFeed({ videos, tabs = true }: { videos: Video[]; tabs?: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<(HTMLDivElement | null)[]>([]);
   const cardRefs = useRef<(VideoCardHandle | null)[]>([]);
@@ -40,9 +40,10 @@ export function SwipeFeed({ videos }: { videos: Video[] }) {
 
   const [feedTab, setFeedTab] = useState<FeedTab>("forYou");
   const displayedVideos = useMemo(() => {
+    if (!tabs) return videos;
     if (feedTab === "forYou") return videos;
     return videos.filter((v) => followedCreators[v.creator.id]);
-  }, [feedTab, videos, followedCreators]);
+  }, [tabs, feedTab, videos, followedCreators]);
 
   const searchParams = useSearchParams();
   const initialIndex = useMemo(() => {
@@ -142,11 +143,11 @@ export function SwipeFeed({ videos }: { videos: Video[] }) {
   return (
     <div className="relative h-dvh w-full">
       <RotateDevicePrompt />
-      <FeedTabs active={feedTab} onChange={setFeedTab} />
+      {tabs && <FeedTabs active={feedTab} onChange={setFeedTab} />}
 
       {displayedVideos.length === 0 ? (
         <div className="h-dvh w-full flex flex-col items-center justify-center gap-3 text-center px-6">
-          {feedTab === "forYou" ? (
+          {!tabs || feedTab === "forYou" ? (
             <>
               <p className="text-lg font-semibold">No videos yet</p>
               <p className="text-sm text-text-secondary max-w-xs">

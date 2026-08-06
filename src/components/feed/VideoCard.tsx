@@ -13,6 +13,7 @@ import { VideoDetailsSheet } from "./VideoDetailsSheet";
 import { Avatar } from "@/components/ui/Avatar";
 import { usePlayerStore } from "@/store/player-store";
 import { useCurrentUserStore } from "@/store/current-user-store";
+import { createClient } from "@/lib/supabase/client";
 import { fadeVolume } from "@/lib/audio";
 import { FOCUS_PULL_TRANSITION, CHROME_FADE_TRANSITION } from "@/lib/motion";
 import type { Video } from "@/lib/types";
@@ -55,7 +56,28 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
     if (!el) return;
 
     if (!active) {
-      // Leaving this scene — fade audio out before the hard cut, don't just snap silent.
+      // Leaving this scene — record it as watched before the position resets
+      // (below), so Home's History section has something real to read.
+      // Below a few seconds is probably a scroll-past, not a watch — not
+      // worth recording. Fire-and-forget: history is a nice-to-have, never
+      // worth blocking or erroring the actual scroll transition over.
+      if (ownProfile && el.currentTime > 3) {
+        const supabase = createClient();
+        supabase
+          .from("watch_progress")
+          .upsert({
+            user_id: ownProfile.id,
+            video_id: video.id,
+            position_seconds: el.currentTime,
+            updated_at: new Date().toISOString(),
+          })
+          .then(
+            () => {},
+            () => {}
+          );
+      }
+
+      // Fade audio out before the hard cut, don't just snap silent.
       if (!muted) fadeVolume(el, el.volume || 1, 0, 250);
       const t = window.setTimeout(
         () => {
@@ -75,6 +97,11 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
 
     el.play().catch(() => {});
     if (!muted) fadeVolume(el, 0, 1, 500);
+    // ownProfile/video.id intentionally excluded — this effect governs
+    // play/pause timing on scroll, not history-writing; picking up a
+    // slightly stale profile/video reference for the fire-and-forget write
+    // above is harmless and not worth re-triggering play/pause over.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, manuallyPaused, muted]);
 
   useEffect(() => {

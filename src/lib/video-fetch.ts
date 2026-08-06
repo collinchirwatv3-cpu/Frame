@@ -103,7 +103,7 @@ export async function fetchPublicVideos(limit = 30): Promise<Video[]> {
   return (data as unknown as Row[]).map(toVideo).filter((v) => v !== null);
 }
 
-/** Recent public shorts (content_type = 'short') for the Discover feed. */
+/** Recent public shorts (content_type = 'short') for the Shorts feed. */
 export async function fetchShorts(limit = 30): Promise<Video[]> {
   const supabase = createClient();
   const { data, error } = await supabase
@@ -112,6 +112,80 @@ export async function fetchShorts(limit = 30): Promise<Video[]> {
     .eq("content_type", "short")
     .order("created_at", { ascending: false })
     .limit(limit);
+  if (error || !data) return [];
+  return (data as unknown as Row[]).map(toVideo).filter((v) => v !== null);
+}
+
+type EmbeddedVideoRow = { videos: Row | null };
+
+/** This user's saved films, most recently saved first — the "Saved" section
+ * of Home's composed feed. `videos!inner` (not a plain embed) so
+ * .eq("videos.content_type", ...) actually filters which saves rows come
+ * back, not just nulls out the embed on non-matching ones. */
+export async function fetchSavedVideos(userId: string, limit = 20): Promise<Video[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("saves")
+    .select(`videos!inner ( ${SELECT} )`)
+    .eq("user_id", userId)
+    .eq("videos.content_type", "film")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error || !data) return [];
+  return (data as unknown as EmbeddedVideoRow[])
+    .map((row) => (row.videos ? toVideo(row.videos) : null))
+    .filter((v) => v !== null);
+}
+
+/** This user's watch history, most recently watched first — the "History"
+ * section of Home's composed feed. Written by VideoCard.tsx when a video
+ * scrolls out of view (upserts watch_progress), not read anywhere until now
+ * — Phase 4's cross-device-resume table finally has a first real reader. */
+export async function fetchHistoryVideos(userId: string, limit = 20): Promise<Video[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("watch_progress")
+    .select(`videos!inner ( ${SELECT} )`)
+    .eq("user_id", userId)
+    .eq("videos.content_type", "film")
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+  if (error || !data) return [];
+  return (data as unknown as EmbeddedVideoRow[])
+    .map((row) => (row.videos ? toVideo(row.videos) : null))
+    .filter((v) => v !== null);
+}
+
+/** Public films the given user hasn't watched yet (or every recent public
+ * film, for a signed-out/anonymous caller) — Discover's full-screen feed.
+ * Two-step rather than a single query: PostgREST's JS client doesn't expose
+ * a NOT IN (subquery) filter, so watched ids are fetched first and excluded
+ * client-side via .not("id", "in", ...). Fine at this catalog size; would
+ * need a real view/RPC if a user's history ever gets large. */
+export async function fetchDiscoverVideos(userId: string | null, limit = 50): Promise<Video[]> {
+  const supabase = createClient();
+
+  let watchedIds: string[] = [];
+  if (userId) {
+    const { data } = await supabase
+      .from("watch_progress")
+      .select("video_id")
+      .eq("user_id", userId);
+    watchedIds = (data ?? []).map((row) => row.video_id as string);
+  }
+
+  let query = supabase
+    .from("videos")
+    .select(SELECT)
+    .eq("content_type", "film")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (watchedIds.length > 0) {
+    query = query.not("id", "in", `(${watchedIds.join(",")})`);
+  }
+
+  const { data, error } = await query;
   if (error || !data) return [];
   return (data as unknown as Row[]).map(toVideo).filter((v) => v !== null);
 }

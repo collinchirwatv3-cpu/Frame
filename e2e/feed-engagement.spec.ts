@@ -6,10 +6,15 @@ import { skipOnboarding } from "./test-utils";
 // ci.yml), and no seeded video/creator content exists in this environment
 // (mock data was deliberately removed — see MIGRATION_PLAN.md), so there is
 // nothing on screen to like or follow here. What's real and reachable
-// without either of those is the tab-aware empty state itself, which is
-// exactly what these tests cover instead.
+// without either of those is the empty state Home's composed feed
+// (lib/home-feed.ts: For You + Saved + History) falls back to when nothing
+// comes back from any of those three, which is exactly what this test
+// covers instead. The old "For You"/"Following" tabs this used to also
+// cover were retired from Home along with that composition — SwipeFeed's
+// `tabs` prop still exists for any future caller that wants them, Home just
+// doesn't pass it anymore.
 
-test("the For You tab shows the honest empty state with an upload CTA", async ({ page }) => {
+test("Home shows the honest empty state with an upload CTA", async ({ page }) => {
   await skipOnboarding(page);
 
   await expect(page.getByText("No videos yet")).toBeVisible();
@@ -20,20 +25,4 @@ test("the For You tab shows the honest empty state with an upload CTA", async ({
     "href",
     "/upload"
   );
-});
-
-test("the Following tab shows a distinct empty state from For You", async ({ page }) => {
-  await skipOnboarding(page);
-
-  await page.getByRole("button", { name: "Following" }).click();
-
-  await expect(page.getByText("Follow creators to see them here")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Find creators to follow" })).toHaveAttribute(
-    "href",
-    "/discover"
-  );
-
-  // Distinct copy from For You — a real test that the tab actually switched
-  // state rather than reusing the same empty state for both.
-  await expect(page.getByText("No videos yet")).toBeHidden();
 });
