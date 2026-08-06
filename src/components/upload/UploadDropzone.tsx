@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { Upload as TusUpload } from "tus-js-client";
 import {
@@ -21,6 +22,7 @@ import { useUploadDraftStore } from "@/store/upload-draft-store";
 import { createClient } from "@/lib/supabase/client";
 import { UploadRejection } from "./UploadRejection";
 import { CameraCapture } from "./CameraCapture";
+import { ThumbnailPicker } from "./ThumbnailPicker";
 import type { AspectRatioDef } from "@/lib/aspect-ratio";
 
 type Status =
@@ -33,6 +35,7 @@ type Status =
   | "uploading"
   | "processing"
   | "failed"
+  | "thumbnail"
   | "published";
 
 // `file.type` is frequently empty or unreliable on mobile — Android content
@@ -76,6 +79,7 @@ export function UploadDropzone() {
   const [fileName, setFileName] = useState("");
   const [uploadProgress, setUploadProgress] = useState(0);
   const [videoId, setVideoId] = useState<string | null>(null);
+  const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const tusUploadRef = useRef<TusUpload | null>(null);
@@ -161,6 +165,7 @@ export function UploadDropzone() {
     setFileName("");
     setUploadProgress(0);
     setVideoId(null);
+    setPosterUrl(null);
     setErrorMessage("");
     if (inputRef.current) inputRef.current.value = "";
   }
@@ -185,7 +190,7 @@ export function UploadDropzone() {
     pollIntervalRef.current = setInterval(async () => {
       const { data, error } = await supabase
         .from("videos")
-        .select("processing_status")
+        .select("processing_status, poster_url")
         .eq("id", id)
         .single();
 
@@ -193,8 +198,8 @@ export function UploadDropzone() {
 
       if (data.processing_status === "ready") {
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-        setStatus("published");
-        clearDraft();
+        setPosterUrl(data.poster_url);
+        setStatus("thumbnail");
       } else if (data.processing_status === "failed") {
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
         setErrorMessage("Cloudflare Stream couldn't encode this video.");
@@ -273,6 +278,25 @@ export function UploadDropzone() {
     setStatus("valid");
   }
 
+  if (status === "thumbnail" && videoId && posterUrl) {
+    const finish = () => {
+      clearDraft();
+      setStatus("published");
+    };
+    return (
+      <ThumbnailPicker
+        videoId={videoId}
+        durationSeconds={probe?.duration ?? 0}
+        posterUrl={posterUrl}
+        onDone={(newPosterUrl) => {
+          setPosterUrl(newPosterUrl);
+          finish();
+        }}
+        onSkip={finish}
+      />
+    );
+  }
+
   if (status === "published") {
     return (
       <div className="flex flex-col items-center justify-center gap-4 h-[60vh] text-center px-6">
@@ -287,12 +311,16 @@ export function UploadDropzone() {
         <p className="text-text-secondary text-sm max-w-sm">{fileName} finished encoding and is ready to watch.</p>
         <div className="flex gap-3 mt-2">
           {videoId && (
-            <a
-              href={`/?v=${videoId}`}
+            // /watch/[id], not /?v= — Home is a curated For You/Saved/History
+            // feed now (lib/home-feed.ts), not "every public video," so a
+            // just-published video isn't reliably in it. /watch/[id] resolves
+            // any real video directly regardless of what's in that list.
+            <Link
+              href={`/watch/${videoId}`}
               className="px-5 py-2.5 rounded-full bg-primary text-bg text-sm font-semibold"
             >
               Watch it now
-            </a>
+            </Link>
           )}
           <button
             onClick={reset}
@@ -538,7 +566,8 @@ export function UploadDropzone() {
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-12">
-      <h1 className="text-2xl font-bold mb-1">Upload</h1>
+      <p className="text-primary text-xs font-semibold tracking-wide uppercase mb-1.5">Creator Studio</p>
+      <h1 className="text-2xl font-bold mb-1">Upload a new film</h1>
       <p className="text-text-secondary text-sm mb-6">
         Landscape only. FRAMES supports 16:9, 21:9 Cinema, and 16:10 — no exceptions, no black
         bars.
