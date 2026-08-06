@@ -2,13 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { Check, Link2, ListPlus, Users, Volume2, VolumeX } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Link2, Plus, Users, Volume2, VolumeX, X } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import { Avatar } from "@/components/ui/Avatar";
 import { useWatchRoom } from "@/lib/use-watch-room";
 import { fetchVideoById } from "@/lib/watch-together";
 import { AddToQueueSheet } from "./AddToQueueSheet";
 import type { Video } from "@/lib/types";
+
+// The add-to-queue prompt only shows up this close to the end — no
+// standing button cluttering the view for the other 99% of a video.
+const SHOW_ADD_PROMPT_SECONDS_REMAINING = 10;
 
 export function WatchTogetherPlayer({
   video: initialVideo,
@@ -21,9 +25,19 @@ export function WatchTogetherPlayer({
   const [muted, setMuted] = useState(true);
   const [copied, setCopied] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [nearEnd, setNearEnd] = useState(false);
   const [video, setVideo] = useState(initialVideo);
-  const { participants, isHost, broadcastSync, queue, addToQueue, advanceQueue, currentVideoId } =
-    useWatchRoom(roomId, initialVideo.id, videoRef);
+  const {
+    participants,
+    isHost,
+    broadcastSync,
+    queue,
+    addToQueue,
+    removeFromQueue,
+    moveQueueItem,
+    advanceQueue,
+    currentVideoId,
+  } = useWatchRoom(roomId, initialVideo.id, videoRef);
 
   // currentVideoId only ever changes via the room's "advance" broadcast
   // (see use-watch-room.ts) — when it does, every client (not just the
@@ -35,11 +49,28 @@ export function WatchTogetherPlayer({
     });
   }, [currentVideoId, video.id]);
 
+  // "Adjust state when a prop changes" during render, not in an effect —
+  // resets the near-end prompt the instant the video swaps rather than one
+  // render later.
+  const [nearEndForVideoId, setNearEndForVideoId] = useState(video.id);
+  if (video.id !== nearEndForVideoId) {
+    setNearEndForVideoId(video.id);
+    setNearEnd(false);
+  }
+
+  function handleTimeUpdate() {
+    const el = videoRef.current;
+    if (!el || !Number.isFinite(el.duration)) return;
+    setNearEnd(el.duration - el.currentTime <= SHOW_ADD_PROMPT_SECONDS_REMAINING);
+  }
+
   async function copyInviteLink() {
     await navigator.clipboard.writeText(window.location.href);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1600);
   }
+
+  const showAddPrompt = nearEnd;
 
   return (
     <div className="relative h-dvh w-full overflow-hidden bg-bg">
@@ -61,6 +92,7 @@ export function WatchTogetherPlayer({
           onPlay={() => isHost && broadcastSync()}
           onPause={() => isHost && broadcastSync()}
           onSeeked={() => isHost && broadcastSync()}
+          onTimeUpdate={handleTimeUpdate}
           onEnded={() => isHost && advanceQueue()}
         />
       </div>
@@ -77,13 +109,6 @@ export function WatchTogetherPlayer({
           <Users size={13} />
           {participants.length}
         </span>
-        <button
-          onClick={() => setAddOpen(true)}
-          aria-label="Add to queue"
-          className="w-9 h-9 rounded-full bg-card/70 backdrop-blur-md flex items-center justify-center"
-        >
-          <ListPlus size={16} />
-        </button>
         <button
           onClick={copyInviteLink}
           aria-label="Copy invite link"
@@ -118,17 +143,49 @@ export function WatchTogetherPlayer({
         </div>
         <p className="text-sm text-accent/90">{video.title}</p>
 
-        {queue.length > 0 && (
+        {(queue.length > 0 || showAddPrompt) && (
           <div className="flex items-center gap-2 overflow-x-auto pb-1">
-            <span className="text-[11px] text-text-secondary shrink-0">Up next</span>
-            {queue.map((item) => (
+            {queue.length > 0 && <span className="text-[11px] text-text-secondary shrink-0">Up next</span>}
+            {queue.map((item, index) => (
               <span
                 key={item.id}
-                className="shrink-0 text-[11px] bg-card/70 backdrop-blur-md rounded-full px-2.5 py-1 truncate max-w-[140px]"
+                className="flex items-center gap-1 shrink-0 bg-card/70 backdrop-blur-md rounded-full pl-2.5 pr-1 py-1 text-[11px]"
               >
-                {item.title}
+                <span className="truncate max-w-[100px]">{item.title}</span>
+                <button
+                  onClick={() => moveQueueItem(item.id, "up")}
+                  disabled={index === 0}
+                  aria-label={`Move ${item.title} up`}
+                  className="p-0.5 rounded-full hover:bg-bg transition-colors disabled:opacity-30"
+                >
+                  <ChevronUp size={11} />
+                </button>
+                <button
+                  onClick={() => moveQueueItem(item.id, "down")}
+                  disabled={index === queue.length - 1}
+                  aria-label={`Move ${item.title} down`}
+                  className="p-0.5 rounded-full hover:bg-bg transition-colors disabled:opacity-30"
+                >
+                  <ChevronDown size={11} />
+                </button>
+                <button
+                  onClick={() => removeFromQueue(item.id)}
+                  aria-label={`Remove ${item.title} from queue`}
+                  className="p-0.5 rounded-full hover:bg-bg transition-colors"
+                >
+                  <X size={11} />
+                </button>
               </span>
             ))}
+            {showAddPrompt && (
+              <button
+                onClick={() => setAddOpen(true)}
+                className="flex items-center gap-1 shrink-0 bg-primary text-bg rounded-full pl-2 pr-2.5 py-1 text-[11px] font-semibold"
+              >
+                <Plus size={12} />
+                {queue.length === 0 ? "Add next video" : "Add"}
+              </button>
+            )}
           </div>
         )}
       </div>

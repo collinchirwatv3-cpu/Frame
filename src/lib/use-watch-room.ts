@@ -50,11 +50,12 @@ function applySync(video: HTMLVideoElement, payload: SyncPayload) {
  * play/pause/seek/heartbeat and queue-advance get broadcast; everyone
  * else's <video> is driven by applySync, not local interaction.
  *
- * Queue is additive-only from any participant (addToQueue), but only the
- * authority ever advances it (on the current video ending) — advancing is
- * itself just another broadcast every client (including the authority)
- * applies identically, so there's never a fork between what different
- * clients think the queue/current video is.
+ * The queue itself is a free-for-all — any participant can add, remove, or
+ * reorder it, not just the authority. Every mutation broadcasts the whole
+ * resulting array (`queue-set`) rather than a diff, so there's no ordering
+ * dependency between two people editing near-simultaneously — whichever
+ * broadcast a client sees last is authoritative for that client, same as
+ * how any last-write-wins list would behave.
  */
 export function useWatchRoom(
   roomId: string,
@@ -77,25 +78,47 @@ export function useWatchRoom(
     channelRef.current?.send({ type: "broadcast", event: "sync", payload });
   }, [videoRef]);
 
-  const addToQueue = useCallback((item: QueueItem) => {
-    // self: false means this client never receives its own broadcast back —
-    // apply locally in addition to sending, not instead of.
-    setQueue((q) => [...q, item]);
-    channelRef.current?.send({ type: "broadcast", event: "queue-add", payload: item });
+  // self: false means this client never receives its own broadcast back —
+  // apply locally in addition to sending, not instead of.
+  const setQueueSynced = useCallback((next: QueueItem[]) => {
+    setQueue(next);
+    channelRef.current?.send({ type: "broadcast", event: "queue-set", payload: next });
   }, []);
+
+  const addToQueue = useCallback(
+    (item: QueueItem) => setQueueSynced([...queueRef.current, item]),
+    [setQueueSynced]
+  );
+
+  const removeFromQueue = useCallback(
+    (id: string) => setQueueSynced(queueRef.current.filter((item) => item.id !== id)),
+    [setQueueSynced]
+  );
+
+  const moveQueueItem = useCallback(
+    (id: string, direction: "up" | "down") => {
+      const items = [...queueRef.current];
+      const index = items.findIndex((item) => item.id === id);
+      const swapWith = direction === "up" ? index - 1 : index + 1;
+      if (index === -1 || swapWith < 0 || swapWith >= items.length) return;
+      [items[index], items[swapWith]] = [items[swapWith], items[index]];
+      setQueueSynced(items);
+    },
+    [setQueueSynced]
+  );
 
   // Authority-only — called from the current video's onEnded. Reads
   // queueRef (not the `queue` state) so it works from a handler that isn't
   // itself part of a render, without needing to be a dependency anywhere.
   const advanceQueue = useCallback(() => {
-    const next = queueRef.current[0];
+    const [next, ...rest] = queueRef.current;
     if (!next) return;
-    setQueue((q) => q.slice(1));
+    setQueue(rest);
     setCurrentVideoId(next.id);
     channelRef.current?.send({
       type: "broadcast",
       event: "advance",
-      payload: { videoId: next.id },
+      payload: { videoId: next.id, queue: rest },
     });
   }, []);
 
@@ -129,13 +152,13 @@ export function useWatchRoom(
       applySync(video, payload as SyncPayload);
     });
 
-    channel.on("broadcast", { event: "queue-add" }, ({ payload }) => {
-      setQueue((q) => [...q, payload as QueueItem]);
+    channel.on("broadcast", { event: "queue-set" }, ({ payload }) => {
+      setQueue(payload as QueueItem[]);
     });
 
     channel.on("broadcast", { event: "advance" }, ({ payload }) => {
-      const { videoId } = payload as { videoId: string };
-      setQueue((q) => (q[0]?.id === videoId ? q.slice(1) : q));
+      const { videoId, queue: newQueue } = payload as { videoId: string; queue: QueueItem[] };
+      setQueue(newQueue);
       setCurrentVideoId(videoId);
     });
 
@@ -162,5 +185,15 @@ export function useWatchRoom(
     return () => clearInterval(interval);
   }, [isHost, broadcastSync, videoRef]);
 
-  return { participants, isHost, broadcastSync, queue, addToQueue, advanceQueue, currentVideoId };
+  return {
+    participants,
+    isHost,
+    broadcastSync,
+    queue,
+    addToQueue,
+    removeFromQueue,
+    moveQueueItem,
+    advanceQueue,
+    currentVideoId,
+  };
 }
