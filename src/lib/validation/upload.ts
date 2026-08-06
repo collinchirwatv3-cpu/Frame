@@ -23,6 +23,12 @@ export const uploadMetadataSchema = z
     title: z.string().trim().min(1, "Title is required").max(120, "Title is too long"),
     description: z.string().trim().max(2000, "Description is too long").optional().default(""),
     category: z.enum(categories as [Category, ...Category[]]),
+    // Films are the cinematic landscape library (the app's core identity);
+    // shorts are the separate, portrait, non-cinematic Discover feed — see
+    // supabase/migrations/20260806120000_shorts_content_type.sql. Defaults
+    // to "film" so every pre-existing caller of this schema keeps working
+    // unchanged.
+    contentType: z.enum(["film", "short"]).default("film"),
     // Structural sanity only — the actual supported-ratio banding (16:9/21:9/
     // 16:10) is a business rule owned by checkUpload() in
     // lib/video-validation.ts, not duplicated here. This schema just refuses
@@ -39,9 +45,22 @@ export const uploadMetadataSchema = z
       .positive()
       .max(20 * 1024 * 1024 * 1024, "File is too large"),
   })
-  .refine((data) => data.width > data.height, {
-    message: "FRAMES is landscape-only",
-    path: ["width"],
+  .superRefine((data, ctx) => {
+    const landscape = data.width > data.height;
+    if (data.contentType === "film" && !landscape) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "FRAMES films are landscape-only",
+        path: ["width"],
+      });
+    }
+    if (data.contentType === "short" && landscape) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Shorts are portrait-only",
+        path: ["width"],
+      });
+    }
   });
 
 export type UploadMetadataInput = z.infer<typeof uploadMetadataSchema>;

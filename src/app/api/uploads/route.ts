@@ -29,7 +29,8 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
-  const { title, description, category, width, height, durationSeconds, fileSizeBytes } = parsed.data;
+  const { title, description, category, contentType, width, height, durationSeconds, fileSizeBytes } =
+    parsed.data;
 
   let session: Awaited<ReturnType<typeof createTusUploadSession>>;
   try {
@@ -47,6 +48,7 @@ export async function POST(request: NextRequest) {
       creator_id: user.id,
       stream_uid: session.uid,
       processing_status: "uploading",
+      content_type: contentType,
       title,
       description,
       category,
