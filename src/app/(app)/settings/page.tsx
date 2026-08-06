@@ -3,13 +3,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LogOut, Trash2, Volume2, VolumeX } from "lucide-react";
+import { LogOut, ShieldAlert, Trash2, Volume2, VolumeX } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SearchButton } from "@/components/ui/SearchButton";
 import { categories } from "@/lib/mock-data";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePlayerStore } from "@/store/player-store";
 import { createClient } from "@/lib/supabase/client";
+import { useIsModerator } from "@/lib/use-is-moderator";
 import { DeleteAccountDialog } from "@/components/settings/DeleteAccountDialog";
 import type { Category } from "@/lib/types";
 
@@ -26,6 +27,7 @@ function SettingsSection({ title, children }: { title: string; children: React.R
 
 export default function SettingsPage() {
   const router = useRouter();
+  const moderatorStatus = useIsModerator();
   const interests = useOnboardingStore((s) => s.interests);
   const setInterests = useOnboardingStore((s) => s.complete);
   const muted = usePlayerStore((s) => s.muted);
@@ -135,6 +137,18 @@ export default function SettingsPage() {
           </li>
         </ul>
       </SettingsSection>
+
+      {moderatorStatus === "moderator" && (
+        <SettingsSection title="Moderation">
+          <Link
+            href="/moderation"
+            className="flex items-center gap-2 text-sm text-primary hover:underline underline-offset-2"
+          >
+            <ShieldAlert size={15} />
+            Review reports
+          </Link>
+        </SettingsSection>
+      )}
 
       <div className="px-6 py-5">
         <button

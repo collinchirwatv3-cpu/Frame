@@ -62,14 +62,27 @@ Not optional once real people can upload video and create accounts.
 - [ ] **You** — Content policy / DMCA takedown process. This is a real liability exposure for any platform hosting user-uploaded video, not a nice-to-have.
 - [ ] **Me** — Once you have the text, wire up the actual `/terms`, `/privacy`, `/dmca` routes and link them from signup/upload.
 
-## Milestone 5 — Pre-launch QA
+## Milestone 5 — Trust & safety
+
+A report pipeline and a review surface exist now; the layer that catches harmful
+content *before* a human ever sees a report is still open.
+
+- [x] **Me** — Report pipeline: the report action posts to `/api/reports`, a server-side (not direct-client) insert into the `reports` table, rate-limited.
+- [x] **Me** — Moderation review dashboard (`/moderation`, gated to `profiles.is_moderator`): lists pending reports with a preview of the actual video, and Dismiss / Remove video / Ban creator actions — each re-checked server-side regardless of what the page renders.
+- [ ] **You** — Set your own account's `is_moderator = true`. No self-service UI for this on purpose — it's a manual SQL step at this scale, not a settings toggle.
+- [ ] **You** — CSAM detection on upload. Legal requirement, not optional, for any UGC video platform (the US requires NCMEC CyberTipline reporting; the EU has its own equivalents) — needs an actual legal consult on the reporting obligation alongside the vendor pick, not just a code integration. Leaning toward [Thorn Safer](https://safer.io) (video-native, bundles NCMEC reporting) over Microsoft PhotoDNA (image-hash-matching — would need frame extraction first); worth comparing against Google's CSAI Match too. Verify current pricing/access terms directly, don't take secondhand numbers as current.
+- [ ] **You** — General content classifier (extreme violence, pornography) to auto-flag on upload. Leaning toward Hive Moderation or Sightengine over AWS Rekognition/Google Video Intelligence — purely to avoid standing up a new full cloud-provider account for one feature, when everything else in this stack (Cloudflare, Supabase, Upstash, Sentry, R2) is a simple API-key integration.
+- [ ] **Me** — Once a vendor's picked and there's a real API key: hook the classifier into the Stream webhook (`/api/webhooks/stream/route.ts`) — sample a few frames the moment a video hits `readyToStream`, before `processing_status` flips to `ready`. Auto-clear clean results, auto-reject high-confidence hits, route anything borderline into the moderation dashboard above.
+- [ ] **You** — Content policy language covering what's actually prohibited — extends Milestone 4's ToS/DMCA work, same legal pass, don't do it twice.
+
+## Milestone 6 — Pre-launch QA
 
 - [ ] **Me** — Cross-browser pass, Safari especially — autoplay policy, `navigator.share`, and clipboard-write behave differently there than in Chromium, and Chromium/Playwright is all I've been able to test against directly.
 - [ ] **You** — Real device testing (an actual iPhone and an actual Android phone) — headless Chromium screenshots are a good proxy but aren't a substitute for real touch/scroll/autoplay behavior.
 - [ ] **Me** — Lighthouse pass on the deployed build (performance, accessibility, SEO basics).
 - [ ] **Me** — Wire up basic error monitoring (Sentry or Vercel's built-in) so a broken production build doesn't fail silently.
 
-## Milestone 6 — Launch
+## Milestone 7 — Launch
 
 - [ ] **Me** — Basic analytics wired (Vercel Analytics or Plausible — enough to know if anyone's actually using it).
 - [ ] **You** — Decide on a soft-launch audience (friends/beta list) vs. going straight public.

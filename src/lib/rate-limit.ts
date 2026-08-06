@@ -44,6 +44,13 @@ export const uploadRateLimiter = makeLimiter(10, "1 h", "upload");
  * surface; a loose limit mainly to blunt bot spam, not to constrain real use. */
 export const engagementRateLimiter = makeLimiter(60, "1 m", "engagement");
 
+/** Moderator actions on a report (dismiss/remove video/ban creator) — not a
+ * public-facing abuse surface (gated to is_moderator server-side regardless),
+ * generous enough that triaging a real report queue in one sitting never
+ * hits it, tight enough to still bound the blast radius of a compromised
+ * moderator session. */
+export const moderationRateLimiter = makeLimiter(30, "1 m", "moderation");
+
 export type RateLimitResult = { success: boolean; limit: number; remaining: number; reset: number };
 
 export async function checkRateLimit(
