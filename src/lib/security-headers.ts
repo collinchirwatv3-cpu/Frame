@@ -48,8 +48,11 @@ export function buildContentSecurityPolicy(nonce: string): string {
       "'self'",
       "https://*.r2.dev",
       "https://*.cloudflarestream.com",
-      // TEMPORARY — demo content only, same as img-src above.
-      "https://commondatastorage.googleapis.com",
+      // TEMPORARY — demo content only, same as img-src above. Was
+      // commondatastorage.googleapis.com; that bucket's public access got
+      // revoked (confirmed live — every URL there now 403s), swapped to
+      // placeholdervideo.dev, which sends explicit CORS headers.
+      "https://placeholdervideo.dev",
     ],
     "connect-src": [
       "'self'",

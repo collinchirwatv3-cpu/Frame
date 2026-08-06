@@ -5,15 +5,22 @@ import type { Category, Collection, Creator, Video } from "./types";
 // same content) so the same rows exist for real in Supabase — likes/saves/
 // comments/follows written against these ids hit real foreign keys, not
 // dead ones. Remove both this content and the picsum.photos/
-// commondatastorage.googleapis.com allowances in next.config.ts and
-// security-headers.ts before real alpha launch; real creators replace this
-// once they exist. See the "no mock data" note this file used to carry —
-// that principle still holds, this is a deliberate, temporary exception.
+// placeholdervideo.dev allowances in next.config.ts and security-headers.ts
+// before real alpha launch; real creators replace this once they exist.
+// See the "no mock data" note this file used to carry — that principle
+// still holds, this is a deliberate, temporary exception.
+//
+// Originally pointed at Google's commondatastorage.googleapis.com sample
+// bucket (real Blender Foundation film clips) — that bucket's public access
+// was revoked at some point after this content was first seeded (confirmed
+// live: every one of those URLs now 403s, AccessDenied). Swapped to
+// placeholdervideo.dev, a service built specifically for this — generated
+// clips at an exact resolution, real video/mp4 content, explicit
+// Access-Control-Allow-Origin: * — verified live, not guessed.
 const avatar = (seed: string) => `https://picsum.photos/seed/${seed}/200/200`;
 const banner = (seed: string) => `https://picsum.photos/seed/${seed}-banner/1600/500`;
 const poster = (seed: string) => `https://picsum.photos/seed/${seed}/1600/900`;
-const sampleMp4 = (name: string) =>
-  `https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/${name}.mp4`;
+const sampleMp4 = () => `https://placeholdervideo.dev/1280x720`;
 
 export const creators: Creator[] = [
   {
@@ -74,7 +81,7 @@ export const videos: Video[] = [
   {
     id: "9b3a9560-47ab-4687-88d5-68fba532beb8",
     creator: creators[0],
-    playbackUrl: sampleMp4("ForBiggerBlazes"),
+    playbackUrl: sampleMp4(),
     posterUrl: poster("v1"),
     title: "Iceland, from 400ft",
     description: "Three weeks chasing storms over the Ring Road. Shot on FPV + cine drone.",
@@ -102,7 +109,7 @@ export const videos: Video[] = [
   {
     id: "44ec8be3-32c6-4dec-a2bb-23f04121c4d4",
     creator: creators[1],
-    playbackUrl: sampleMp4("ForBiggerJoyrides"),
+    playbackUrl: sampleMp4(),
     posterUrl: poster("v2"),
     title: "Midnight run, Osaka",
     description: "RX-7 through wet Osaka streets. One take, no stabilization.",
@@ -120,7 +127,7 @@ export const videos: Video[] = [
   {
     id: "6b3cf47e-0fdf-4614-a986-0219c8af0415",
     creator: creators[2],
-    playbackUrl: sampleMp4("ForBiggerEscapes"),
+    playbackUrl: sampleMp4(),
     posterUrl: poster("v3"),
     title: "The last fishing villages",
     description: "Part 2 of the coastline series — Ghana's disappearing harbors.",
@@ -137,7 +144,7 @@ export const videos: Video[] = [
   {
     id: "76bfe705-bf8c-49d4-be62-63ea68ae1c11",
     creator: creators[3],
-    playbackUrl: sampleMp4("ForBiggerFun"),
+    playbackUrl: sampleMp4(),
     posterUrl: poster("v4"),
     title: "Live from Warehouse 12",
     description: "Closing set, unedited. Full set on FRAMES first.",
@@ -155,7 +162,7 @@ export const videos: Video[] = [
   {
     id: "2e9abccc-82ff-477d-934f-d6388e5a4983",
     creator: creators[0],
-    playbackUrl: sampleMp4("ForBiggerMeltdowns"),
+    playbackUrl: sampleMp4(),
     posterUrl: poster("v5"),
     title: "Above the fjords",
     description: "Norway leg of the aerial series, color graded on-site.",

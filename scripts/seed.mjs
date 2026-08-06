@@ -26,8 +26,13 @@ const supabase = createClient(url, serviceKey, {
 const avatar = (seed) => `https://picsum.photos/seed/${seed}/200/200`;
 const banner = (seed) => `https://picsum.photos/seed/${seed}-banner/1600/500`;
 const poster = (seed) => `https://picsum.photos/seed/${seed}/1600/900`;
-const sampleMp4 = (name) =>
-  `https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/${name}.mp4`;
+// Was commondatastorage.googleapis.com/gtv-videos-bucket — that bucket's
+// public access was revoked at some point after this was first seeded
+// (confirmed live: every URL there now 403s, AccessDenied). Swapped to
+// placeholdervideo.dev — generates a real video/mp4 at the exact
+// resolution requested, explicit Access-Control-Allow-Origin: * — verified
+// live before switching, not guessed.
+const sampleMp4 = (width, height) => `https://placeholdervideo.dev/${width}x${height}`;
 
 const CREATORS = [
   {
@@ -92,7 +97,7 @@ const VIDEOS = [
   {
     id: "9b3a9560-47ab-4687-88d5-68fba532beb8",
     creator_id: CREATORS[0].id,
-    playback_url: sampleMp4("ForBiggerBlazes"),
+    playback_url: sampleMp4(1280, 720),
     poster_url: poster("v1"),
     title: "Iceland, from 400ft",
     description: "Three weeks chasing storms over the Ring Road. Shot on FPV + cine drone.",
@@ -120,7 +125,7 @@ const VIDEOS = [
   {
     id: "44ec8be3-32c6-4dec-a2bb-23f04121c4d4",
     creator_id: CREATORS[1].id,
-    playback_url: sampleMp4("ForBiggerJoyrides"),
+    playback_url: sampleMp4(1280, 720),
     poster_url: poster("v2"),
     title: "Midnight run, Osaka",
     description: "RX-7 through wet Osaka streets. One take, no stabilization.",
@@ -138,7 +143,7 @@ const VIDEOS = [
   {
     id: "6b3cf47e-0fdf-4614-a986-0219c8af0415",
     creator_id: CREATORS[2].id,
-    playback_url: sampleMp4("ForBiggerEscapes"),
+    playback_url: sampleMp4(1280, 720),
     poster_url: poster("v3"),
     title: "The last fishing villages",
     description: "Part 2 of the coastline series — Ghana's disappearing harbors.",
@@ -146,7 +151,7 @@ const VIDEOS = [
     duration_seconds: 58,
     width: 1280,
     height: 720,
-    badges: ["FRAME Certified"],
+    badges: ["FRAMES Certified"],
     likes_count: 41_800,
     comments_count: 980,
     shares_count: 1_220,
@@ -155,16 +160,16 @@ const VIDEOS = [
   {
     id: "76bfe705-bf8c-49d4-be62-63ea68ae1c11",
     creator_id: CREATORS[3].id,
-    playback_url: sampleMp4("ForBiggerFun"),
+    playback_url: sampleMp4(1280, 720),
     poster_url: poster("v4"),
     title: "Live from Warehouse 12",
-    description: "Closing set, unedited. Full set on FRAME first.",
+    description: "Closing set, unedited. Full set on FRAMES first.",
     category: "Music",
     sound_name: "Live set · nightpulse",
     duration_seconds: 47,
     width: 1280,
     height: 720,
-    badges: ["FRAME Certified", "Spatial Audio"],
+    badges: ["FRAMES Certified", "Spatial Audio"],
     likes_count: 212_900,
     comments_count: 5_400,
     shares_count: 11_200,
@@ -173,7 +178,7 @@ const VIDEOS = [
   {
     id: "2e9abccc-82ff-477d-934f-d6388e5a4983",
     creator_id: CREATORS[0].id,
-    playback_url: sampleMp4("ForBiggerMeltdowns"),
+    playback_url: sampleMp4(1280, 720),
     poster_url: poster("v5"),
     title: "Above the fjords",
     description: "Norway leg of the aerial series, color graded on-site.",
@@ -197,11 +202,64 @@ const VIDEOS = [
   },
 ];
 
+// Discover's shorts — content_type: "short", portrait, no ratio banding,
+// deliberately not cinematic (see supabase/migrations/20260806120000_shorts_content_type.sql).
+const SHORTS = [
+  {
+    id: "b6b9b1a0-2f8e-4b0f-9d3c-7b6a1e2f9c01",
+    creator_id: CREATORS[1].id,
+    playback_url: sampleMp4(720, 1280),
+    poster_url: poster("s1"),
+    title: "POV: the tunnel run everyone's talking about",
+    description: "No context needed.",
+    category: "Cars",
+    duration_seconds: 14,
+    width: 720,
+    height: 1280,
+    likes_count: 18_200,
+    comments_count: 340,
+    shares_count: 2_100,
+    saves_count: 610,
+  },
+  {
+    id: "c7cae2b1-3f9f-4c1a-8e4d-8c7b2f3a0d12",
+    creator_id: CREATORS[3].id,
+    playback_url: sampleMp4(720, 1280),
+    poster_url: poster("s2"),
+    title: "3am soundcheck chaos",
+    description: "This is why we're always late.",
+    category: "Music",
+    duration_seconds: 9,
+    width: 720,
+    height: 1280,
+    likes_count: 44_900,
+    comments_count: 1_020,
+    shares_count: 5_400,
+    saves_count: 1_800,
+  },
+  {
+    id: "d8dbf3c2-4a0a-4d2b-9f5e-9d8c3a4b1e23",
+    creator_id: CREATORS[2].id,
+    playback_url: sampleMp4(720, 1280),
+    poster_url: poster("s3"),
+    title: "the coastline drone almost didn't make it back",
+    description: "wind was NOT it today",
+    category: "Nature",
+    duration_seconds: 21,
+    width: 720,
+    height: 1280,
+    likes_count: 9_600,
+    comments_count: 210,
+    shares_count: 480,
+    saves_count: 320,
+  },
+];
+
 const COLLECTIONS = [
   {
     id: "f9cf458e-feef-4b68-8361-f86c0a56effc",
     title: "Drone Masters",
-    description: "The best aerial work on FRAME — flown, not flown-over.",
+    description: "The best aerial work on FRAMES — flown, not flown-over.",
     cover_url: poster("v5"),
     videoIds: [VIDEOS[0].id, VIDEOS[4].id],
   },
@@ -292,8 +350,12 @@ async function main() {
   }
 
   console.log("Upserting videos...");
+  const allVideos = [
+    ...VIDEOS.map((v) => ({ ...v, content_type: "film" })),
+    ...SHORTS.map((v) => ({ ...v, content_type: "short" })),
+  ];
   const { error: videosError } = await supabase.from("videos").upsert(
-    VIDEOS.map(({ id, creator_id, playback_url, poster_url, title, description, category, sound_name, duration_seconds, width, height, badges, details, likes_count, comments_count, shares_count, saves_count }) => ({
+    allVideos.map(({ id, creator_id, playback_url, poster_url, title, description, category, sound_name, duration_seconds, width, height, badges, details, likes_count, comments_count, shares_count, saves_count, content_type }) => ({
       id,
       creator_id,
       playback_url,
@@ -301,6 +363,7 @@ async function main() {
       title,
       description,
       category,
+      content_type,
       sound_name: sound_name ?? null,
       duration_seconds,
       width,
@@ -321,7 +384,7 @@ async function main() {
     { onConflict: "id" }
   );
   if (videosError) throw videosError;
-  console.log(`  videos: ${VIDEOS.length}`);
+  console.log(`  videos: ${VIDEOS.length} films, ${SHORTS.length} shorts`);
 
   console.log("Upserting collections...");
   const { error: collectionsError } = await supabase.from("collections").upsert(
