@@ -8,6 +8,7 @@ import { categories } from "@/lib/mock-data";
 import { checkShortUpload } from "@/lib/video-validation";
 import { deriveTitleFromFilename } from "@/lib/upload";
 import { createClient } from "@/lib/supabase/client";
+import { useEscapeToClose } from "@/lib/use-escape-to-close";
 import type { Category } from "@/lib/types";
 
 type Status =
@@ -53,6 +54,11 @@ export function ShortUploadDropzone({ onClose }: { onClose: () => void }) {
   const [errorMessage, setErrorMessage] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const tusUploadRef = useRef<TusUpload | null>(null);
+
+  // Always "open" while mounted (no open prop — the parent conditionally
+  // renders this at all) — same onClose the X button already uses, no
+  // additional guard against closing mid-upload beyond what that button has.
+  useEscapeToClose(true, onClose);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -417,7 +423,7 @@ export function ShortUploadDropzone({ onClose }: { onClose: () => void }) {
   })();
 
   return (
-    <div className="fixed inset-0 z-[80] bg-bg flex flex-col">
+    <div role="dialog" aria-modal="true" aria-label="New short" className="fixed inset-0 z-[80] bg-bg flex flex-col">
       <div className="flex items-center justify-between px-5 pt-5 pb-2">
         <h2 className="text-base font-semibold">New short</h2>
         <button

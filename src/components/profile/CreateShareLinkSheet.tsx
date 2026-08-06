@@ -6,6 +6,7 @@ import { Check, Copy, Eye, Link2, X } from "lucide-react";
 import { cn, shareContent } from "@/lib/utils";
 import { formatRelativeExpiry, getShareLinkStatus, TTL_LABEL } from "@/lib/share-links";
 import { useShareLinksStore } from "@/store/share-links-store";
+import { useEscapeToClose } from "@/lib/use-escape-to-close";
 import type { ShareLinkTTL, Video } from "@/lib/types";
 
 const TTL_OPTIONS: ShareLinkTTL[] = ["1h", "24h", "7d"];
@@ -33,6 +34,8 @@ export function CreateShareLinkSheet({
     () => allLinks.filter((l) => l.videoId === video.id),
     [allLinks, video.id]
   );
+
+  useEscapeToClose(open, onClose);
 
   async function handleCreate() {
     const link = createLink(video.id, ttl);
@@ -67,6 +70,9 @@ export function CreateShareLinkSheet({
             className="fixed inset-0 bg-bg/70 backdrop-blur-sm z-[60]"
           />
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Create a private share link"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}

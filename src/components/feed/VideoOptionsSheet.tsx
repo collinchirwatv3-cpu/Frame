@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, EyeOff, Flag, Users } from "lucide-react";
+import { useEscapeToClose } from "@/lib/use-escape-to-close";
 import type { Video } from "@/lib/types";
 
 export function VideoOptionsSheet({
@@ -18,6 +19,8 @@ export function VideoOptionsSheet({
   const router = useRouter();
   const [feedback, setFeedback] = useState<string | null>(null);
   const [reporting, setReporting] = useState(false);
+
+  useEscapeToClose(open, onClose);
 
   function handleWatchTogether() {
     const roomId = crypto.randomUUID();
@@ -70,6 +73,9 @@ export function VideoOptionsSheet({
             className="fixed inset-0 bg-bg/70 backdrop-blur-sm z-[60]"
           />
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Video options"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}

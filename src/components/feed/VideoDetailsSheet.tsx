@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { Aperture, Clapperboard, Film, MapPin, Tag, X } from "lucide-react";
 import { SHEET_SPRING } from "@/lib/motion";
+import { useEscapeToClose } from "@/lib/use-escape-to-close";
 import type { Video } from "@/lib/types";
 
 function Row({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
@@ -30,6 +31,8 @@ export function VideoDetailsSheet({
 }) {
   const d = video.details;
 
+  useEscapeToClose(open, onClose);
+
   return (
     <AnimatePresence>
       {open && (
@@ -42,6 +45,9 @@ export function VideoDetailsSheet({
             className="fixed inset-0 bg-bg/70 backdrop-blur-sm z-[60]"
           />
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${video.title} details`}
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}

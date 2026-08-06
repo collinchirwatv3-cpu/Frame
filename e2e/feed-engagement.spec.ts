@@ -19,7 +19,7 @@ test("Home shows the honest empty state with an upload CTA", async ({ page }) =>
 
   await expect(page.getByText("No videos yet")).toBeVisible();
   await expect(
-    page.getByText("FRAME is just getting started", { exact: false })
+    page.getByText("FRAMES is just getting started", { exact: false })
   ).toBeVisible();
   await expect(page.getByRole("link", { name: "Upload a video" })).toHaveAttribute(
     "href",

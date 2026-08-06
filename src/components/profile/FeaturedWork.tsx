@@ -55,7 +55,9 @@ export function FeaturedWork({
       {featuredVideo && (
         <FeaturedCard
           label="Featured film"
-          href={`/?v=${featuredVideo.id}`}
+          // /watch/[id], not /?v= — same reasoning as StudioVideoGrid: Home
+          // is a curated feed, this video isn't guaranteed to be in it.
+          href={`/watch/${featuredVideo.id}`}
           coverUrl={featuredVideo.posterUrl}
           title={featuredVideo.title}
           subtitle={featuredVideo.description}

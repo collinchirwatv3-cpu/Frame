@@ -39,7 +39,11 @@ function InProgressCard({ video }: { video: OwnVideo }) {
 function ReadyCard({ video }: { video: Video }) {
   return (
     <Link
-      href={`/?v=${video.id}`}
+      // /watch/[id], not /?v= — Home is a curated feed now, not "every
+      // video," so an older upload from your own back-catalog frequently
+      // isn't in it; /?v= would silently open whatever else is first in
+      // Home instead of this video, with no visible error.
+      href={`/watch/${video.id}`}
       aria-label={`Watch ${video.title}`}
       style={{ aspectRatio: `${video.width} / ${video.height}` }}
       className="group relative block rounded-xl overflow-hidden bg-card border border-border text-left mb-3 break-inside-avoid"

@@ -7,6 +7,7 @@ import { Camera, Loader2, UserCircle2, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUserStore } from "@/store/current-user-store";
 import { profileEditSchema, ACCEPTED_IMAGE_TYPES, MAX_IMAGE_BYTES } from "@/lib/validation/profile";
+import { useEscapeToClose } from "@/lib/use-escape-to-close";
 import { cn } from "@/lib/utils";
 
 type PendingImage = { file: File; previewUrl: string };
@@ -52,6 +53,13 @@ export function EditProfileModal({
 
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
+
+  // Called before the early return below (Rules of Hooks) — uses the raw
+  // onClose prop rather than resetAndClose (defined further down, closes
+  // over the narrowed non-null profile) so Escape doesn't reset in-progress
+  // edits, only Cancel/X do. Minor inconsistency, not worth restructuring
+  // the component around.
+  useEscapeToClose(open, onClose);
 
   if (!profile) return null;
   const currentProfile = profile;
@@ -201,6 +209,9 @@ export function EditProfileModal({
             className="fixed inset-0 bg-bg/70 backdrop-blur-sm z-[60]"
           />
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Edit profile"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}

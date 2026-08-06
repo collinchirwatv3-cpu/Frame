@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Send, X } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { useCommentsStore, type Comment } from "@/store/comments-store";
+import { useEscapeToClose } from "@/lib/use-escape-to-close";
 import type { Video } from "@/lib/types";
 
 const EMPTY_COMMENTS: Comment[] = [];
@@ -27,6 +28,8 @@ export function CommentDrawer({
     if (open) fetchComments(video.id);
   }, [open, video.id, fetchComments]);
 
+  useEscapeToClose(open, onClose);
+
   function submit(e: React.FormEvent) {
     e.preventDefault();
     const text = draft.trim();
@@ -47,6 +50,9 @@ export function CommentDrawer({
             className="fixed inset-0 bg-bg/70 backdrop-blur-sm z-[60]"
           />
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Comments"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}

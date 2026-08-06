@@ -1,14 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { videos } from "@/lib/mock-data";
+import { fetchWatchPreview } from "./data";
 import { WatchRedirect } from "./WatchRedirect";
-
-// Public share previews only — deliberately searches `videos`, never
-// `privateVideos`. A private video must never get a crawlable, publicly
-// unfurlable URL; that's what the token-gated /s/[token] route is for.
-function findVideo(id: string) {
-  return videos.find((v) => v.id === id);
-}
 
 export async function generateMetadata({
   params,
@@ -16,11 +9,11 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const video = findVideo(id);
+  const video = await fetchWatchPreview(id);
   if (!video) return { title: "FRAMES" };
 
   const title = `${video.title} — FRAMES`;
-  const description = `${video.description} · @${video.creator.username} on FRAMES`;
+  const description = `${video.description} · @${video.creatorUsername} on FRAMES`;
 
   return {
     title,
@@ -40,7 +33,8 @@ export async function generateMetadata({
 
 export default async function WatchPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  if (!findVideo(id)) notFound();
+  const video = await fetchWatchPreview(id);
+  if (!video) notFound();
 
   return <WatchRedirect videoId={id} />;
 }

@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Check, Loader2, Plus, Search, X } from "lucide-react";
 import { fetchPublicVideos } from "@/lib/watch-together";
 import { matchesVideoQuery } from "@/lib/search";
+import { useEscapeToClose } from "@/lib/use-escape-to-close";
 import type { QueueItem } from "@/lib/use-watch-room";
 import type { Video } from "@/lib/types";
 
@@ -24,6 +25,8 @@ export function AddToQueueSheet({
   const [videos, setVideos] = useState<Video[]>([]);
   const [query, setQuery] = useState("");
   const [justAdded, setJustAdded] = useState<string | null>(null);
+
+  useEscapeToClose(open, onClose);
 
   useEffect(() => {
     // Loading starts true and only ever flips false once — reopening the
@@ -61,6 +64,9 @@ export function AddToQueueSheet({
             className="fixed inset-0 bg-bg/70 backdrop-blur-sm z-[70]"
           />
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Add to queue"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}

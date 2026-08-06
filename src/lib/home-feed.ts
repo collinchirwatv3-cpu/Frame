@@ -12,22 +12,35 @@ const FOR_YOU_CAP = 30;
  *
  * Signed-out visitors (userId null) get For You only — Saved/History are
  * inherently per-account.
+ *
+ * All three sections are fetched in parallel, not sequentially — none of
+ * them actually need each other's *data*, only a budget computed from each
+ * other's result *counts*, so there's no reason to pay three round trips
+ * back to back on every Home load. Saved/History are asked for up to the
+ * full remaining cap rather than a precisely pre-computed remainder; worst
+ * case that over-fetches a few rows that get sliced away below, which is
+ * far cheaper than a third sequential network round trip.
  */
 export async function fetchHomeFeed(userId: string | null): Promise<Video[]> {
-  const forYou = await fetchPublicVideos(FOR_YOU_CAP);
+  if (!userId) {
+    const forYou = await fetchPublicVideos(FOR_YOU_CAP);
+    return forYou.slice(0, TOTAL_CAP);
+  }
 
-  if (!userId) return forYou.slice(0, TOTAL_CAP);
+  const [forYou, saved, history] = await Promise.all([
+    fetchPublicVideos(FOR_YOU_CAP),
+    fetchSavedVideos(userId, TOTAL_CAP),
+    fetchHistoryVideos(userId, TOTAL_CAP),
+  ]);
 
-  const seen = new Set(forYou.map((v) => v.id));
-  const remainingAfterForYou = TOTAL_CAP - forYou.length;
+  const seen = new Set<string>();
+  const combined: Video[] = [];
+  for (const video of [...forYou, ...saved, ...history]) {
+    if (seen.has(video.id)) continue;
+    seen.add(video.id);
+    combined.push(video);
+    if (combined.length === TOTAL_CAP) break;
+  }
 
-  const saved = remainingAfterForYou > 0 ? await fetchSavedVideos(userId, remainingAfterForYou) : [];
-  const newSaved = saved.filter((v) => !seen.has(v.id));
-  newSaved.forEach((v) => seen.add(v.id));
-
-  const remainingAfterSaved = remainingAfterForYou - newSaved.length;
-  const history = remainingAfterSaved > 0 ? await fetchHistoryVideos(userId, remainingAfterSaved) : [];
-  const newHistory = history.filter((v) => !seen.has(v.id));
-
-  return [...forYou, ...newSaved, ...newHistory].slice(0, TOTAL_CAP);
+  return combined;
 }

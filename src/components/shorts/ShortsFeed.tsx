@@ -65,6 +65,24 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
     });
   }, [activeIndex]);
 
+  // Had no keyboard path at all before this — SwipeFeed's own arrow-key
+  // scroll (src/components/feed/SwipeFeed.tsx) was never mirrored here.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      const container = containerRef.current;
+      if (!container) return;
+      if (e.key === "ArrowDown" || e.key === "j") {
+        e.preventDefault();
+        container.scrollBy({ top: container.clientHeight, behavior: "smooth" });
+      } else if (e.key === "ArrowUp" || e.key === "k") {
+        e.preventDefault();
+        container.scrollBy({ top: -container.clientHeight, behavior: "smooth" });
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   if (shorts.length === 0) {
     return (
       <div className="relative flex flex-col items-center justify-center h-dvh text-center px-6 gap-2">
@@ -78,6 +96,8 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
   return (
     <div
       ref={containerRef}
+      role="region"
+      aria-label={`Shorts, ${activeIndex + 1} of ${shorts.length}`}
       className="relative h-dvh w-full overflow-y-scroll snap-y snap-mandatory no-scrollbar bg-bg"
     >
       <SearchButton className="fixed top-4 right-4 md:top-6 md:right-6 z-20" />
@@ -92,6 +112,8 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
               sectionRefs.current[index] = el;
             }}
             data-index={index}
+            aria-label={`${short.title} by @${short.creator.username}`}
+            aria-hidden={!active}
             className="h-dvh w-full snap-center flex items-center justify-center"
           >
             <div

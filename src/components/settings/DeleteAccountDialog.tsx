@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { useEscapeToClose } from "@/lib/use-escape-to-close";
 
 const CONFIRM_PHRASE = "DELETE";
 
@@ -20,6 +21,8 @@ export function DeleteAccountDialog({ open, onClose }: { open: boolean; onClose:
     setError("");
     onClose();
   }
+
+  useEscapeToClose(open, handleClose);
 
   async function handleDelete() {
     setDeleting(true);
@@ -55,6 +58,9 @@ export function DeleteAccountDialog({ open, onClose }: { open: boolean; onClose:
             className="fixed inset-0 bg-bg/70 backdrop-blur-sm z-[60]"
           />
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Delete your account"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}

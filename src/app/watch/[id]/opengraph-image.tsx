@@ -1,5 +1,5 @@
 import { ImageResponse } from "next/og";
-import { videos } from "@/lib/mock-data";
+import { fetchWatchPreview } from "./data";
 
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
@@ -13,7 +13,7 @@ function formatDuration(totalSeconds: number) {
 export default async function Image({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   // Public share previews only — private videos never get an OG image.
-  const video = videos.find((v) => v.id === id);
+  const video = await fetchWatchPreview(id);
 
   if (!video) {
     return new ImageResponse(
@@ -100,7 +100,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
             {video.title}
           </span>
           <div style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 26, color: "#8E8E93" }}>
-            <span>@{video.creator.username}</span>
+            <span>@{video.creatorUsername}</span>
             <span>·</span>
             <span>{formatDuration(video.durationSeconds)}</span>
           </div>

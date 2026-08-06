@@ -1,0 +1,31 @@
+-- RC1 security audit — same bug class as 20260808000000_profile_self_edit.sql's
+-- profiles fix, never checked for videos until now: videos_update_own RLS
+-- (20260101000000_init.sql) restricts which ROW a creator can touch, not
+-- which COLUMNS — Postgres RLS has no concept of column restriction, and
+-- this table has never had its baseline Supabase grant (full-table UPDATE
+-- to authenticated) revoked. That means, as shipped, any signed-in creator
+-- could PATCH /rest/v1/videos?id=eq.<their-own-video> with an arbitrary
+-- body — likes_count/comments_count/shares_count/saves_count (self-inflate
+-- engagement), quality_score (fraudulently cross the FRAMES Certified
+-- threshold — the schema's own comment says this must never be
+-- client-influenced), processing_status (fake a video to "ready" without
+-- Stream ever actually encoding it), stream_uid, content_type, badges — all
+-- of it, on their own row, today, via a raw request no UI needs to expose.
+--
+-- Unlike profiles, there is no legitimate client feature to preserve here:
+-- the only code that ever updates videos is the Stream webhook
+-- (api/webhooks/stream/route.ts), which uses the service-role key and
+-- bypasses RLS/grants entirely — nothing currently relies on
+-- authenticated-role UPDATE access to this table at all. Revoking outright
+-- rather than granting back a safe subset of columns, the way the profiles
+-- fix did; if a real "edit your video" feature is ever built, it gets its
+-- own deliberate column-level grant then, not a default-open one now.
+-- Unlike function EXECUTE (which Postgres grants to PUBLIC automatically at
+-- CREATE time — the exact mechanism that made the two earlier RPC-lockdown
+-- migrations this alpha ship with fail silently), table privileges are
+-- never auto-granted to PUBLIC; Supabase's project bootstrap grants them to
+-- anon/authenticated explicitly. Revoking from authenticated alone should
+-- therefore be sufficient — but given that exact wrong assumption already
+-- cost a re-fix once this alpha, all three are revoked here for zero
+-- additional cost rather than trusting the same reasoning twice.
+revoke update on table videos from authenticated, anon, public;
