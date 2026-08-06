@@ -24,9 +24,9 @@ const geistMono = Geist_Mono({
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "FRAME — Cinematic Landscape Video",
+  title: "FRAMES — Cinematic Landscape Video",
   description:
-    "FRAME is the home for landscape creators. Every video full-screen and cinematic — 16:9, 21:9, and 16:10.",
+    "FRAMES is the home for landscape creators. Every video full-screen and cinematic — 16:9, 21:9, and 16:10.",
 };
 
 export default function RootLayout({

@@ -29,7 +29,7 @@ export type Category =
   | "Nature";
 
 export type Badge =
-  | "FRAME Certified"
+  | "FRAMES Certified"
   | "4K"
   | "HDR"
   | "Dolby Vision"

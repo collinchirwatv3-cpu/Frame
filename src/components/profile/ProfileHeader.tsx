@@ -26,7 +26,7 @@ export function ProfileHeader({ creator }: { creator: Creator }) {
   async function handleShare() {
     const url = `${window.location.origin}/profile`;
     const result = await shareContent({
-      title: `@${creator.username} on FRAME`,
+      title: `@${creator.username} on FRAMES`,
       text: creator.bio,
       url,
     });

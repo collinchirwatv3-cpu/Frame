@@ -39,7 +39,7 @@ export function SharedVideoPlayer({ video }: { video: Video }) {
 
       <div className="absolute top-4 left-4 md:top-6 md:left-6 flex items-center gap-2">
         <Logo size={28} />
-        <span className="text-sm font-bold tracking-tight drop-shadow-sm">FRAME</span>
+        <span className="text-sm font-bold tracking-tight drop-shadow-sm">FRAMES</span>
       </div>
 
       <button
@@ -63,7 +63,7 @@ export function SharedVideoPlayer({ video }: { video: Video }) {
           href="/login"
           className="self-start px-4 py-2 rounded-full bg-primary text-bg text-xs font-semibold"
         >
-          Get FRAME to watch more
+          Get FRAMES to watch more
         </Link>
       </div>
     </div>

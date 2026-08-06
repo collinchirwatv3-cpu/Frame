@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalPage, DraftNotice } from "@/components/legal/LegalPage";
 
-export const metadata: Metadata = { title: "Community Guidelines — FRAME" };
+export const metadata: Metadata = { title: "Community Guidelines — FRAMES" };
 
 export default function CommunityGuidelinesPage() {
   return (
@@ -10,11 +10,11 @@ export default function CommunityGuidelinesPage() {
       <DraftNotice />
 
       <p>
-        FRAME exists for landscape storytelling — a cinematic home for filmmakers, drone pilots,
+        FRAMES exists for landscape storytelling — a cinematic home for filmmakers, drone pilots,
         and anyone who shoots wide. These guidelines keep it that way.
       </p>
 
-      <h2>What belongs on FRAME</h2>
+      <h2>What belongs on FRAMES</h2>
       <ul>
         <li>Original landscape video (16:9, 21:9 Cinema, or 16:10) that you have the rights to.</li>
         <li>Real shooting details, credit, and context — Creator Notes and Shot Details exist for this.</li>
@@ -39,7 +39,7 @@ export default function CommunityGuidelinesPage() {
         <li>Spam, scams, or coordinated inauthentic behavior.</li>
         <li>Illegal content of any kind.</li>
         <li>Impersonating another person or creator.</li>
-        <li>Content that isn&apos;t genuinely landscape/cinematic video — FRAME is not a general video platform.</li>
+        <li>Content that isn&apos;t genuinely landscape/cinematic video — FRAMES is not a general video platform.</li>
       </ul>
 
       <h2>Reporting</h2>

@@ -12,7 +12,7 @@ export function WatchRedirect({ videoId }: { videoId: string }) {
 
   return (
     <div className="min-h-dvh flex items-center justify-center text-sm text-text-secondary">
-      Opening in FRAME…
+      Opening in FRAMES…
     </div>
   );
 }

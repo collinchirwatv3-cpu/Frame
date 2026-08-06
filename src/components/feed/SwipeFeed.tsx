@@ -150,7 +150,7 @@ export function SwipeFeed({ videos }: { videos: Video[] }) {
             <>
               <p className="text-lg font-semibold">No videos yet</p>
               <p className="text-sm text-text-secondary max-w-xs">
-                FRAME is just getting started — be the first to upload something worth watching.
+                FRAMES is just getting started — be the first to upload something worth watching.
               </p>
               <Link
                 href="/upload"

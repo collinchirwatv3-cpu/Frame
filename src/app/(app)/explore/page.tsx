@@ -42,7 +42,7 @@ export default function ExplorePage() {
   // and would just be re-labeled slices of the same handful of videos — the
   // "endless algorithmic clutter" the brief itself warns against.
   const watchLater = videos.filter((v) => savedVideos[v.id]);
-  const staffPicks = videos.filter((v) => computeBadges(v).includes("FRAME Certified"));
+  const staffPicks = videos.filter((v) => computeBadges(v).includes("FRAMES Certified"));
   const bestDrone = videos.filter((v) => computeBadges(v).includes("Drone"));
   const newVoices = videos.filter((v) => v.creator.followers < 150_000);
 

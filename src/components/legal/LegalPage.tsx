@@ -21,7 +21,7 @@ export function LegalPage({
       <header className="border-b border-border px-6 py-5 flex items-center justify-between max-w-2xl mx-auto">
         <Link href="/" className="flex items-center gap-2">
           <Logo size={24} />
-          <span className="text-base font-bold tracking-tight">FRAME</span>
+          <span className="text-base font-bold tracking-tight">FRAMES</span>
         </Link>
         <Link
           href="/"
@@ -59,7 +59,7 @@ export function DraftNotice() {
   return (
     <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-xs text-text-secondary mb-2">
       <strong className="text-primary">Draft — pending legal review.</strong> This page is a
-      complete starting draft, not a substitute for review by a lawyer before FRAME is used by
+      complete starting draft, not a substitute for review by a lawyer before FRAMES is used by
       real creators outside the team.
     </div>
   );

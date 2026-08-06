@@ -43,12 +43,12 @@ describe("computeBadges", () => {
     expect(badges).toContain("21:9 Cinema");
   });
 
-  it("preserves a manually-authored FRAME Certified badge regardless of score", () => {
-    const badges = computeBadges(makeVideo({ badges: ["FRAME Certified"], likes: 1 }));
-    expect(badges).toContain("FRAME Certified");
+  it("preserves a manually-authored FRAMES Certified badge regardless of score", () => {
+    const badges = computeBadges(makeVideo({ badges: ["FRAMES Certified"], likes: 1 }));
+    expect(badges).toContain("FRAMES Certified");
   });
 
-  it("grants FRAME Certified purely from the Quality Index when it's earned, not just authored", () => {
+  it("grants FRAMES Certified purely from the Quality Index when it's earned, not just authored", () => {
     const highScoring = makeVideo({
       width: 3840,
       height: 2160,
@@ -56,7 +56,7 @@ describe("computeBadges", () => {
       likes: 500_000,
       creator: { ...makeVideo().creator, followers: 100_000 },
     });
-    expect(computeBadges(highScoring)).toContain("FRAME Certified");
+    expect(computeBadges(highScoring)).toContain("FRAMES Certified");
   });
 
   it("does not certify a video with no strong signal", () => {
@@ -67,6 +67,6 @@ describe("computeBadges", () => {
       likes: 1,
       creator: { ...makeVideo().creator, followers: 1_000_000 },
     });
-    expect(computeBadges(lowScoring)).not.toContain("FRAME Certified");
+    expect(computeBadges(lowScoring)).not.toContain("FRAMES Certified");
   });
 });

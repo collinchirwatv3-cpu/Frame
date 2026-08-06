@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import type { Badge } from "@/lib/types";
 
 const BADGE_ICON: Record<Badge, React.ElementType> = {
-  "FRAME Certified": ShieldCheck,
+  "FRAMES Certified": ShieldCheck,
   "4K": MonitorPlay,
   HDR: SunMedium,
   "Dolby Vision": SunMedium,
@@ -25,7 +25,7 @@ const BADGE_ICON: Record<Badge, React.ElementType> = {
 
 // Roughly most- to least-impressive, for contexts that only show one badge.
 const BADGE_PRIORITY: Badge[] = [
-  "FRAME Certified",
+  "FRAMES Certified",
   "21:9 Cinema",
   "4K",
   "Dolby Vision",

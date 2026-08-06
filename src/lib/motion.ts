@@ -1,4 +1,4 @@
-/** Shared motion vocabulary — every animation in FRAME should reach for these
+/** Shared motion vocabulary — every animation in FRAMES should reach for these
  * instead of inventing new durations/curves inline, so the app moves like one
  * considered thing rather than a pile of ad hoc springs. */
 

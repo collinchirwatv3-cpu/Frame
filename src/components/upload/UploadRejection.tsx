@@ -78,12 +78,12 @@ export function UploadRejection({
           <AlertTriangle size={24} className="text-primary" />
         </span>
         <h1 className="text-xl font-bold">
-          {isPortrait ? "FRAME is landscape-only" : "This ratio isn't supported yet"}
+          {isPortrait ? "FRAMES is landscape-only" : "This ratio isn't supported yet"}
         </h1>
         <p className="text-sm text-text-secondary max-w-sm">
           {isPortrait
-            ? "FRAME exists to celebrate cinematic, widescreen storytelling — every upload has to be landscape."
-            : "FRAME supports a specific set of landscape ratios so every video stays true to the creator's composition."}
+            ? "FRAMES exists to celebrate cinematic, widescreen storytelling — every upload has to be landscape."
+            : "FRAMES supports a specific set of landscape ratios so every video stays true to the creator's composition."}
         </p>
         <div className="flex items-center gap-3 text-xs text-text-secondary bg-card border border-border rounded-full px-4 py-2 mt-1">
           <span>

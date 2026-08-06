@@ -42,7 +42,7 @@ export function VideoOptionsSheet({
         return;
       }
       if (!res.ok) throw new Error();
-      setFeedback("Reported — thanks for helping keep FRAME safe");
+      setFeedback("Reported — thanks for helping keep FRAMES safe");
     } catch {
       setFeedback("Couldn't submit your report — try again");
     } finally {

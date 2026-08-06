@@ -47,7 +47,7 @@ function formatElapsed(seconds: number): string {
  * getUserMedia's orientation behavior is notoriously inconsistent across
  * mobile browsers, so the reliable move is asking the creator to physically
  * rotate the device and blocking Record until `matchMedia` confirms it —
- * consistent with "FRAME is landscape only, no exceptions" elsewhere in the
+ * consistent with "FRAMES is landscape only, no exceptions" elsewhere in the
  * upload flow.
  */
 export function CameraCapture({
@@ -188,7 +188,7 @@ export function CameraCapture({
         <CameraOff size={40} className="text-primary" />
         <h2 className="text-lg font-semibold">Camera access needed</h2>
         <p className="text-sm text-text-secondary max-w-sm">
-          {errorMessage || "Allow camera access in your browser to record directly in FRAME."}
+          {errorMessage || "Allow camera access in your browser to record directly in FRAMES."}
         </p>
         <button
           onClick={onClose}
@@ -248,7 +248,7 @@ export function CameraCapture({
             </div>
             <p className="text-sm font-medium">Rotate your device to landscape</p>
             <p className="text-xs text-text-secondary max-w-[220px]">
-              FRAME is landscape only — turn your phone sideways to start recording.
+              FRAMES is landscape only — turn your phone sideways to start recording.
             </p>
           </div>
         )}

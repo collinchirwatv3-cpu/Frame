@@ -50,14 +50,14 @@ export default function OnboardingPage() {
           >
             <div className="flex items-center gap-2 justify-center mb-8">
               <Logo size={32} />
-              <span className="text-2xl font-bold tracking-tight">FRAME</span>
+              <span className="text-2xl font-bold tracking-tight">FRAMES</span>
             </div>
 
             <h1 className="text-2xl font-bold leading-snug">
               The cinematic social network
             </h1>
             <p className="text-text-secondary text-sm mt-4 leading-relaxed">
-              FRAME exists for landscape storytelling — 16:9, 21:9 Cinema, 16:10.
+              FRAMES exists for landscape storytelling — 16:9, 21:9 Cinema, 16:10.
               No portrait video, no black bars, no infinite doomscroll. Every swipe
               takes you to another scene, like walking through a film festival that
               never ends.
@@ -81,7 +81,7 @@ export default function OnboardingPage() {
           >
             <div className="flex items-center gap-2 justify-center mb-8">
               <Logo size={32} />
-              <span className="text-2xl font-bold tracking-tight">FRAME</span>
+              <span className="text-2xl font-bold tracking-tight">FRAMES</span>
             </div>
 
             <h1 className="text-xl font-bold text-center">What do you love watching?</h1>

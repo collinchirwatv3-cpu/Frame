@@ -72,7 +72,7 @@ describe("matchesCollectionQuery", () => {
   const collection: Collection = {
     id: "col-1",
     title: "Drone Masters",
-    description: "The best aerial work on FRAME.",
+    description: "The best aerial work on FRAMES.",
     coverUrl: "",
     videoIds: [],
   };

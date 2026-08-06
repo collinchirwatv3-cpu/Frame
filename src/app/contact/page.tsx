@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Mail } from "lucide-react";
 import { LegalPage, DraftNotice } from "@/components/legal/LegalPage";
 
-export const metadata: Metadata = { title: "Contact — FRAME" };
+export const metadata: Metadata = { title: "Contact — FRAMES" };
 
 const CHANNELS = [
   {

@@ -30,7 +30,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
             fontSize: 32,
           }}
         >
-          FRAME
+          FRAMES
         </div>
       ),
       { ...size }
@@ -75,7 +75,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
               display: "flex",
             }}
           />
-          <span style={{ fontSize: 30, fontWeight: 700, color: "#FFFFFF" }}>FRAME</span>
+          <span style={{ fontSize: 30, fontWeight: 700, color: "#FFFFFF" }}>FRAMES</span>
         </div>
 
         <div

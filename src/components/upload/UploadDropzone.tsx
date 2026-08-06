@@ -41,7 +41,7 @@ type Status =
 // back to the extension avoids silently dropping a real video pick. Covers
 // iPhone (mov/m4v, HEVC or H.264 inside), Android (mp4/webm/3gp), and
 // prosumer/broadcast camera exports (mts/m2ts AVCHD camcorders, mxf, ts,
-// wmv) — not just mp4. This check only gates whether FRAME attempts to read
+// wmv) — not just mp4. This check only gates whether FRAMES attempts to read
 // the file at all; whether it can actually preview it locally still depends
 // on the browser's own codec support (see analyzeFile's onerror path).
 const VIDEO_EXTENSION = /\.(mp4|mov|m4v|webm|avi|mkv|3gp|mts|m2ts|mxf|ts|wmv|flv|ogv)$/i;
@@ -283,7 +283,7 @@ export function UploadDropzone() {
         >
           <CheckCircle2 size={56} className="text-primary" />
         </motion.div>
-        <h2 className="text-xl font-bold">You&apos;re live on FRAME</h2>
+        <h2 className="text-xl font-bold">You&apos;re live on FRAMES</h2>
         <p className="text-text-secondary text-sm max-w-sm">{fileName} finished encoding and is ready to watch.</p>
         <div className="flex gap-3 mt-2">
           {videoId && (
@@ -528,7 +528,7 @@ export function UploadDropzone() {
               className="flex-1 py-2.5 rounded-full bg-primary text-bg text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-70"
             >
               {status === "minting" && <Loader2 size={16} className="animate-spin" />}
-              {status === "minting" ? "Starting upload…" : "Publish to FRAME"}
+              {status === "minting" ? "Starting upload…" : "Publish to FRAMES"}
             </button>
           </div>
         </form>
@@ -540,7 +540,7 @@ export function UploadDropzone() {
     <div className="max-w-2xl mx-auto px-6 py-12">
       <h1 className="text-2xl font-bold mb-1">Upload</h1>
       <p className="text-text-secondary text-sm mb-6">
-        Landscape only. FRAME supports 16:9, 21:9 Cinema, and 16:10 — no exceptions, no black
+        Landscape only. FRAMES supports 16:9, 21:9 Cinema, and 16:10 — no exceptions, no black
         bars.
       </p>
 

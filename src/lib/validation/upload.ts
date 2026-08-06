@@ -40,7 +40,7 @@ export const uploadMetadataSchema = z
       .max(20 * 1024 * 1024 * 1024, "File is too large"),
   })
   .refine((data) => data.width > data.height, {
-    message: "FRAME is landscape-only",
+    message: "FRAMES is landscape-only",
     path: ["width"],
   });
 

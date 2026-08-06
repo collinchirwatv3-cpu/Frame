@@ -29,7 +29,7 @@ export function SideRail() {
       <div>
         <Link href="/" className="flex items-center gap-2 px-2 mb-10">
           <Logo size={28} />
-          <span className="text-lg font-bold tracking-tight">FRAME</span>
+          <span className="text-lg font-bold tracking-tight">FRAMES</span>
         </Link>
 
         <ul className="flex flex-col gap-1">

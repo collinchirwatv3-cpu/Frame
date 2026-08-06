@@ -88,7 +88,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="flex items-center gap-2 justify-center mb-10">
           <Logo size={32} />
-          <span className="text-2xl font-bold tracking-tight">FRAME</span>
+          <span className="text-2xl font-bold tracking-tight">FRAMES</span>
         </div>
 
         <div className="flex flex-col gap-3">
@@ -149,7 +149,7 @@ export default function LoginPage() {
         )}
 
         <p className="text-[11px] text-center text-text-secondary mt-6">
-          By continuing, you agree to FRAME&apos;s{" "}
+          By continuing, you agree to FRAMES&apos;{" "}
           <Link href="/terms" className="text-primary underline underline-offset-2">
             Terms
           </Link>{" "}

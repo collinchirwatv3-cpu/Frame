@@ -10,10 +10,10 @@ import { useInviteStore } from "@/store/invite-store";
 
 // Public share links and legal/informational pages are the deliberate
 // exceptions to "nothing is reachable without a code" — share links are
-// designed to work for people who aren't on FRAME at all (see /s/[token],
+// designed to work for people who aren't on FRAMES at all (see /s/[token],
 // /watch/[id]'s Open Graph unfurl), and legal pages need to be publicly
 // readable (someone deciding whether to request an invite, or verifying
-// FRAME's policies, shouldn't need one first) — gating either would
+// FRAMES' policies, shouldn't need one first) — gating either would
 // silently break an already-shipped feature or basic transparency.
 const BYPASS_PREFIXES = [
   "/s/",
@@ -91,11 +91,11 @@ export function InviteGate({ children }: { children: React.ReactNode }) {
       <div className="w-full max-w-sm text-center">
         <div className="flex items-center gap-2 justify-center mb-8">
           <Logo size={32} />
-          <span className="text-2xl font-bold tracking-tight">FRAME</span>
+          <span className="text-2xl font-bold tracking-tight">FRAMES</span>
         </div>
         <h1 className="text-lg font-semibold mb-1.5">You need an invite</h1>
         <p className="text-sm text-text-secondary mb-6">
-          FRAME is in a closed creator alpha right now — enter your invite code to get in.
+          FRAMES is in a closed creator alpha right now — enter your invite code to get in.
         </p>
         <form onSubmit={submit} className="flex flex-col gap-3">
           <input

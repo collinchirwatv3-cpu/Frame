@@ -55,7 +55,7 @@ export function RotateDevicePrompt() {
           </motion.span>
           <p className="text-sm font-medium">Turn your phone sideways</p>
           <p className="text-xs text-text-secondary max-w-[240px]">
-            FRAME is built for landscape — rotate for the full cinematic view.
+            FRAMES is built for landscape — rotate for the full cinematic view.
           </p>
           <button
             onClick={() => setDismissed(true)}

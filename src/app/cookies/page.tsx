@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalPage, DraftNotice } from "@/components/legal/LegalPage";
 
-export const metadata: Metadata = { title: "Cookie Policy — FRAME" };
+export const metadata: Metadata = { title: "Cookie Policy — FRAMES" };
 
 export default function CookiesPage() {
   return (
@@ -10,7 +10,7 @@ export default function CookiesPage() {
       <DraftNotice />
 
       <p>
-        FRAME uses a small number of cookies and local browser storage — all functional, none
+        FRAMES uses a small number of cookies and local browser storage — all functional, none
         for third-party advertising or tracking. Here&apos;s exactly what&apos;s stored and why.
       </p>
 

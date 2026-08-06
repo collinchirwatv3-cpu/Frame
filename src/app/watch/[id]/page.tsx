@@ -17,10 +17,10 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { id } = await params;
   const video = findVideo(id);
-  if (!video) return { title: "FRAME" };
+  if (!video) return { title: "FRAMES" };
 
-  const title = `${video.title} — FRAME`;
-  const description = `${video.description} · @${video.creator.username} on FRAME`;
+  const title = `${video.title} — FRAMES`;
+  const description = `${video.description} · @${video.creator.username} on FRAMES`;
 
   return {
     title,

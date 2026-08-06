@@ -132,7 +132,7 @@ export const videos: Video[] = [
     durationSeconds: 58,
     width: 1280,
     height: 720,
-    badges: ["FRAME Certified"],
+    badges: ["FRAMES Certified"],
   },
   {
     id: "76bfe705-bf8c-49d4-be62-63ea68ae1c11",
@@ -140,7 +140,7 @@ export const videos: Video[] = [
     playbackUrl: sampleMp4("ForBiggerFun"),
     posterUrl: poster("v4"),
     title: "Live from Warehouse 12",
-    description: "Closing set, unedited. Full set on FRAME first.",
+    description: "Closing set, unedited. Full set on FRAMES first.",
     category: "Music",
     soundName: "Live set · nightpulse",
     likes: 212_900,
@@ -150,7 +150,7 @@ export const videos: Video[] = [
     durationSeconds: 47,
     width: 1280,
     height: 720,
-    badges: ["FRAME Certified", "Spatial Audio"],
+    badges: ["FRAMES Certified", "Spatial Audio"],
   },
   {
     id: "2e9abccc-82ff-477d-934f-d6388e5a4983",
@@ -199,7 +199,7 @@ export const collections: Collection[] = [
   {
     id: "f9cf458e-feef-4b68-8361-f86c0a56effc",
     title: "Drone Masters",
-    description: "The best aerial work on FRAME — flown, not flown-over.",
+    description: "The best aerial work on FRAMES — flown, not flown-over.",
     coverUrl: poster("v5"),
     videoIds: [videos[0].id, videos[4].id],
   },

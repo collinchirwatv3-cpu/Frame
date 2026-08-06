@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalPage, DraftNotice } from "@/components/legal/LegalPage";
 
-export const metadata: Metadata = { title: "Privacy Policy — FRAME" };
+export const metadata: Metadata = { title: "Privacy Policy — FRAMES" };
 
 export default function PrivacyPage() {
   return (
@@ -10,7 +10,7 @@ export default function PrivacyPage() {
       <DraftNotice />
 
       <p>
-        This policy explains what information FRAME collects, how it&apos;s used, and the
+        This policy explains what information FRAMES collects, how it&apos;s used, and the
         choices you have about it.
       </p>
 
@@ -19,12 +19,12 @@ export default function PrivacyPage() {
         <strong>Account information.</strong> When you sign in with Google, Apple, or email, we
         receive your email address and, if your provider shares it, your name and profile photo.
         If you sign up with email, we send a one-time sign-in link rather than storing a
-        password — FRAME never has access to your Google or Apple password.
+        password — FRAMES never has access to your Google or Apple password.
       </p>
       <p>
         <strong>Profile information.</strong> Anything you choose to add to your profile —
         username, bio, avatar, banner, equipment list, website — is stored and shown publicly on
-        FRAME.
+        FRAMES.
       </p>
       <p>
         <strong>Content you upload.</strong> Videos, titles, descriptions, and any shooting
@@ -40,13 +40,13 @@ export default function PrivacyPage() {
       <ul>
         <li>To operate your account and show your content to other creators and viewers.</li>
         <li>To personalize what you see (interests you pick, creators you follow).</li>
-        <li>To keep FRAME secure — detecting abuse, enforcing rate limits, investigating reports.</li>
+        <li>To keep FRAMES secure — detecting abuse, enforcing rate limits, investigating reports.</li>
         <li>To contact you about your account when necessary (security, policy changes).</li>
       </ul>
       <p>We do not sell your personal information.</p>
 
       <h2>Who we share it with</h2>
-      <p>FRAME is built on a small number of infrastructure providers who process data on our behalf:</p>
+      <p>FRAMES is built on a small number of infrastructure providers who process data on our behalf:</p>
       <ul>
         <li>
           <strong>Supabase</strong> — authentication and our database (accounts, profiles, videos
@@ -62,7 +62,7 @@ export default function PrivacyPage() {
         </li>
       </ul>
       <p>
-        We don&apos;t share your data with advertisers — FRAME doesn&apos;t run third-party ad
+        We don&apos;t share your data with advertisers — FRAMES doesn&apos;t run third-party ad
         tracking. See our <Link href="/cookies">Cookie Policy</Link> for the specifics of what
         gets stored in your browser.
       </p>
@@ -81,7 +81,7 @@ export default function PrivacyPage() {
 
       <h2>Children&apos;s privacy</h2>
       <p>
-        FRAME is not directed at children under 13, and we don&apos;t knowingly collect
+        FRAMES is not directed at children under 13, and we don&apos;t knowingly collect
         information from anyone under that age.
       </p>
 

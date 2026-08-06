@@ -3,9 +3,9 @@ import { classifyAspectRatio } from "./aspect-ratio";
 import type { Video } from "./types";
 
 /**
- * FRAME Quality Index — a 0–100 score, never shown to users (per spec: "never
+ * FRAMES Quality Index — a 0–100 score, never shown to users (per spec: "never
  * expose raw calculations"). It only matters through what it drives — right
- * now, whether a video qualifies for the `FRAME Certified` badge alongside
+ * now, whether a video qualifies for the `FRAMES Certified` badge alongside
  * manual editorial picks (see `badges.ts`).
  *
  * Honest about its inputs: resolution and aspect-ratio are objective, read
@@ -35,4 +35,4 @@ export function computeQualityScore(video: Video): number {
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
-export const FRAME_CERTIFIED_THRESHOLD = 70;
+export const FRAMES_CERTIFIED_THRESHOLD = 70;
