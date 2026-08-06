@@ -166,7 +166,7 @@ export function SwipeFeed({ videos }: { videos: Video[] }) {
                 Videos from creators you follow will show up in this tab.
               </p>
               <Link
-                href="/explore"
+                href="/discover"
                 className="mt-2 px-5 py-2.5 rounded-full bg-primary text-bg text-sm font-semibold"
               >
                 Find creators to follow

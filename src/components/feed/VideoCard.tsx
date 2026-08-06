@@ -2,6 +2,7 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { Maximize2, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { ActionRail } from "./ActionRail";
@@ -9,7 +10,9 @@ import { VideoOverlay } from "./VideoOverlay";
 import { CommentDrawer } from "./CommentDrawer";
 import { VideoOptionsSheet } from "./VideoOptionsSheet";
 import { VideoDetailsSheet } from "./VideoDetailsSheet";
+import { Avatar } from "@/components/ui/Avatar";
 import { usePlayerStore } from "@/store/player-store";
+import { useCurrentUserStore } from "@/store/current-user-store";
 import { fadeVolume } from "@/lib/audio";
 import { FOCUS_PULL_TRANSITION, CHROME_FADE_TRANSITION } from "@/lib/motion";
 import type { Video } from "@/lib/types";
@@ -44,6 +47,7 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
   const directorMode = usePlayerStore((s) => s.directorMode);
   const toggleDirectorMode = usePlayerStore((s) => s.toggleDirectorMode);
   const setScrubbing = usePlayerStore((s) => s.setScrubbing);
+  const ownProfile = useCurrentUserStore((s) => s.profile);
   const displayProgress = seeking ? scrubProgress : progress;
 
   useEffect(() => {
@@ -204,6 +208,23 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
                 monitors, so captions/actions stay visually anchored near the video
                 instead of floating at the far edges of a huge viewport. */}
             <div className="absolute inset-0 max-w-[1920px] mx-auto pointer-events-none">
+              {/* Profile/Inbox live off the main nav now — this is the only
+                  standing way back to your own profile from the feed. */}
+              {ownProfile && (
+                <Link
+                  href="/profile"
+                  aria-label="Your profile"
+                  className="pointer-events-auto absolute top-4 left-4 md:top-6 md:left-6 z-10 w-9 h-9 rounded-full ring-2 ring-bg/70 overflow-hidden"
+                >
+                  <Avatar
+                    src={ownProfile.avatarUrl}
+                    alt={ownProfile.displayName}
+                    size={36}
+                    className="w-full h-full"
+                  />
+                </Link>
+              )}
+
               {/* director mode + mute */}
               <div className="pointer-events-auto absolute top-4 right-4 md:top-6 md:right-6 z-10 flex items-center gap-2">
                 <button

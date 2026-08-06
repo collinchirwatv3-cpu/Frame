@@ -18,10 +18,10 @@ export function SavedCollections() {
         </span>
         <p className="text-sm font-medium">No collections saved yet</p>
         <p className="text-xs text-text-secondary max-w-[220px]">
-          Save a collection from Explore to build your shelf here.
+          Save a collection from Discover to build your shelf here.
         </p>
         <Link
-          href="/explore"
+          href="/discover"
           className="mt-1 px-4 py-2 rounded-full bg-primary text-bg text-xs font-semibold"
         >
           Browse collections

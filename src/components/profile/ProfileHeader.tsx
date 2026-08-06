@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Link as LinkIcon, Settings } from "lucide-react";
+import { Check, Link as LinkIcon, MessageCircle, Settings } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { EditProfileModal } from "@/components/profile/EditProfileModal";
 import { formatCount, shareContent } from "@/lib/utils";
@@ -43,6 +43,13 @@ export function ProfileHeader({ creator, isCreator }: { creator: Creator; isCrea
           <Image src={creator.bannerUrl} alt="" fill className="object-cover" />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-bg via-transparent to-bg/20" />
+        <Link
+          href="/inbox"
+          aria-label="Inbox"
+          className="absolute top-4 left-4 w-9 h-9 rounded-full bg-bg/70 backdrop-blur-md flex items-center justify-center"
+        >
+          <MessageCircle size={16} />
+        </Link>
         <Link
           href="/settings"
           aria-label="Settings"

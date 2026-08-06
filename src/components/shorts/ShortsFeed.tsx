@@ -10,7 +10,7 @@ import type { Video } from "@/lib/types";
 // shorts are lighter-weight (no Director Mode chrome, no action rail).
 const RENDER_WINDOW = 1;
 
-export function DiscoverFeed({ shorts }: { shorts: Video[] }) {
+export function ShortsFeed({ shorts }: { shorts: Video[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<(HTMLDivElement | null)[]>([]);
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);

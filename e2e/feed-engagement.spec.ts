@@ -30,7 +30,7 @@ test("the Following tab shows a distinct empty state from For You", async ({ pag
   await expect(page.getByText("Follow creators to see them here")).toBeVisible();
   await expect(page.getByRole("link", { name: "Find creators to follow" })).toHaveAttribute(
     "href",
-    "/explore"
+    "/discover"
   );
 
   // Distinct copy from For You — a real test that the tab actually switched
