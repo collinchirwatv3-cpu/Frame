@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { SearchButton } from "@/components/ui/SearchButton";
@@ -11,11 +11,32 @@ import type { Video } from "@/lib/types";
 // shorts are lighter-weight (no Director Mode chrome, no action rail).
 const RENDER_WINDOW = 1;
 
-export function ShortsFeed({ shorts }: { shorts: Video[] }) {
+/** `initialId` lets a caller open this feed scoped to an arbitrary list
+ * (search results, a creator's profile) starting at one specific short —
+ * mirrors SwipeFeed's `?v=` deep-link, as a prop instead since callers here
+ * already have the id in hand rather than needing to read it from the URL
+ * themselves. */
+export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<(HTMLDivElement | null)[]>([]);
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
-  const [activeIndex, setActiveIndex] = useState(0);
+  const initialIndex = useMemo(() => {
+    if (!initialId) return 0;
+    const idx = shorts.findIndex((s) => s.id === initialId);
+    return idx >= 0 ? idx : 0;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const [activeIndex, setActiveIndex] = useState(initialIndex);
+
+  // Jump straight to the deep-linked short before paint — no flash of index 0.
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    const target = sectionRefs.current[initialIndex];
+    if (container && target && initialIndex > 0) {
+      container.scrollTop = target.offsetTop;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const container = containerRef.current;

@@ -61,6 +61,10 @@ export type Video = {
   title: string;
   description: string;
   category: Category;
+  /** Absent on videos built before content_type existed (mock data, some
+   * client-side conversions) — always treat a missing value as "film",
+   * never as "short"; shorts are always explicitly tagged. */
+  contentType?: "film" | "short";
   soundName?: string;
   likes: number;
   comments: number;

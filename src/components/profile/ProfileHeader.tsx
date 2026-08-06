@@ -9,6 +9,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { SearchButton } from "@/components/ui/SearchButton";
 import { EditProfileModal } from "@/components/profile/EditProfileModal";
 import { formatCount, shareContent } from "@/lib/utils";
+import { useEngagementStore } from "@/store/engagement-store";
 import type { Creator } from "@/lib/types";
 
 function Stat({ value, label }: { value: number; label: string }) {
@@ -20,12 +21,24 @@ function Stat({ value, label }: { value: number; label: string }) {
   );
 }
 
-export function ProfileHeader({ creator, isCreator }: { creator: Creator; isCreator: boolean }) {
+export function ProfileHeader({
+  creator,
+  isCreator,
+  own = true,
+}: {
+  creator: Creator;
+  isCreator: boolean;
+  /** False when viewing someone else's profile (/profile/[username]) —
+   * hides Settings/Inbox/Edit Profile, shows Follow instead. */
+  own?: boolean;
+}) {
   const [shared, setShared] = useState(false);
   const [editing, setEditing] = useState(false);
+  const following = useEngagementStore((s) => !!s.followedCreators[creator.id]);
+  const toggleFollow = useEngagementStore((s) => s.toggleFollow);
 
   async function handleShare() {
-    const url = `${window.location.origin}/profile`;
+    const url = `${window.location.origin}/profile${own ? "" : `/${creator.username}`}`;
     const result = await shareContent({
       title: `@${creator.username} on FRAMES`,
       text: creator.bio,
@@ -44,22 +57,26 @@ export function ProfileHeader({ creator, isCreator }: { creator: Creator; isCrea
           <Image src={creator.bannerUrl} alt="" fill className="object-cover" />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-bg via-transparent to-bg/20" />
-        <Link
-          href="/inbox"
-          aria-label="Inbox"
-          className="absolute top-4 left-4 w-9 h-9 rounded-full bg-bg/70 backdrop-blur-md flex items-center justify-center"
-        >
-          <MessageCircle size={16} />
-        </Link>
+        {own && (
+          <Link
+            href="/inbox"
+            aria-label="Inbox"
+            className="absolute top-4 left-4 w-9 h-9 rounded-full bg-bg/70 backdrop-blur-md flex items-center justify-center"
+          >
+            <MessageCircle size={16} />
+          </Link>
+        )}
         <div className="absolute top-4 right-4 flex items-center gap-2">
           <SearchButton className="bg-bg/70" />
-          <Link
-            href="/settings"
-            aria-label="Settings"
-            className="w-9 h-9 rounded-full bg-bg/70 backdrop-blur-md flex items-center justify-center"
-          >
-            <Settings size={16} />
-          </Link>
+          {own && (
+            <Link
+              href="/settings"
+              aria-label="Settings"
+              className="w-9 h-9 rounded-full bg-bg/70 backdrop-blur-md flex items-center justify-center"
+            >
+              <Settings size={16} />
+            </Link>
+          )}
         </div>
       </div>
 
@@ -118,12 +135,25 @@ export function ProfileHeader({ creator, isCreator }: { creator: Creator; isCrea
         </div>
 
         <div className="flex items-center gap-3 mt-5 w-full max-w-xs">
-          <button
-            onClick={() => setEditing(true)}
-            className="flex-1 py-2 rounded-full bg-primary text-bg text-sm font-semibold"
-          >
-            Edit Profile
-          </button>
+          {own ? (
+            <button
+              onClick={() => setEditing(true)}
+              className="flex-1 py-2 rounded-full bg-primary text-bg text-sm font-semibold"
+            >
+              Edit Profile
+            </button>
+          ) : (
+            <button
+              onClick={() => toggleFollow(creator.id)}
+              className={
+                following
+                  ? "flex-1 py-2 rounded-full border border-border text-sm font-medium hover:bg-card transition-colors"
+                  : "flex-1 py-2 rounded-full bg-primary text-bg text-sm font-semibold"
+              }
+            >
+              {following ? "Following" : "Follow"}
+            </button>
+          )}
           <div className="relative flex-1">
             <button
               onClick={handleShare}
@@ -148,7 +178,9 @@ export function ProfileHeader({ creator, isCreator }: { creator: Creator; isCrea
         </div>
       </div>
 
-      <EditProfileModal open={editing} onClose={() => setEditing(false)} isCreator={isCreator} />
+      {own && (
+        <EditProfileModal open={editing} onClose={() => setEditing(false)} isCreator={isCreator} />
+      )}
     </div>
   );
 }

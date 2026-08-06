@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
-import type { Video } from "@/lib/types";
+import type { Creator, Video } from "@/lib/types";
 
 type Row = {
   id: string;
@@ -8,6 +8,7 @@ type Row = {
   title: string;
   description: string;
   category: Video["category"];
+  content_type: "film" | "short";
   sound_name: string | null;
   duration_seconds: number;
   width: number;
@@ -37,7 +38,7 @@ type Row = {
 // can't infer which relationship is meant and a bare embed 400s with
 // PGRST201 ("more than one relationship was found"). Confirmed live.
 const SELECT = `
-  id, playback_url, poster_url, title, description, category, sound_name,
+  id, playback_url, poster_url, title, description, category, content_type, sound_name,
   duration_seconds, width, height, badges,
   likes_count, comments_count, shares_count, saves_count,
   profiles!videos_creator_id_fkey ( id, username, display_name, avatar_url, banner_url, bio, website, verified, followers_count, following_count, total_views )
@@ -66,6 +67,7 @@ function toVideo(row: Row): Video | null {
     title: row.title,
     description: row.description,
     category: row.category,
+    contentType: row.content_type,
     soundName: row.sound_name ?? undefined,
     likes: row.likes_count,
     comments: row.comments_count,
@@ -186,6 +188,72 @@ export async function fetchDiscoverVideos(userId: string | null, limit = 50): Pr
   }
 
   const { data, error } = await query;
+  if (error || !data) return [];
+  return (data as unknown as Row[]).map(toVideo).filter((v) => v !== null);
+}
+
+type ProfileRow = {
+  id: string;
+  username: string;
+  display_name: string;
+  avatar_url: string | null;
+  banner_url: string | null;
+  bio: string;
+  website: string | null;
+  verified: boolean;
+  statement: string | null;
+  equipment: string[] | null;
+  available_for_hire: boolean;
+  followers_count: number;
+  following_count: number;
+  total_views: number;
+};
+
+function toCreator(row: ProfileRow): Creator {
+  return {
+    id: row.id,
+    username: row.username,
+    displayName: row.display_name,
+    avatarUrl: row.avatar_url ?? "",
+    bannerUrl: row.banner_url ?? "",
+    bio: row.bio,
+    website: row.website ?? undefined,
+    followers: row.followers_count,
+    following: row.following_count,
+    totalViews: row.total_views,
+    verified: row.verified,
+    statement: row.statement ?? undefined,
+    equipment: row.equipment ?? undefined,
+    availableForHire: row.available_for_hire,
+  };
+}
+
+/** Any creator's public profile by username — for viewing someone else's
+ * profile (unlike current-user-store's own profile, this is read-only and
+ * never the signed-in viewer's own row). */
+export async function fetchProfileByUsername(username: string): Promise<Creator | null> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select(
+      "id, username, display_name, avatar_url, banner_url, bio, website, verified, statement, equipment, available_for_hire, followers_count, following_count, total_views"
+    )
+    .eq("username", username)
+    .single();
+  if (error || !data) return null;
+  return toCreator(data as ProfileRow);
+}
+
+/** A specific creator's public, ready videos (both films and shorts) for
+ * their public profile page — newest first. */
+export async function fetchCreatorPublicVideos(creatorId: string, limit = 50): Promise<Video[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("videos")
+    .select(SELECT)
+    .eq("creator_id", creatorId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
   if (error || !data) return [];
   return (data as unknown as Row[]).map(toVideo).filter((v) => v !== null);
 }
