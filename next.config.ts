@@ -10,7 +10,9 @@ const securityHeaders = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   {
     key: "Permissions-Policy",
-    value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+    // camera/microphone are needed for in-app recording (CameraCapture.tsx)
+    // — scoped to same-origin, not the wide-open default.
+    value: "camera=(self), microphone=(self), geolocation=(), interest-cohort=()",
   },
   {
     key: "Strict-Transport-Security",

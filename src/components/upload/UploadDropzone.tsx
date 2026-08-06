@@ -10,6 +10,7 @@ import {
   Loader2,
   RectangleHorizontal,
   UploadCloud,
+  Video,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -19,6 +20,7 @@ import { deriveTitleFromFilename } from "@/lib/upload";
 import { useUploadDraftStore } from "@/store/upload-draft-store";
 import { createClient } from "@/lib/supabase/client";
 import { UploadRejection } from "./UploadRejection";
+import { CameraCapture } from "./CameraCapture";
 import type { AspectRatioDef } from "@/lib/aspect-ratio";
 
 type Status =
@@ -57,6 +59,7 @@ type AppliedFix = { type: "rotate" } | { type: "crop"; target: AspectRatioDef } 
 
 export function UploadDropzone() {
   const [status, setStatus] = useState<Status>("idle");
+  const [source, setSource] = useState<"file" | "camera">("file");
   const [dragOver, setDragOver] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [probe, setProbe] = useState<Probe | null>(null);
@@ -374,6 +377,15 @@ export function UploadDropzone() {
     );
   }
 
+  if (status === "reading") {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 h-[60vh] text-center px-6">
+        <Loader2 size={32} className="animate-spin text-primary" />
+        <p className="text-sm text-text-secondary">Checking aspect ratio…</p>
+      </div>
+    );
+  }
+
   if (status === "rejected" && probe && check && !check.ok) {
     return (
       <UploadRejection
@@ -521,58 +533,78 @@ export function UploadDropzone() {
   return (
     <div className="max-w-2xl mx-auto px-6 py-12">
       <h1 className="text-2xl font-bold mb-1">Upload</h1>
-      <p className="text-text-secondary text-sm mb-8">
+      <p className="text-text-secondary text-sm mb-6">
         Landscape only. FRAME supports 16:9, 21:9 Cinema, and 16:10 — no exceptions, no black
         bars.
       </p>
 
-      <div
-        role="button"
-        tabIndex={0}
-        aria-label="Choose a video file to upload"
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragOver(true);
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragOver(false);
-          handleFiles(e.dataTransfer.files);
-        }}
-        onClick={() => inputRef.current?.click()}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            inputRef.current?.click();
-          }
-        }}
-        className={cn(
-          "border-2 border-dashed rounded-2xl aspect-video flex flex-col items-center justify-center gap-3 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-          dragOver ? "border-primary bg-primary/5" : "border-border bg-card/40 hover:bg-card/70"
-        )}
-      >
-        <input
-          ref={inputRef}
-          type="file"
-          accept="video/*"
-          className="hidden"
-          onChange={(e) => handleFiles(e.target.files)}
-        />
-
-        {status === "reading" ? (
-          <>
-            <Loader2 size={32} className="animate-spin text-primary" />
-            <p className="text-sm text-text-secondary">Checking aspect ratio…</p>
-          </>
-        ) : (
-          <>
-            <UploadCloud size={32} className="text-text-secondary" />
-            <p className="text-sm font-medium">Drag & drop your video, or click to browse</p>
-            <p className="text-xs text-text-secondary">MP4 or MOV · up to 4K · 60fps</p>
-          </>
-        )}
+      <div className="inline-flex items-center gap-1 p-1 rounded-full bg-card border border-border mb-6">
+        <button
+          type="button"
+          onClick={() => setSource("file")}
+          className={cn(
+            "flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-colors",
+            source === "file" ? "bg-primary text-bg" : "text-text-secondary hover:text-accent"
+          )}
+        >
+          <UploadCloud size={13} />
+          Upload
+        </button>
+        <button
+          type="button"
+          onClick={() => setSource("camera")}
+          className={cn(
+            "flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-colors",
+            source === "camera" ? "bg-primary text-bg" : "text-text-secondary hover:text-accent"
+          )}
+        >
+          <Video size={13} />
+          Record
+        </button>
       </div>
+
+      {source === "camera" ? (
+        <CameraCapture onCapture={analyzeFile} onClose={() => setSource("file")} />
+      ) : (
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label="Choose a video file to upload"
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            handleFiles(e.dataTransfer.files);
+          }}
+          onClick={() => inputRef.current?.click()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              inputRef.current?.click();
+            }
+          }}
+          className={cn(
+            "border-2 border-dashed rounded-2xl aspect-video flex flex-col items-center justify-center gap-3 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+            dragOver ? "border-primary bg-primary/5" : "border-border bg-card/40 hover:bg-card/70"
+          )}
+        >
+          <input
+            ref={inputRef}
+            type="file"
+            accept="video/*"
+            className="hidden"
+            onChange={(e) => handleFiles(e.target.files)}
+          />
+
+          <UploadCloud size={32} className="text-text-secondary" />
+          <p className="text-sm font-medium">Drag & drop your video, or click to browse</p>
+          <p className="text-xs text-text-secondary">MP4 or MOV · up to 4K · 60fps</p>
+        </div>
+      )}
     </div>
   );
 }
