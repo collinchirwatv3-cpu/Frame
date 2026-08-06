@@ -39,16 +39,8 @@ const SELECT = `
   profiles ( id, username, display_name, avatar_url, banner_url, bio, website, verified, followers_count, following_count, total_views )
 `;
 
-/** Public, ready videos only — RLS (videos_select_public) already enforces
- * this, this just fails gracefully instead of returning a half-built Video. */
-export async function fetchVideoById(id: string): Promise<Video | null> {
-  const supabase = createClient();
-  const { data, error } = await supabase.from("videos").select(SELECT).eq("id", id).single();
-  if (error || !data) return null;
-
-  const row = data as unknown as Row;
+function toVideo(row: Row): Video | null {
   if (!row.playback_url || !row.poster_url || !row.profiles) return null;
-
   const creator = row.profiles;
   return {
     id: row.id,
@@ -80,4 +72,27 @@ export async function fetchVideoById(id: string): Promise<Video | null> {
     height: row.height,
     badges: (row.badges ?? []) as Video["badges"],
   };
+}
+
+/** Public, ready videos only — RLS (videos_select_public) already enforces
+ * this, this just fails gracefully instead of returning a half-built Video. */
+export async function fetchVideoById(id: string): Promise<Video | null> {
+  const supabase = createClient();
+  const { data, error } = await supabase.from("videos").select(SELECT).eq("id", id).single();
+  if (error || !data) return null;
+  return toVideo(data as unknown as Row);
+}
+
+/** Recent public videos to browse when adding to a watch-together queue —
+ * client-side filtered against the query, same pattern Explore already
+ * uses (matchesVideoQuery) rather than a new server-side search feature. */
+export async function fetchPublicVideos(limit = 30): Promise<Video[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("videos")
+    .select(SELECT)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error || !data) return [];
+  return (data as unknown as Row[]).map(toVideo).filter((v) => v !== null);
 }

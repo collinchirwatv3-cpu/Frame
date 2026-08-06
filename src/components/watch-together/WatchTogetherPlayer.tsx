@@ -1,18 +1,39 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { Check, Link2, Users, Volume2, VolumeX } from "lucide-react";
+import { Check, Link2, ListPlus, Users, Volume2, VolumeX } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import { Avatar } from "@/components/ui/Avatar";
 import { useWatchRoom } from "@/lib/use-watch-room";
+import { fetchVideoById } from "@/lib/watch-together";
+import { AddToQueueSheet } from "./AddToQueueSheet";
 import type { Video } from "@/lib/types";
 
-export function WatchTogetherPlayer({ video, roomId }: { video: Video; roomId: string }) {
+export function WatchTogetherPlayer({
+  video: initialVideo,
+  roomId,
+}: {
+  video: Video;
+  roomId: string;
+}) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [muted, setMuted] = useState(true);
   const [copied, setCopied] = useState(false);
-  const { participants, isHost, broadcast } = useWatchRoom(roomId, videoRef);
+  const [addOpen, setAddOpen] = useState(false);
+  const [video, setVideo] = useState(initialVideo);
+  const { participants, isHost, broadcastSync, queue, addToQueue, advanceQueue, currentVideoId } =
+    useWatchRoom(roomId, initialVideo.id, videoRef);
+
+  // currentVideoId only ever changes via the room's "advance" broadcast
+  // (see use-watch-room.ts) — when it does, every client (not just the
+  // authority who triggered it) swaps to the new video the same way.
+  useEffect(() => {
+    if (currentVideoId === video.id) return;
+    fetchVideoById(currentVideoId).then((v) => {
+      if (v) setVideo(v);
+    });
+  }, [currentVideoId, video.id]);
 
   async function copyInviteLink() {
     await navigator.clipboard.writeText(window.location.href);
@@ -29,15 +50,18 @@ export function WatchTogetherPlayer({ video, roomId }: { video: Video; roomId: s
       <div className="absolute inset-0 flex items-center justify-center">
         <video
           ref={videoRef}
+          key={video.id}
           src={video.playbackUrl}
           poster={video.posterUrl}
           className="w-full h-full object-contain"
           muted={muted}
+          autoPlay
           playsInline
           controls={isHost}
-          onPlay={() => isHost && broadcast()}
-          onPause={() => isHost && broadcast()}
-          onSeeked={() => isHost && broadcast()}
+          onPlay={() => isHost && broadcastSync()}
+          onPause={() => isHost && broadcastSync()}
+          onSeeked={() => isHost && broadcastSync()}
+          onEnded={() => isHost && advanceQueue()}
         />
       </div>
 
@@ -53,6 +77,13 @@ export function WatchTogetherPlayer({ video, roomId }: { video: Video; roomId: s
           <Users size={13} />
           {participants.length}
         </span>
+        <button
+          onClick={() => setAddOpen(true)}
+          aria-label="Add to queue"
+          className="w-9 h-9 rounded-full bg-card/70 backdrop-blur-md flex items-center justify-center"
+        >
+          <ListPlus size={16} />
+        </button>
         <button
           onClick={copyInviteLink}
           aria-label="Copy invite link"
@@ -86,7 +117,28 @@ export function WatchTogetherPlayer({ video, roomId }: { video: Video; roomId: s
           </div>
         </div>
         <p className="text-sm text-accent/90">{video.title}</p>
+
+        {queue.length > 0 && (
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            <span className="text-[11px] text-text-secondary shrink-0">Up next</span>
+            {queue.map((item) => (
+              <span
+                key={item.id}
+                className="shrink-0 text-[11px] bg-card/70 backdrop-blur-md rounded-full px-2.5 py-1 truncate max-w-[140px]"
+              >
+                {item.title}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
+
+      <AddToQueueSheet
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onAdd={addToQueue}
+        queuedIds={[video.id, ...queue.map((q) => q.id)]}
+      />
     </div>
   );
 }

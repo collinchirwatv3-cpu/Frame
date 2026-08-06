@@ -14,6 +14,8 @@ type PresenceMeta = { joinedAt: number };
 
 export type Participant = { id: string; joinedAt: number };
 
+export type QueueItem = { id: string; title: string; posterUrl: string; creatorUsername: string };
+
 // Corrections smaller than this are invisible as a stutter; anything bigger
 // gets a hard seek rather than trying to smoothly catch up.
 const DRIFT_THRESHOLD_SECONDS = 1.5;
@@ -35,31 +37,71 @@ function applySync(video: HTMLVideoElement, payload: SyncPayload) {
 }
 
 /**
- * Genuinely synced playback for a shared "watch together" room, built on
- * Supabase Realtime Broadcast + Presence — no new table, no migration, no
- * RLS: an open (non-private) channel keyed by roomId, same trust model as
- * the existing /s/[token] share links (anyone with the link can join).
+ * Genuinely synced playback + a shared queue for a "watch together" room,
+ * built on Supabase Realtime Broadcast + Presence — no new table, no
+ * migration, no RLS: an open (non-private) channel keyed by roomId, same
+ * trust model as the existing /s/[token] share links (anyone with the link
+ * can join).
  *
  * No fixed host — whoever has been in the room longest (earliest tracked
- * presence) is the sync authority. That falls out for free on host
- * disconnect: presence drops their entry, the next-earliest immediately
- * becomes authoritative, no explicit handoff code needed. Only the
- * authority's play/pause/seek and periodic heartbeat get broadcast;
- * everyone else's <video> is driven by applySync, not local interaction.
+ * presence) is the sync authority. That falls out for free on disconnect:
+ * presence drops their entry, the next-earliest immediately becomes
+ * authoritative, no explicit handoff code needed. Only the authority's
+ * play/pause/seek/heartbeat and queue-advance get broadcast; everyone
+ * else's <video> is driven by applySync, not local interaction.
+ *
+ * Queue is additive-only from any participant (addToQueue), but only the
+ * authority ever advances it (on the current video ending) — advancing is
+ * itself just another broadcast every client (including the authority)
+ * applies identically, so there's never a fork between what different
+ * clients think the queue/current video is.
  */
-export function useWatchRoom(roomId: string, videoRef: RefObject<HTMLVideoElement | null>) {
+export function useWatchRoom(
+  roomId: string,
+  initialVideoId: string,
+  videoRef: RefObject<HTMLVideoElement | null>
+) {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [isHost, setIsHost] = useState(false);
+  const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [currentVideoId, setCurrentVideoId] = useState(initialVideoId);
   const channelRef = useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null);
+  const queueRef = useRef<QueueItem[]>([]);
   const selfId = useMemo(() => crypto.randomUUID(), []);
   const [joinedAt] = useState(() => Date.now());
 
-  const broadcast = useCallback(() => {
+  const broadcastSync = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
     const payload: SyncPayload = { time: video.currentTime, paused: video.paused, at: Date.now() };
     channelRef.current?.send({ type: "broadcast", event: "sync", payload });
   }, [videoRef]);
+
+  const addToQueue = useCallback((item: QueueItem) => {
+    // self: false means this client never receives its own broadcast back —
+    // apply locally in addition to sending, not instead of.
+    setQueue((q) => [...q, item]);
+    channelRef.current?.send({ type: "broadcast", event: "queue-add", payload: item });
+  }, []);
+
+  // Authority-only — called from the current video's onEnded. Reads
+  // queueRef (not the `queue` state) so it works from a handler that isn't
+  // itself part of a render, without needing to be a dependency anywhere.
+  const advanceQueue = useCallback(() => {
+    const next = queueRef.current[0];
+    if (!next) return;
+    setQueue((q) => q.slice(1));
+    setCurrentVideoId(next.id);
+    channelRef.current?.send({
+      type: "broadcast",
+      event: "advance",
+      payload: { videoId: next.id },
+    });
+  }, []);
+
+  useEffect(() => {
+    queueRef.current = queue;
+  }, [queue]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -78,13 +120,23 @@ export function useWatchRoom(roomId: string, videoRef: RefObject<HTMLVideoElemen
 
       // A late joiner otherwise sits frozen until the next heartbeat/action
       // — the authority pushes current state the moment presence changes.
-      if (nowHost) broadcast();
+      if (nowHost) broadcastSync();
     });
 
     channel.on("broadcast", { event: "sync" }, ({ payload }) => {
       const video = videoRef.current;
       if (!video) return;
       applySync(video, payload as SyncPayload);
+    });
+
+    channel.on("broadcast", { event: "queue-add" }, ({ payload }) => {
+      setQueue((q) => [...q, payload as QueueItem]);
+    });
+
+    channel.on("broadcast", { event: "advance" }, ({ payload }) => {
+      const { videoId } = payload as { videoId: string };
+      setQueue((q) => (q[0]?.id === videoId ? q.slice(1) : q));
+      setCurrentVideoId(videoId);
     });
 
     channel.subscribe((status) => {
@@ -105,10 +157,10 @@ export function useWatchRoom(roomId: string, videoRef: RefObject<HTMLVideoElemen
   useEffect(() => {
     if (!isHost) return;
     const interval = setInterval(() => {
-      if (videoRef.current && !videoRef.current.paused) broadcast();
+      if (videoRef.current && !videoRef.current.paused) broadcastSync();
     }, HEARTBEAT_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [isHost, broadcast, videoRef]);
+  }, [isHost, broadcastSync, videoRef]);
 
-  return { participants, isHost, broadcast };
+  return { participants, isHost, broadcastSync, queue, addToQueue, advanceQueue, currentVideoId };
 }
