@@ -38,8 +38,13 @@ type Status =
 // `file.type` is frequently empty or unreliable on mobile — Android content
 // resolvers (Google Photos, some file managers) often hand back a File with
 // no MIME type even though the OS picker only showed video files. Falling
-// back to the extension avoids silently dropping a real video pick.
-const VIDEO_EXTENSION = /\.(mp4|mov|m4v|webm|avi|mkv|3gp)$/i;
+// back to the extension avoids silently dropping a real video pick. Covers
+// iPhone (mov/m4v, HEVC or H.264 inside), Android (mp4/webm/3gp), and
+// prosumer/broadcast camera exports (mts/m2ts AVCHD camcorders, mxf, ts,
+// wmv) — not just mp4. This check only gates whether FRAME attempts to read
+// the file at all; whether it can actually preview it locally still depends
+// on the browser's own codec support (see analyzeFile's onerror path).
+const VIDEO_EXTENSION = /\.(mp4|mov|m4v|webm|avi|mkv|3gp|mts|m2ts|mxf|ts|wmv|flv|ogv)$/i;
 function looksLikeVideo(file: File) {
   return file.type.startsWith("video/") || VIDEO_EXTENSION.test(file.name);
 }
@@ -364,8 +369,9 @@ export function UploadDropzone() {
         <h2 className="text-lg font-semibold">Couldn&apos;t read that file</h2>
         <p className="text-sm text-text-secondary max-w-sm">
           {fileName ? `"${fileName}" ` : "That file "}
-          doesn&apos;t look like a playable video, or uses a format this browser can&apos;t
-          preview. Try exporting as MP4 (H.264) and uploading again.
+          doesn&apos;t look like a playable video, or uses a codec this browser can&apos;t
+          decode locally to check it (common with RAW camera formats like BRAW/R3D, or ProRes
+          outside Safari). Try a standard export — H.264 or HEVC in MP4/MOV — and uploading again.
         </p>
         <button
           onClick={reset}
@@ -602,7 +608,9 @@ export function UploadDropzone() {
 
           <UploadCloud size={32} className="text-text-secondary" />
           <p className="text-sm font-medium">Drag & drop your video, or click to browse</p>
-          <p className="text-xs text-text-secondary">MP4 or MOV · up to 4K · 60fps</p>
+          <p className="text-xs text-text-secondary">
+            MP4, MOV, MKV, WebM, and most camera formats · up to 4K · 60fps
+          </p>
         </div>
       )}
     </div>
