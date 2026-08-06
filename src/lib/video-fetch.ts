@@ -32,11 +32,15 @@ type Row = {
   } | null;
 };
 
+// profiles!videos_creator_id_fkey, not a plain "profiles(...)" embed — with
+// likes/saves/watch_progress also joining videos to profiles, PostgREST
+// can't infer which relationship is meant and a bare embed 400s with
+// PGRST201 ("more than one relationship was found"). Confirmed live.
 const SELECT = `
   id, playback_url, poster_url, title, description, category, sound_name,
   duration_seconds, width, height, badges,
   likes_count, comments_count, shares_count, saves_count,
-  profiles ( id, username, display_name, avatar_url, banner_url, bio, website, verified, followers_count, following_count, total_views )
+  profiles!videos_creator_id_fkey ( id, username, display_name, avatar_url, banner_url, bio, website, verified, followers_count, following_count, total_views )
 `;
 
 function toVideo(row: Row): Video | null {
