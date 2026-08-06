@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, EyeOff, Flag } from "lucide-react";
+import { Check, EyeOff, Flag, Users } from "lucide-react";
 import type { Video } from "@/lib/types";
 
 export function VideoOptionsSheet({
@@ -14,8 +15,14 @@ export function VideoOptionsSheet({
   open: boolean;
   onClose: () => void;
 }) {
+  const router = useRouter();
   const [feedback, setFeedback] = useState<string | null>(null);
   const [reporting, setReporting] = useState(false);
+
+  function handleWatchTogether() {
+    const roomId = crypto.randomUUID();
+    router.push(`/watch-together/${roomId}?v=${video.id}`);
+  }
 
   function closeSoon() {
     window.setTimeout(() => {
@@ -77,6 +84,13 @@ export function VideoOptionsSheet({
               </div>
             ) : (
               <div className="flex flex-col py-2">
+                <button
+                  onClick={handleWatchTogether}
+                  className="flex items-center gap-3 px-5 py-3.5 text-sm font-medium hover:bg-bg transition-colors text-left"
+                >
+                  <Users size={18} className="text-text-secondary" />
+                  Watch together
+                </button>
                 <button
                   onClick={handleNotInterested}
                   className="flex items-center gap-3 px-5 py-3.5 text-sm font-medium hover:bg-bg transition-colors text-left"

@@ -17,7 +17,8 @@ import { useInviteStore } from "@/store/invite-store";
 // silently break an already-shipped feature or basic transparency.
 const BYPASS_PREFIXES = [
   "/s/",
-  "/watch",
+  "/watch", // also covers /watch-together/[roomId] — a watch party invite
+  // link needs to work for whoever's being invited, invite code or not.
   "/privacy",
   "/terms",
   "/community-guidelines",

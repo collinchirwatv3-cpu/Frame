@@ -51,7 +51,15 @@ export function buildContentSecurityPolicy(nonce: string): string {
       // TEMPORARY — demo content only, same as img-src above.
       "https://commondatastorage.googleapis.com",
     ],
-    "connect-src": ["'self'", "https://*.supabase.co", "https://*.r2.dev"],
+    "connect-src": [
+      "'self'",
+      "https://*.supabase.co",
+      // Realtime (useWatchRoom's sync channel) connects over a WebSocket,
+      // not plain HTTPS — connect-src matches by scheme, so the https:
+      // entry above does NOT implicitly cover this; needs its own wss: entry.
+      "wss://*.supabase.co",
+      "https://*.r2.dev",
+    ],
     "font-src": ["'self'"],
     "object-src": ["'none'"],
     "frame-ancestors": ["'none'"],
