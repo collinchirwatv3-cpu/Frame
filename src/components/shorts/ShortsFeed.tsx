@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
+import { SearchButton } from "@/components/ui/SearchButton";
 import type { Video } from "@/lib/types";
 
 // Real <video> elements are mounted only this close to the active short —
@@ -45,7 +46,8 @@ export function ShortsFeed({ shorts }: { shorts: Video[] }) {
 
   if (shorts.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-dvh text-center px-6 gap-2">
+      <div className="relative flex flex-col items-center justify-center h-dvh text-center px-6 gap-2">
+        <SearchButton className="fixed top-4 right-4 md:top-6 md:right-6 z-20" />
         <p className="text-sm font-medium">No shorts yet</p>
         <p className="text-xs text-text-secondary">Be the first to post one.</p>
       </div>
@@ -55,8 +57,9 @@ export function ShortsFeed({ shorts }: { shorts: Video[] }) {
   return (
     <div
       ref={containerRef}
-      className="h-dvh w-full overflow-y-scroll snap-y snap-mandatory no-scrollbar bg-bg"
+      className="relative h-dvh w-full overflow-y-scroll snap-y snap-mandatory no-scrollbar bg-bg"
     >
+      <SearchButton className="fixed top-4 right-4 md:top-6 md:right-6 z-20" />
       {shorts.map((short, index) => {
         const active = index === activeIndex;
         const withinRenderWindow = Math.abs(index - activeIndex) <= RENDER_WINDOW;

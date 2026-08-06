@@ -6,6 +6,7 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Link as LinkIcon, MessageCircle, Settings } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
+import { SearchButton } from "@/components/ui/SearchButton";
 import { EditProfileModal } from "@/components/profile/EditProfileModal";
 import { formatCount, shareContent } from "@/lib/utils";
 import type { Creator } from "@/lib/types";
@@ -50,13 +51,16 @@ export function ProfileHeader({ creator, isCreator }: { creator: Creator; isCrea
         >
           <MessageCircle size={16} />
         </Link>
-        <Link
-          href="/settings"
-          aria-label="Settings"
-          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-bg/70 backdrop-blur-md flex items-center justify-center"
-        >
-          <Settings size={16} />
-        </Link>
+        <div className="absolute top-4 right-4 flex items-center gap-2">
+          <SearchButton className="bg-bg/70" />
+          <Link
+            href="/settings"
+            aria-label="Settings"
+            className="w-9 h-9 rounded-full bg-bg/70 backdrop-blur-md flex items-center justify-center"
+          >
+            <Settings size={16} />
+          </Link>
+        </div>
       </div>
 
       <div className="px-6 -mt-10 flex flex-col items-center text-center">

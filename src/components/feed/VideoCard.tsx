@@ -11,6 +11,7 @@ import { CommentDrawer } from "./CommentDrawer";
 import { VideoOptionsSheet } from "./VideoOptionsSheet";
 import { VideoDetailsSheet } from "./VideoDetailsSheet";
 import { Avatar } from "@/components/ui/Avatar";
+import { SearchButton } from "@/components/ui/SearchButton";
 import { usePlayerStore } from "@/store/player-store";
 import { useCurrentUserStore } from "@/store/current-user-store";
 import { createClient } from "@/lib/supabase/client";
@@ -252,8 +253,9 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
                 </Link>
               )}
 
-              {/* director mode + mute */}
+              {/* search + director mode + mute */}
               <div className="pointer-events-auto absolute top-4 right-4 md:top-6 md:right-6 z-10 flex items-center gap-2">
+                <SearchButton />
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
