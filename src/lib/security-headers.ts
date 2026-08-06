@@ -39,11 +39,17 @@ export function buildContentSecurityPolicy(nonce: string): string {
       // Stream's upload/embed domain, unused by this app's plain <video>
       // player, which points straight at the HLS manifest).
       "https://*.cloudflarestream.com",
+      // TEMPORARY — demo content only (src/lib/mock-data.ts), remove before
+      // real alpha launch. See next.config.ts's remotePatterns for the
+      // matching image-optimizer allowance and why this needs flagging.
+      "https://picsum.photos",
     ],
     "media-src": [
       "'self'",
       "https://*.r2.dev",
       "https://*.cloudflarestream.com",
+      // TEMPORARY — demo content only, same as img-src above.
+      "https://commondatastorage.googleapis.com",
     ],
     "connect-src": ["'self'", "https://*.supabase.co", "https://*.r2.dev"],
     "font-src": ["'self'"],

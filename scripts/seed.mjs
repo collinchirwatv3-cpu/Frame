@@ -32,7 +32,7 @@ const sampleMp4 = (name) =>
 const CREATORS = [
   {
     id: "1901feaf-349b-435c-847a-b801b6a707ab",
-    username: "milo.aerial",
+    username: "milo_aerial",
     display_name: "Milo Ferreira",
     email: "milo.aerial@seed.frame.app",
     avatar_url: avatar("milo"),
@@ -97,7 +97,7 @@ const VIDEOS = [
     title: "Iceland, from 400ft",
     description: "Three weeks chasing storms over the Ring Road. Shot on FPV + cine drone.",
     category: "Travel",
-    sound_name: "Original audio · milo.aerial",
+    sound_name: "Original audio · milo_aerial",
     duration_seconds: 34,
     width: 1280,
     height: 720,
@@ -244,7 +244,7 @@ const COMMENTS = [
   { video_id: VIDEOS[1].id, author: "nightpulse", text: "One take?? no way", ago: "5h" },
   {
     video_id: VIDEOS[2].id,
-    author: "milo.aerial",
+    author: "milo_aerial",
     text: "Part 1 was already incredible, can't wait for the rest of the series",
     ago: "1d",
   },
@@ -306,6 +306,11 @@ async function main() {
       width,
       height,
       visibility: "public",
+      // Seeded rows represent complete, live videos — without this they'd
+      // default to 'uploading' and videos_select_public's RLS (requires
+      // processing_status = 'ready' for anyone but the creator) would hide
+      // them from everyone.
+      processing_status: "ready",
       badges: badges ?? [],
       details: details ?? null,
       likes_count,

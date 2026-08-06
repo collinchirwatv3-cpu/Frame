@@ -29,6 +29,11 @@ const nextConfig: NextConfig = {
       // customer-<code>.cloudflarestream.com subdomain — see
       // src/lib/security-headers.ts for why this replaced videodelivery.net.
       { protocol: "https", hostname: "*.cloudflarestream.com" },
+      // TEMPORARY — demo content only (src/lib/mock-data.ts). Remove before
+      // real alpha launch; a stale, permanently-allowed third-party domain
+      // is exactly the class of issue this pattern got flagged for once
+      // already (see git history for the original removal).
+      { protocol: "https", hostname: "picsum.photos" },
     ],
   },
   async headers() {
