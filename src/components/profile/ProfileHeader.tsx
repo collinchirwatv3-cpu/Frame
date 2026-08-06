@@ -6,6 +6,7 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Link as LinkIcon, Settings } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
+import { EditProfileModal } from "@/components/profile/EditProfileModal";
 import { formatCount, shareContent } from "@/lib/utils";
 import type { Creator } from "@/lib/types";
 
@@ -20,6 +21,7 @@ function Stat({ value, label }: { value: number; label: string }) {
 
 export function ProfileHeader({ creator }: { creator: Creator }) {
   const [shared, setShared] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   async function handleShare() {
     const url = `${window.location.origin}/profile`;
@@ -105,7 +107,10 @@ export function ProfileHeader({ creator }: { creator: Creator }) {
         </div>
 
         <div className="flex items-center gap-3 mt-5 w-full max-w-xs">
-          <button className="flex-1 py-2 rounded-full bg-primary text-bg text-sm font-semibold">
+          <button
+            onClick={() => setEditing(true)}
+            className="flex-1 py-2 rounded-full bg-primary text-bg text-sm font-semibold"
+          >
             Edit Profile
           </button>
           <div className="relative flex-1">
@@ -131,6 +136,8 @@ export function ProfileHeader({ creator }: { creator: Creator }) {
           </div>
         </div>
       </div>
+
+      <EditProfileModal open={editing} onClose={() => setEditing(false)} />
     </div>
   );
 }

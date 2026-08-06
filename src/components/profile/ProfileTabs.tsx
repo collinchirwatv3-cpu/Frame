@@ -1,20 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { Bookmark, Film, LayoutGrid, Lock, UploadCloud } from "lucide-react";
+import { Bookmark, LayoutGrid, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { TrendingGrid } from "@/components/explore/TrendingGrid";
+import { StudioVideoGrid } from "./StudioVideoGrid";
 import { PrivateVideoList } from "./PrivateVideoList";
 import { SavedCollections } from "./SavedCollections";
+import type { OwnVideo } from "@/lib/profile-videos";
 import type { Video } from "@/lib/types";
 
 export function ProfileTabs({
   videos,
   privateVideos,
+  creator,
 }: {
-  videos: Video[];
+  videos: OwnVideo[];
   privateVideos: Video[];
+  creator: Video["creator"];
 }) {
   const [tab, setTab] = useState<"videos" | "collections" | "private">("videos");
 
@@ -42,29 +44,7 @@ export function ProfileTabs({
       </div>
 
       <div className="pt-4">
-        {tab === "videos" && (
-          <TrendingGrid
-            videos={videos}
-            emptyState={
-              <div className="flex flex-col items-center gap-3 text-center py-16 px-6">
-                <span className="w-12 h-12 rounded-full bg-card border border-border flex items-center justify-center">
-                  <Film size={20} className="text-text-secondary" />
-                </span>
-                <p className="text-sm font-medium">Nothing uploaded yet</p>
-                <p className="text-xs text-text-secondary max-w-[220px]">
-                  Your public films will show up here once you publish your first one.
-                </p>
-                <Link
-                  href="/upload"
-                  className="mt-1 flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-bg text-xs font-semibold"
-                >
-                  <UploadCloud size={13} />
-                  Upload a film
-                </Link>
-              </div>
-            }
-          />
-        )}
+        {tab === "videos" && <StudioVideoGrid videos={videos} creator={creator} />}
         {tab === "collections" && <SavedCollections />}
         {tab === "private" && <PrivateVideoList videos={privateVideos} />}
       </div>
