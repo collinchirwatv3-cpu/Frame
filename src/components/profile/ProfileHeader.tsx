@@ -19,7 +19,7 @@ function Stat({ value, label }: { value: number; label: string }) {
   );
 }
 
-export function ProfileHeader({ creator }: { creator: Creator }) {
+export function ProfileHeader({ creator, isCreator }: { creator: Creator; isCreator: boolean }) {
   const [shared, setShared] = useState(false);
   const [editing, setEditing] = useState(false);
 
@@ -137,7 +137,7 @@ export function ProfileHeader({ creator }: { creator: Creator }) {
         </div>
       </div>
 
-      <EditProfileModal open={editing} onClose={() => setEditing(false)} />
+      <EditProfileModal open={editing} onClose={() => setEditing(false)} isCreator={isCreator} />
     </div>
   );
 }

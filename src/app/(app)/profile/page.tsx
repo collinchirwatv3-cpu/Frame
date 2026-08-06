@@ -33,6 +33,12 @@ export default function ProfilePage() {
 
   if (!hydrated || !userId || !profile) return null;
 
+  // Soft creator/general-user distinction — no stored flag, just "have they
+  // ever actually published something." Gates the extra portfolio fields in
+  // EditProfileModal; everything else already renders those fields
+  // conditionally, so nothing else needs this check.
+  const isCreator = ownVideos.some((v) => v.status === "ready");
+
   const publicVideos = ownVideos.filter((v) => v.visibility === "public");
   const privateVideos = ownVideos
     .filter((v) => v.visibility === "private")
@@ -49,7 +55,7 @@ export default function ProfilePage() {
 
   return (
     <div className="pb-24 md:pb-8">
-      <ProfileHeader creator={profile} />
+      <ProfileHeader creator={profile} isCreator={isCreator} />
       <FeaturedWork featuredVideo={featuredVideo} featuredCollection={featuredCollection} />
       <ProfileTabs videos={publicVideos} privateVideos={privateVideos} creator={profile} />
     </div>

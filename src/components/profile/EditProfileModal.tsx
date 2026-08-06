@@ -17,7 +17,23 @@ function validateImage(file: File): string | null {
   return null;
 }
 
-export function EditProfileModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+/** Comma-separated equipment input <-> the string[] the DB/schema expect. */
+function parseEquipment(raw: string): string[] {
+  return raw
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+export function EditProfileModal({
+  open,
+  onClose,
+  isCreator,
+}: {
+  open: boolean;
+  onClose: () => void;
+  isCreator: boolean;
+}) {
   const profile = useCurrentUserStore((s) => s.profile);
   const setProfile = useCurrentUserStore((s) => s.setProfile);
   const inviteRedeemedAt = useCurrentUserStore((s) => s.inviteRedeemedAt);
@@ -25,6 +41,10 @@ export function EditProfileModal({ open, onClose }: { open: boolean; onClose: ()
   const [username, setUsername] = useState(profile?.username ?? "");
   const [displayName, setDisplayName] = useState(profile?.displayName ?? "");
   const [bio, setBio] = useState(profile?.bio ?? "");
+  const [website, setWebsite] = useState(profile?.website ?? "");
+  const [statement, setStatement] = useState(profile?.statement ?? "");
+  const [equipment, setEquipment] = useState((profile?.equipment ?? []).join(", "));
+  const [availableForHire, setAvailableForHire] = useState(profile?.availableForHire ?? false);
   const [avatar, setAvatar] = useState<PendingImage | null>(null);
   const [banner, setBanner] = useState<PendingImage | null>(null);
   const [saving, setSaving] = useState(false);
@@ -41,6 +61,10 @@ export function EditProfileModal({ open, onClose }: { open: boolean; onClose: ()
     setUsername(currentProfile.username);
     setDisplayName(currentProfile.displayName);
     setBio(currentProfile.bio);
+    setWebsite(currentProfile.website ?? "");
+    setStatement(currentProfile.statement ?? "");
+    setEquipment((currentProfile.equipment ?? []).join(", "));
+    setAvailableForHire(currentProfile.availableForHire ?? false);
     if (avatar) URL.revokeObjectURL(avatar.previewUrl);
     if (banner) URL.revokeObjectURL(banner.previewUrl);
     setAvatar(null);
@@ -74,7 +98,16 @@ export function EditProfileModal({ open, onClose }: { open: boolean; onClose: ()
   }
 
   async function handleSave() {
-    const parsed = profileEditSchema.safeParse({ username, displayName, bio, website: "" });
+    const parsedEquipment = parseEquipment(equipment);
+    const parsed = profileEditSchema.safeParse({
+      username,
+      displayName,
+      bio,
+      website,
+      statement: isCreator ? statement : "",
+      equipment: isCreator ? parsedEquipment : [],
+      availableForHire: isCreator ? availableForHire : false,
+    });
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "Check the fields above.");
       return;
@@ -85,12 +118,24 @@ export function EditProfileModal({ open, onClose }: { open: boolean; onClose: ()
 
     try {
       const supabase = createClient();
-      const updates: Record<string, string> = {};
+      const updates: Record<string, string | string[] | boolean | null> = {};
 
       if (parsed.data.username !== currentProfile.username) updates.username = parsed.data.username;
       if (parsed.data.displayName !== currentProfile.displayName)
         updates.display_name = parsed.data.displayName;
       if (parsed.data.bio !== currentProfile.bio) updates.bio = parsed.data.bio;
+      if ((parsed.data.website ?? "") !== (currentProfile.website ?? ""))
+        updates.website = parsed.data.website || null;
+
+      if (isCreator) {
+        if ((parsed.data.statement ?? "") !== (currentProfile.statement ?? ""))
+          updates.statement = parsed.data.statement || null;
+        const currentEquipment = currentProfile.equipment ?? [];
+        if (parsed.data.equipment.join(",") !== currentEquipment.join(","))
+          updates.equipment = parsed.data.equipment;
+        if (parsed.data.availableForHire !== (currentProfile.availableForHire ?? false))
+          updates.available_for_hire = parsed.data.availableForHire;
+      }
 
       if (avatar) updates.avatar_url = await uploadImage("avatar", avatar.file, currentProfile.id);
       if (banner) updates.banner_url = await uploadImage("banner", banner.file, currentProfile.id);
@@ -123,6 +168,10 @@ export function EditProfileModal({ open, onClose }: { open: boolean; onClose: ()
           username: data.username,
           displayName: data.display_name,
           bio: data.bio,
+          website: data.website ?? undefined,
+          statement: data.statement ?? undefined,
+          equipment: data.equipment ?? undefined,
+          availableForHire: data.available_for_hire ?? undefined,
           avatarUrl: data.avatar_url ?? "",
           bannerUrl: data.banner_url ?? "",
         },
@@ -271,6 +320,75 @@ export function EditProfileModal({ open, onClose }: { open: boolean; onClose: ()
                   className="bg-bg border border-border rounded-xl px-4 py-2.5 text-sm outline-none focus:border-primary transition-colors resize-none disabled:opacity-50"
                 />
               </label>
+
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs text-text-secondary">Website</span>
+                <input
+                  value={website}
+                  onChange={(e) => setWebsite(e.target.value)}
+                  disabled={saving}
+                  maxLength={120}
+                  placeholder="yourdomain.com"
+                  className="bg-bg border border-border rounded-xl px-4 py-2.5 text-sm outline-none focus:border-primary transition-colors disabled:opacity-50"
+                />
+              </label>
+
+              {isCreator && (
+                <>
+                  <div className="pt-2 mt-1 border-t border-border" />
+
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-xs text-text-secondary flex justify-between">
+                      Creator statement
+                      <span className={cn(statement.length > 500 && "text-primary")}>
+                        {statement.length}/500
+                      </span>
+                    </span>
+                    <textarea
+                      value={statement}
+                      onChange={(e) => setStatement(e.target.value)}
+                      disabled={saving}
+                      maxLength={500}
+                      rows={3}
+                      placeholder="How you approach your work — shown as a pull quote on your profile."
+                      className="bg-bg border border-border rounded-xl px-4 py-2.5 text-sm outline-none focus:border-primary transition-colors resize-none disabled:opacity-50"
+                    />
+                  </label>
+
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-xs text-text-secondary">Equipment</span>
+                    <input
+                      value={equipment}
+                      onChange={(e) => setEquipment(e.target.value)}
+                      disabled={saving}
+                      placeholder="Sony FX3, 24-70mm f/2.8 (comma-separated, up to 12)"
+                      className="bg-bg border border-border rounded-xl px-4 py-2.5 text-sm outline-none focus:border-primary transition-colors disabled:opacity-50"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between py-1">
+                    <span className="text-sm">Available for hire</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={availableForHire}
+                      onClick={() => setAvailableForHire((v) => !v)}
+                      disabled={saving}
+                      className={cn(
+                        "w-10 h-6 rounded-full relative transition-colors disabled:opacity-50",
+                        availableForHire ? "bg-primary" : "bg-border"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "absolute top-0.5 w-5 h-5 rounded-full bg-bg transition-transform",
+                          availableForHire ? "translate-x-[18px]" : "translate-x-0.5"
+                        )}
+                      />
+                    </button>
+                  </label>
+                </>
+              )}
 
               {error && (
                 <p role="alert" className="text-xs text-primary">

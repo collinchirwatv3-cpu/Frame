@@ -20,6 +20,9 @@ export const profileEditSchema = z.object({
     .max(120, "Too long")
     .optional()
     .or(z.literal("")),
+  statement: z.string().trim().max(500, "Too long").optional().or(z.literal("")),
+  equipment: z.array(z.string().trim().min(1).max(40)).max(12, "Up to 12 items"),
+  availableForHire: z.boolean(),
 });
 
 export type ProfileEditInput = z.infer<typeof profileEditSchema>;
