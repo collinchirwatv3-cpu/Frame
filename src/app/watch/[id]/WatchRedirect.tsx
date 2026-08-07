@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { SwipeFeed } from "@/components/feed/SwipeFeed";
+import { ProfileFloat } from "@/components/nav/ProfileFloat";
 import { fetchVideoById } from "@/lib/video-fetch";
 import type { Video } from "@/lib/types";
 
@@ -23,21 +24,35 @@ export function WatchRedirect({ videoId }: { videoId: string }) {
     fetchVideoById(videoId).then(setVideo);
   }, [videoId]);
 
+  // No (app) shell on this standalone route (share/deep-link videos are
+  // meant to be chrome-free) — ProfileFloat is rendered directly here
+  // instead, the one thing this route still needs from that shell.
   if (video === undefined) {
     return (
-      <div className="min-h-dvh flex items-center justify-center">
-        <Loader2 size={28} className="animate-spin text-text-secondary" />
-      </div>
+      <>
+        <div className="min-h-dvh flex items-center justify-center">
+          <Loader2 size={28} className="animate-spin text-text-secondary" />
+        </div>
+        <ProfileFloat />
+      </>
     );
   }
 
   if (video === null) {
     return (
-      <div className="min-h-dvh flex items-center justify-center text-sm text-text-secondary">
-        This video isn&apos;t available anymore.
-      </div>
+      <>
+        <div className="min-h-dvh flex items-center justify-center text-sm text-text-secondary">
+          This video isn&apos;t available anymore.
+        </div>
+        <ProfileFloat />
+      </>
     );
   }
 
-  return <SwipeFeed videos={[video]} />;
+  return (
+    <>
+      <SwipeFeed videos={[video]} />
+      <ProfileFloat />
+    </>
+  );
 }
