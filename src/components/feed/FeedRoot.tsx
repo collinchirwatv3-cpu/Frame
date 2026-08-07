@@ -3,128 +3,130 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { SwipeFeed, EmptyState } from "./SwipeFeed";
-import { TABS, type FeedTab } from "./FeedTabs";
-import { CATEGORY_CHIPS } from "./CategoryChips";
-import { TrendingGrid } from "@/components/explore/TrendingGrid";
-import { useIsMobile } from "@/lib/use-portrait-mobile";
+import { Shelf, type ShelfKind } from "./Shelf";
+import { CollectionsRail } from "@/components/collections/CollectionsRail";
 import {
   fetchPublicVideos,
   fetchFollowingVideos,
   fetchSavedVideos,
   fetchHistoryVideos,
 } from "@/lib/video-fetch";
+import { collections } from "@/lib/mock-data";
 import { useEngagementStore } from "@/store/engagement-store";
-import { cn } from "@/lib/utils";
-import type { Category, Video } from "@/lib/types";
+import type { Video } from "@/lib/types";
 
-const CAP = 30;
+const SHELF_CAP = 20;
 
-function fetchForTab(tab: FeedTab, userId: string | null, category: Category | null): Promise<Video[]> {
-  if (tab === "forYou") return fetchPublicVideos(CAP, category ?? undefined);
-  if (!userId) return Promise.resolve([]);
-  if (tab === "following") return fetchFollowingVideos(userId, CAP, category ?? undefined);
-  if (tab === "saved") return fetchSavedVideos(userId, CAP, category ?? undefined);
-  return fetchHistoryVideos(userId, CAP, category ?? undefined);
+type Shelves = { forYou: Video[]; following: Video[]; saved: Video[]; history: Video[] };
+const EMPTY_SHELVES: Shelves = { forYou: [], following: [], saved: [], history: [] };
+
+async function fetchShelves(userId: string | null): Promise<Shelves> {
+  if (!userId) {
+    return { ...EMPTY_SHELVES, forYou: await fetchPublicVideos(SHELF_CAP) };
+  }
+  const [forYou, following, saved, history] = await Promise.all([
+    fetchPublicVideos(SHELF_CAP),
+    fetchFollowingVideos(userId, SHELF_CAP),
+    fetchSavedVideos(userId, SHELF_CAP),
+    fetchHistoryVideos(userId, SHELF_CAP),
+  ]);
+  return { forYou, following, saved, history };
+}
+
+function isShelfKind(value: string | null): value is ShelfKind {
+  return value === "forYou" || value === "following" || value === "saved" || value === "history";
 }
 
 /**
- * Home: four real tabs (For You / Following / Saved / History), each its
- * own fetch — replaces the earlier one-continuous-composed-feed version
- * (lib/home-feed.ts, deleted). Signed-out visitors never see the tab
- * switcher at all — Following/Saved/History are inherently per-account, so
- * there's nothing useful behind them; they get For You only.
+ * Home: a scrollable page of horizontal shelves — For You, Collections,
+ * then (signed in) Following / Saved / History — Netflix/YouTube-shelf
+ * style, replacing the earlier tabs + full-screen-swipe-feed default (that
+ * whole approach, including the portrait-vs-landscape tile-grid/SwipeFeed
+ * branching and the category chip strip, is gone; see git history if any of
+ * it needs resurrecting). One layout regardless of device now — phones,
+ * tablets, and desktop all land here.
  *
- * Phones get a browsable tile grid (TrendingGrid, same one Discover uses)
- * instead of the immersive swipe feed until a specific video is selected —
- * regardless of orientation, on purpose (see useIsMobile) — the tab
- * switcher is reproduced above it as plain pill buttons rather than reusing
- * FeedTabs (that component's drop-shadow/overlay styling is built for
- * sitting on top of video content, not a plain grid background). Tablets
- * and desktop always get SwipeFeed directly, tabs and all.
+ * Collections reuses CollectionsRail as-is (same component already shown on
+ * Profile's Saved Collections) — still backed by mock-data.ts, same as
+ * everywhere else it appears; making it real is a separate, not-yet-done
+ * project, not something this change touches.
  *
- * A category chip strip (CategoryChips) sits under the tabs on every
- * layout, narrowing whichever tab is active — shown regardless of sign-in
- * state, unlike the tabs themselves, since filtering by category is useful
- * even on the signed-out For-You-only view.
+ * Tapping a card still opens the same immersive SwipeFeed player as always
+ * (?v=<id>), just scoped to whichever shelf the card came from
+ * (&shelf=<kind> — see Shelf.tsx) rather than always For You, since each
+ * shelf is its own separate fetch now, not one merged array.
+ *
+ * Following/Saved/History are inherently per-account — signed-out visitors
+ * only ever get the For You shelf. If For You itself comes back empty, the
+ * whole catalog is necessarily empty too (Following only ever shows a
+ * subset of the same public videos; Saved/History reference videos that
+ * would have to already exist) — so that case collapses to one page-level
+ * empty state rather than four individually-empty shelves.
  */
 export function FeedRoot() {
-  const isMobile = useIsMobile();
-  const hasSelectedVideo = useSearchParams().has("v");
+  const searchParams = useSearchParams();
+  const selectedVideoId = searchParams.get("v");
+  const shelfParam = searchParams.get("shelf");
+  const activeShelf: ShelfKind = isShelfKind(shelfParam) ? shelfParam : "forYou";
+
   const userId = useEngagementStore((s) => s.userId);
   const hydrated = useEngagementStore((s) => s.hydrated);
-  const [tab, setTab] = useState<FeedTab>("forYou");
-  const [category, setCategory] = useState<Category | null>(null);
-  const [videos, setVideos] = useState<Video[]>([]);
+  const [shelves, setShelves] = useState<Shelves>(EMPTY_SHELVES);
 
   useEffect(() => {
     if (!hydrated) return;
     let cancelled = false;
-    fetchForTab(tab, userId, category).then((result) => {
-      if (!cancelled) setVideos(result);
+    fetchShelves(userId).then((result) => {
+      if (!cancelled) setShelves(result);
     });
     return () => {
       cancelled = true;
     };
-  }, [hydrated, userId, tab, category]);
+  }, [hydrated, userId]);
 
-  if (isMobile && !hasSelectedVideo) {
+  if (selectedVideoId) {
+    return <SwipeFeed videos={shelves[activeShelf]} />;
+  }
+
+  if (shelves.forYou.length === 0) {
     return (
-      <div className="pt-8 pb-24">
-        <h1 className="text-2xl font-bold px-6 mb-1">FRAMES</h1>
-        <p className="text-text-secondary text-sm px-6 mb-4">Tap a film to watch.</p>
-        {userId && (
-          <div className="flex items-center gap-1.5 px-6 mb-3 overflow-x-auto no-scrollbar">
-            {TABS.map(({ id, label }) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setTab(id)}
-                aria-pressed={tab === id}
-                className={cn(
-                  "flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors",
-                  tab === id ? "bg-primary text-bg" : "text-text-secondary hover:text-accent"
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
-        <div className="flex items-center gap-2 px-6 mb-4 overflow-x-auto no-scrollbar">
-          {CATEGORY_CHIPS.map(({ label, value }) => (
-            <button
-              key={label}
-              type="button"
-              onClick={() => setCategory(value)}
-              aria-pressed={category === value}
-              className={cn(
-                "flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors",
-                category === value
-                  ? "bg-primary text-bg"
-                  : "bg-card text-text-secondary hover:text-accent"
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <TrendingGrid
-          videos={videos}
-          emptyState={
-            <div className="flex flex-col items-center gap-3 text-center px-6 py-16">
-              <EmptyState tab={userId ? tab : "forYou"} />
-            </div>
-          }
-        />
+      <div className="h-dvh w-full flex flex-col items-center justify-center gap-3 text-center px-6">
+        <EmptyState />
       </div>
     );
   }
 
   return (
-    <SwipeFeed
-      videos={videos}
-      tabsConfig={userId ? { active: tab, onChange: setTab } : undefined}
-      categoryConfig={{ active: category, onChange: setCategory }}
-    />
+    <div className="pt-8 pb-24">
+      <h1 className="text-2xl font-bold px-6 mb-1">FRAMES</h1>
+      <p className="text-text-secondary text-sm px-6 mb-2">Tap a film to watch.</p>
+
+      <Shelf kind="forYou" title="For You" videos={shelves.forYou} />
+      <div className="py-3">
+        <CollectionsRail collections={collections} title="Collections" />
+      </div>
+      {userId && (
+        <>
+          <Shelf
+            kind="following"
+            title="Following"
+            videos={shelves.following}
+            emptyMessage="Follow creators to see their films here."
+          />
+          <Shelf
+            kind="saved"
+            title="Saved"
+            videos={shelves.saved}
+            emptyMessage="Save a film from the feed and it'll show up here."
+          />
+          <Shelf
+            kind="history"
+            title="History"
+            videos={shelves.history}
+            emptyMessage="Films you watch will show up here."
+          />
+        </>
+      )}
+    </div>
   );
 }

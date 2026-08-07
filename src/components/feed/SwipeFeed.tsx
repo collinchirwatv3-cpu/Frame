@@ -5,8 +5,6 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { VideoCard, type VideoCardHandle } from "./VideoCard";
 import { VideoPlaceholder } from "./VideoPlaceholder";
-import { FeedTabs, type FeedTab } from "./FeedTabs";
-import { CategoryChips } from "./CategoryChips";
 import { RotateDevicePrompt } from "./RotateDevicePrompt";
 
 // How many cards stay fully mounted on either side of the active one. Real
@@ -20,75 +18,29 @@ const RENDER_WINDOW = 2;
 // enough that the feed reads as cinematic rather than app-chrome-heavy.
 const AUTO_DIRECTOR_MODE_DELAY_MS = 2500;
 import { usePlayerStore } from "@/store/player-store";
-import type { Category, Video } from "@/lib/types";
+import type { Video } from "@/lib/types";
 
-type TabsConfig = { active: FeedTab; onChange: (tab: FeedTab) => void };
-type CategoryConfig = { active: Category | null; onChange: (category: Category | null) => void };
-
-/** Same copy across every empty forYou/untabbed case, deliberately —
- * e2e/feed-engagement.spec.ts asserts this exact string for Home. Exported
- * so FeedRoot's portrait-grid layout can reuse the same per-tab messaging
- * around TrendingGrid instead of duplicating it. */
-export function EmptyState({ tab }: { tab: FeedTab | null }) {
-  if (tab === null || tab === "forYou") {
-    return (
-      <>
-        <p className="text-lg font-semibold">No videos yet</p>
-        <p className="text-sm text-text-secondary max-w-xs">
-          FRAMES is just getting started — be the first to upload something worth watching.
-        </p>
-        <Link
-          href="/upload"
-          className="mt-2 px-5 py-2.5 rounded-full bg-primary text-bg text-sm font-semibold"
-        >
-          Upload a video
-        </Link>
-      </>
-    );
-  }
-  if (tab === "following") {
-    return (
-      <>
-        <p className="text-lg font-semibold">Follow creators to see them here</p>
-        <p className="text-sm text-text-secondary max-w-xs">
-          Videos from creators you follow will show up in this tab.
-        </p>
-        <Link
-          href="/discover"
-          className="mt-2 px-5 py-2.5 rounded-full bg-primary text-bg text-sm font-semibold"
-        >
-          Find creators to follow
-        </Link>
-      </>
-    );
-  }
-  if (tab === "saved") {
-    return (
-      <>
-        <p className="text-lg font-semibold">Nothing saved yet</p>
-        <p className="text-sm text-text-secondary max-w-xs">
-          Save a video from the feed and it&apos;ll show up here.
-        </p>
-      </>
-    );
-  }
+/** e2e/feed-engagement.spec.ts asserts this exact string — exported so
+ * FeedRoot can reuse the identical copy for its own page-level empty state
+ * when the For You shelf is empty, rather than duplicating it. */
+export function EmptyState() {
   return (
     <>
-      <p className="text-lg font-semibold">No watch history yet</p>
-      <p className="text-sm text-text-secondary max-w-xs">Videos you watch will show up here.</p>
+      <p className="text-lg font-semibold">No videos yet</p>
+      <p className="text-sm text-text-secondary max-w-xs">
+        FRAMES is just getting started — be the first to upload something worth watching.
+      </p>
+      <Link
+        href="/upload"
+        className="mt-2 px-5 py-2.5 rounded-full bg-primary text-bg text-sm font-semibold"
+      >
+        Upload a video
+      </Link>
     </>
   );
 }
 
-export function SwipeFeed({
-  videos,
-  tabsConfig,
-  categoryConfig,
-}: {
-  videos: Video[];
-  tabsConfig?: TabsConfig;
-  categoryConfig?: CategoryConfig;
-}) {
+export function SwipeFeed({ videos }: { videos: Video[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<(HTMLDivElement | null)[]>([]);
   const cardRefs = useRef<(VideoCardHandle | null)[]>([]);
@@ -123,27 +75,6 @@ export function SwipeFeed({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Switching feed tabs or the category filter starts a fresh list — reset
-  // scroll position and trim stale refs from the previous (possibly longer)
-  // list. Keyed off both active selections directly (props now, the parent
-  // owns this state and fetches per-tab/category) rather than just
-  // videos.length — two different result sets can coincidentally have the
-  // same length, which wouldn't otherwise re-trigger this. For untabbed,
-  // unfiltered callers both props are always undefined, so the effect never
-  // re-fires after mount for them.
-  const isFirstTabRender = useRef(true);
-  useEffect(() => {
-    if (isFirstTabRender.current) {
-      isFirstTabRender.current = false;
-      return;
-    }
-    sectionRefs.current.length = videos.length;
-    cardRefs.current.length = videos.length;
-    setActiveIndex(0);
-    const container = containerRef.current;
-    if (container) container.scrollTop = 0;
-  }, [tabsConfig?.active, categoryConfig?.active, videos.length]);
-
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -162,7 +93,7 @@ export function SwipeFeed({
 
     sectionRefs.current.forEach((el) => el && observer.observe(el));
     return () => observer.disconnect();
-  }, [videos.length, tabsConfig?.active, categoryConfig?.active]);
+  }, [videos.length]);
 
   // Scrolling to a new scene always brings chrome back — never let someone
   // land on a video with the nav/action rail already hidden.
@@ -207,14 +138,10 @@ export function SwipeFeed({
   return (
     <div className="relative h-dvh w-full">
       <RotateDevicePrompt />
-      {tabsConfig && <FeedTabs active={tabsConfig.active} onChange={tabsConfig.onChange} />}
-      {categoryConfig && (
-        <CategoryChips active={categoryConfig.active} onChange={categoryConfig.onChange} />
-      )}
 
       {videos.length === 0 ? (
         <div className="h-dvh w-full flex flex-col items-center justify-center gap-3 text-center px-6">
-          <EmptyState tab={tabsConfig?.active ?? null} />
+          <EmptyState />
         </div>
       ) : (
         <div
