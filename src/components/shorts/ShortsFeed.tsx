@@ -8,23 +8,22 @@ import { SearchButton } from "@/components/ui/SearchButton";
 import { ActionRail } from "@/components/feed/ActionRail";
 import { CommentDrawer } from "@/components/feed/CommentDrawer";
 import { VideoOptionsSheet } from "@/components/feed/VideoOptionsSheet";
+import { usePlayerStore } from "@/store/player-store";
 import type { Video } from "@/lib/types";
 
 // Real <video> elements are mounted only this close to the active short —
 // same reasoning as SwipeFeed's RENDER_WINDOW, just a smaller window since
-// shorts are lighter-weight (no Director Mode chrome).
+// shorts are lighter-weight.
 const RENDER_WINDOW = 1;
 
-// Like/comment/share/save stay off the video entirely at first — they fade
-// in after a beat of actually watching, rather than sitting on screen
-// immediately the way they do in the main feed. Inverse of SwipeFeed's
-// auto-*hide* timer: here nothing shows until this delay elapses on the
-// currently active short, and it resets the instant you scroll to another.
-const ACTIONS_REVEAL_DELAY_MS = 3500;
-// A tap reveals it immediately too — same as the passive dwell reveal, both
-// just start this same countdown, so however it got shown it fades back out
-// on its own after a few seconds rather than sitting there permanently.
-const ACTIONS_HIDE_DELAY_MS = 3000;
+// Shares SwipeFeed's Director Mode flag (usePlayerStore) rather than its
+// own separate reveal timer — like/comment/share/caption/search now fade
+// together as one chrome cluster here too, same as the main feed, and the
+// landscape nav dock (which lives outside either feed, in the app shell)
+// watches this same flag to know when to reveal itself. Matches SwipeFeed's
+// own auto-engage delay exactly, for the same reason: consistent pacing
+// across every video-watching surface in the app.
+const AUTO_DIRECTOR_MODE_DELAY_MS = 2500;
 
 // Every tile is the same size — no separate active-vs-inactive width/scale
 // — and stacked with zero gap between them (the tile itself *is* the snap
@@ -48,49 +47,40 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
   }, []);
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const [edgeSpacer, setEdgeSpacer] = useState(0);
-  // revealedIndex (rather than a plain boolean + an explicit "reset to
-  // false" on every activeIndex change) so there's nothing to synchronously
-  // set at the top of the effect — showActions falls out of comparing the
-  // two, and naturally reads false the instant activeIndex moves on.
-  const [revealedIndex, setRevealedIndex] = useState<number | null>(null);
-  // Bumped on every reveal (passive or tapped), including a re-tap while
-  // already visible — revealedIndex alone wouldn't change value in that
-  // last case (already equals activeIndex), and a same-value setState is a
-  // no-op that wouldn't restart the hide countdown below.
-  const [revealTick, setRevealTick] = useState(0);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const hasScrolledToInitialRef = useRef(false);
-  // Whichever trigger (the passive dwell timer or a tap) reveals the
-  // current short first "claims" it — without this, tapping early wouldn't
-  // stop the still-pending passive timer from firing later and re-arming
-  // the hide countdown, extending visibility past what the tap earned it.
-  const hasRevealedRef = useRef(false);
 
+  const directorMode = usePlayerStore((s) => s.directorMode);
+  const isScrubbing = usePlayerStore((s) => s.isScrubbing);
+  const enterDirectorMode = usePlayerStore((s) => s.enterDirectorMode);
+  const exitDirectorMode = usePlayerStore((s) => s.exitDirectorMode);
+  const setActiveId = usePlayerStore((s) => s.setActiveId);
+  const showActions = !directorMode;
+
+  // Director Mode is scoped to whichever feed is actually on screen —
+  // don't leave it engaged for some other route after navigating away.
   useEffect(() => {
-    hasRevealedRef.current = false;
-    const timer = window.setTimeout(() => {
-      if (hasRevealedRef.current) return;
-      hasRevealedRef.current = true;
-      setRevealedIndex(activeIndex);
-      setRevealTick((t) => t + 1);
-    }, ACTIONS_REVEAL_DELAY_MS);
-    return () => window.clearTimeout(timer);
-  }, [activeIndex]);
+    return () => exitDirectorMode();
+  }, [exitDirectorMode]);
 
-  const showActions = revealedIndex === activeIndex;
-
+  // Auto-engage after a beat of no interaction, mirroring SwipeFeed's own
+  // effect exactly (see that file for the full reasoning) — deliberately
+  // does NOT force chrome back on when activeIndex changes; once hidden it
+  // stays hidden through further scrolling, same fix as SwipeFeed got.
   useEffect(() => {
-    if (!showActions) return;
-    const timer = window.setTimeout(() => setRevealedIndex(null), ACTIONS_HIDE_DELAY_MS);
+    if (directorMode || isScrubbing) return;
+    const timer = window.setTimeout(enterDirectorMode, AUTO_DIRECTOR_MODE_DELAY_MS);
     return () => window.clearTimeout(timer);
-  }, [showActions, revealTick]);
+  }, [activeIndex, directorMode, isScrubbing, enterDirectorMode]);
 
-  function revealActionsNow() {
-    hasRevealedRef.current = true;
-    setRevealedIndex(activeIndex);
-    setRevealTick((t) => t + 1);
-  }
+  // Lets LandscapeNavDock (rendered in the app shell, outside this feed)
+  // know the active video changed, so it can close itself immediately on a
+  // swipe rather than staying open across videos.
+  useEffect(() => {
+    const short = shorts[activeIndex];
+    if (short) setActiveId(short.id);
+  }, [activeIndex, shorts, setActiveId]);
 
   // Tiles are uniform-size now (no more active-card-is-bigger treatment),
   // so nothing about a tile's own size distinguishes "centered on screen"
@@ -247,10 +237,16 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
       ref={containerRef}
       role="region"
       aria-label={`Shorts, ${activeIndex + 1} of ${shorts.length}`}
-      onClick={revealActionsNow}
+      onClick={exitDirectorMode}
       className="relative h-dvh w-full overflow-y-scroll snap-y snap-mandatory no-scrollbar bg-bg"
     >
-      <SearchButton className="fixed top-4 right-4 md:top-6 md:right-6 z-20" />
+      <motion.div
+        animate={{ opacity: directorMode ? 0 : 1 }}
+        transition={{ duration: 0.3 }}
+        className={cn(directorMode && "pointer-events-none")}
+      >
+        <SearchButton className="fixed top-4 right-4 md:top-6 md:right-6 z-20" />
+      </motion.div>
       <div aria-hidden style={{ height: edgeSpacer }} />
       {shorts.map((short, index) => {
         const active = index === activeIndex;
@@ -297,10 +293,14 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
             )}
 
             {active && (
-              <div className="absolute inset-x-0 bottom-0 p-4">
+              <motion.div
+                animate={{ opacity: directorMode ? 0 : 1 }}
+                transition={{ duration: 0.3 }}
+                className="absolute inset-x-0 bottom-0 p-4"
+              >
                 <p className="text-sm font-semibold">@{short.creator.username}</p>
                 <p className="text-xs text-text-secondary truncate">{short.title}</p>
-              </div>
+              </motion.div>
             )}
           </div>
         );
@@ -332,10 +332,11 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
                 // Same corner, laid out on the other axis in landscape — a
                 // vertical column reads naturally against the right edge in
                 // portrait; rotated 90° with the phone, that becomes a
-                // horizontal row along the bottom edge instead. right-20
-                // (not right-4) so it doesn't sit under LandscapeSideRail,
-                // which owns the true right edge in this same orientation.
-                className="fixed right-4 bottom-24 md:right-6 md:bottom-10 landscape:max-md:right-20 landscape:max-md:bottom-4 z-30"
+                // horizontal row along the bottom edge instead. bottom-32
+                // (not the portrait bottom-24) clears LandscapeNavDock's
+                // 88px-tall panel plus safe-area when it's open, so the two
+                // don't collide when both are visible at once.
+                className="fixed right-4 bottom-24 md:right-6 md:bottom-10 landscape:max-md:right-4 landscape:max-md:bottom-32 z-30"
               >
                 <ActionRail
                   video={shorts[activeIndex]}

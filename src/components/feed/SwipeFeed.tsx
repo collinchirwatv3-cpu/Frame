@@ -49,6 +49,7 @@ export function SwipeFeed({ videos }: { videos: Video[] }) {
   const isScrubbing = usePlayerStore((s) => s.isScrubbing);
   const enterDirectorMode = usePlayerStore((s) => s.enterDirectorMode);
   const exitDirectorMode = usePlayerStore((s) => s.exitDirectorMode);
+  const setActiveId = usePlayerStore((s) => s.setActiveId);
 
   // Director Mode is a feed-only experience — never let it leak into other routes.
   useEffect(() => {
@@ -94,6 +95,14 @@ export function SwipeFeed({ videos }: { videos: Video[] }) {
     sectionRefs.current.forEach((el) => el && observer.observe(el));
     return () => observer.disconnect();
   }, [videos.length]);
+
+  // Lets LandscapeNavDock (rendered in the app shell, outside this feed)
+  // know the active video changed, so it can close itself immediately on a
+  // swipe rather than staying open across videos.
+  useEffect(() => {
+    const video = videos[activeIndex];
+    if (video) setActiveId(video.id);
+  }, [activeIndex, videos, setActiveId]);
 
   // Auto-engage Director Mode after a beat so the feed defaults to
   // cinematic, chrome-free viewing rather than requiring an explicit tap.
