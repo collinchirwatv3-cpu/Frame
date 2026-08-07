@@ -208,7 +208,17 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
             aria-label={`${short.title} by @${short.creator.username}`}
             aria-hidden={!active}
             className={cn(
-              "relative aspect-video w-full max-w-[720px] mx-auto overflow-hidden bg-card snap-center transition-[opacity,filter] duration-300 ease-out",
+              // snap-always (scroll-snap-stop: always) is the actual fix
+              // for "swipe feels rough" — without it, a fast/hard swipe
+              // flings straight past the next tile to whichever one
+              // momentum happens to land on, skipping 2-3 at once
+              // unpredictably. This forces the browser to stop at every
+              // tile regardless of fling speed, so one swipe always moves
+              // exactly one short — the standard fix for erratic-feeling
+              // snap-scroll. Longer, gentler crossfade on top (was 300ms
+              // ease-out) so the focus/blur handoff itself doesn't feel
+              // like a hard cut mid-scroll.
+              "relative aspect-video w-full max-w-[720px] mx-auto overflow-hidden bg-card snap-center snap-always transition-[opacity,filter] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]",
               active ? "opacity-100 blur-none" : "opacity-50 blur-sm"
             )}
           >
