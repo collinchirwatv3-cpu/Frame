@@ -6,6 +6,7 @@ import { Bookmark, Check, Heart, Link2, MessageCircle, MoreHorizontal, Share2 } 
 import { Avatar } from "@/components/ui/Avatar";
 import { cn, formatCount, shareContent } from "@/lib/utils";
 import { DURATION } from "@/lib/motion";
+import { CHROME_GLASS_CLASS, CHROME_TAP_SCALE } from "@/lib/chrome";
 import { useEngagementStore } from "@/store/engagement-store";
 import { useCommentsStore } from "@/store/comments-store";
 import type { Video } from "@/lib/types";
@@ -33,11 +34,14 @@ function RailButton({
     <button onClick={onClick} className="flex flex-col items-center gap-1 group" aria-pressed={active} aria-label={srLabel}>
       <motion.span
         key={pulseKey}
-        whileTap={{ scale: 0.8 }}
+        whileTap={{ scale: CHROME_TAP_SCALE }}
         initial={pulseKey ? { scale: 1 } : false}
         animate={pulseKey ? { scale: [1, 1.18, 1] } : undefined}
         transition={{ duration: DURATION.base }}
-        className="w-11 h-11 rounded-full flex items-center justify-center bg-card/70 backdrop-blur-md group-hover:bg-card transition-colors"
+        className={cn(
+          CHROME_GLASS_CLASS,
+          "w-11 h-11 flex items-center justify-center group-hover:bg-card transition-colors"
+        )}
       >
         <Icon
           size={22}
@@ -173,13 +177,14 @@ export function ActionRail({
         onClick={() => toggleSave(video.id)}
       />
 
-      <button
+      <motion.button
+        whileTap={{ scale: CHROME_TAP_SCALE }}
         onClick={onOpenOptions}
         aria-label="More options"
-        className="w-11 h-11 rounded-full flex items-center justify-center bg-card/70 backdrop-blur-md hover:bg-card transition-colors"
+        className={cn(CHROME_GLASS_CLASS, "w-11 h-11 flex items-center justify-center hover:bg-card transition-colors")}
       >
         <MoreHorizontal size={22} className="text-accent" />
-      </button>
+      </motion.button>
     </div>
   );
 }

@@ -15,6 +15,8 @@ import { useCurrentUserStore } from "@/store/current-user-store";
 import { createClient } from "@/lib/supabase/client";
 import { fadeVolume } from "@/lib/audio";
 import { FOCUS_PULL_TRANSITION, CHROME_FADE_TRANSITION } from "@/lib/motion";
+import { CHROME_GLASS_CLASS, CHROME_TAP_SCALE_CLASS } from "@/lib/chrome";
+import { cn } from "@/lib/utils";
 import type { Video } from "@/lib/types";
 
 export type VideoCardHandle = {
@@ -246,7 +248,7 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
                     toggleDirectorMode();
                   }}
                   aria-label="Enter Director Mode"
-                  className="w-9 h-9 rounded-full bg-card/70 backdrop-blur-md flex items-center justify-center"
+                  className={cn(CHROME_GLASS_CLASS, CHROME_TAP_SCALE_CLASS, "w-9 h-9 flex items-center justify-center")}
                 >
                   <Maximize2 size={15} />
                 </button>
@@ -256,7 +258,7 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
                     toggleMuted();
                   }}
                   aria-label={muted ? "Unmute" : "Mute"}
-                  className="w-9 h-9 rounded-full bg-card/70 backdrop-blur-md flex items-center justify-center"
+                  className={cn(CHROME_GLASS_CLASS, CHROME_TAP_SCALE_CLASS, "w-9 h-9 flex items-center justify-center")}
                 >
                   {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
                 </button>

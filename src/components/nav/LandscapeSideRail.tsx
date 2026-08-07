@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { navItems } from "./nav-items";
 import { CHROME_FADE_TRANSITION } from "@/lib/motion";
+import { CHROME_GLASS_CLASS, CHROME_TAP_SCALE } from "@/lib/chrome";
 import { usePlayerStore } from "@/store/player-store";
 
 // BottomNav rotated 90° for a phone turned sideways: the horizontal row of
@@ -34,6 +35,7 @@ export function LandscapeSideRail() {
         "hidden landscape:max-md:flex fixed right-4 top-1/2 -translate-y-1/2 z-40 flex-col items-center gap-3",
         directorMode && "pointer-events-none"
       )}
+      style={{ marginRight: "env(safe-area-inset-right)" }}
     >
       {navItems.map(({ href, label, icon: Icon }) => {
         const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -42,16 +44,20 @@ export function LandscapeSideRail() {
         return (
           <Link key={href} href={href} aria-label={label}>
             {isUpload ? (
+              // Upload keeps its own distinct shape/color — same rounded-xl
+              // "squircle" + primary color BottomNav uses for it in
+              // portrait, the one deliberate exception to "every button
+              // matches" since it's the single CTA among four destinations.
               <motion.span
-                whileTap={{ scale: 0.88 }}
-                className="flex items-center justify-center w-9 h-9 rounded-full bg-primary text-bg"
+                whileTap={{ scale: CHROME_TAP_SCALE }}
+                className="flex items-center justify-center w-9 h-9 rounded-xl bg-primary text-bg"
               >
                 <Icon size={17} strokeWidth={2.5} />
               </motion.span>
             ) : (
               <motion.span
-                whileTap={{ scale: 0.88 }}
-                className="flex items-center justify-center w-9 h-9 rounded-full bg-card/70 backdrop-blur-md"
+                whileTap={{ scale: CHROME_TAP_SCALE }}
+                className={cn(CHROME_GLASS_CLASS, "flex items-center justify-center w-9 h-9")}
               >
                 <Icon
                   size={17}

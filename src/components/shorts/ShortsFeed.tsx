@@ -9,6 +9,7 @@ import { ActionRail } from "@/components/feed/ActionRail";
 import { CommentDrawer } from "@/components/feed/CommentDrawer";
 import { VideoOptionsSheet } from "@/components/feed/VideoOptionsSheet";
 import { usePlayerStore } from "@/store/player-store";
+import { CHROME_FADE_TRANSITION } from "@/lib/motion";
 import type { Video } from "@/lib/types";
 
 // Real <video> elements are mounted only this close to the active short —
@@ -233,8 +234,9 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
     >
       <motion.div
         animate={{ opacity: directorMode ? 0 : 1 }}
-        transition={{ duration: 0.3 }}
+        transition={CHROME_FADE_TRANSITION}
         className={cn(directorMode && "pointer-events-none")}
+        style={{ marginRight: "env(safe-area-inset-right)" }}
       >
         <SearchButton className="fixed top-4 right-4 md:top-6 md:right-6 z-20" />
       </motion.div>
@@ -286,11 +288,11 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
             {active && (
               <motion.div
                 animate={{ opacity: directorMode ? 0 : 1 }}
-                transition={{ duration: 0.3 }}
-                className="absolute inset-x-0 bottom-0 p-4"
+                transition={CHROME_FADE_TRANSITION}
+                className="absolute inset-x-0 bottom-0 p-4 flex flex-col gap-0.5"
               >
-                <p className="text-sm font-semibold">@{short.creator.username}</p>
-                <p className="text-xs text-text-secondary truncate">{short.title}</p>
+                <p className="text-sm font-semibold leading-tight">@{short.creator.username}</p>
+                <p className="text-xs text-text-secondary leading-tight truncate">{short.title}</p>
               </motion.div>
             )}
           </div>
@@ -316,10 +318,10 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
           <AnimatePresence>
             {showActions && (
               <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 0.3 }}
+                transition={CHROME_FADE_TRANSITION}
                 // Same corner, laid out on the other axis in landscape — a
                 // vertical column reads naturally against the right edge in
                 // portrait; rotated 90° with the phone, that becomes a
@@ -327,7 +329,15 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
                 // LandscapeSideRail sits vertically centered on the right
                 // edge in that same orientation, not full-height, so it
                 // doesn't reach down to the bottom edge this row occupies.
-                className="fixed right-4 bottom-24 md:right-6 md:bottom-10 landscape:max-md:bottom-4 z-30"
+                className={cn(
+                  "fixed right-4 bottom-24 md:right-6 md:bottom-10 z-30",
+                  // Landscape-only safe-area padding on top of the base
+                  // offset — portrait's bottom-24 already clears BottomNav
+                  // (which bakes in its own inset), so this only applies
+                  // where it's actually needed: the notch/gesture-nav sides
+                  // a rotated phone exposes on the right and bottom edges.
+                  "landscape:max-md:bottom-4 landscape:max-md:mr-[env(safe-area-inset-right)] landscape:max-md:mb-[env(safe-area-inset-bottom)]"
+                )}
               >
                 <ActionRail
                   video={shorts[activeIndex]}
