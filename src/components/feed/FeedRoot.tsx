@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { SwipeFeed, EmptyState } from "./SwipeFeed";
 import { Shelf, type ShelfKind } from "./Shelf";
-import { CollectionsRail } from "@/components/collections/CollectionsRail";
+import { CollectionsShelf } from "./CollectionsShelf";
+import { ProfileFloat } from "@/components/nav/ProfileFloat";
+import { ProfileAvatarLink } from "@/components/nav/ProfileAvatarLink";
 import {
   fetchPublicVideos,
   fetchFollowingVideos,
@@ -46,10 +48,11 @@ function isShelfKind(value: string | null): value is ShelfKind {
  * it needs resurrecting). One layout regardless of device now — phones,
  * tablets, and desktop all land here.
  *
- * Collections reuses CollectionsRail as-is (same component already shown on
- * Profile's Saved Collections) — still backed by mock-data.ts, same as
- * everywhere else it appears; making it real is a separate, not-yet-done
- * project, not something this change touches.
+ * Collections (CollectionsShelf, styled to match every other shelf here
+ * exactly rather than reusing CollectionsRail's own bigger-heading/
+ * wider-card look) — still backed by mock-data.ts, same as everywhere else
+ * it appears; making it real is a separate, not-yet-done project, not
+ * something this change touches.
  *
  * Tapping a card still opens the same immersive SwipeFeed player as always
  * (?v=<id>), just scoped to whichever shelf the card came from
@@ -85,7 +88,12 @@ export function FeedRoot() {
   }, [hydrated, userId]);
 
   if (selectedVideoId) {
-    return <SwipeFeed videos={shelves[activeShelf]} />;
+    return (
+      <>
+        <SwipeFeed videos={shelves[activeShelf]} />
+        <ProfileFloat />
+      </>
+    );
   }
 
   if (shelves.forYou.length === 0) {
@@ -98,13 +106,16 @@ export function FeedRoot() {
 
   return (
     <div className="pt-8 pb-24">
-      <h1 className="text-2xl font-bold px-6 mb-1">FRAMES</h1>
-      <p className="text-text-secondary text-sm px-6 mb-2">Tap a film to watch.</p>
+      <div className="flex items-start justify-between px-6 mb-2">
+        <div>
+          <h1 className="text-2xl font-bold mb-1">FRAMES</h1>
+          <p className="text-text-secondary text-sm">Tap a film to watch.</p>
+        </div>
+        <ProfileAvatarLink />
+      </div>
 
       <Shelf kind="forYou" title="For You" videos={shelves.forYou} />
-      <div className="py-3">
-        <CollectionsRail collections={collections} title="Collections" />
-      </div>
+      <CollectionsShelf collections={collections} />
       {userId && (
         <>
           <Shelf
