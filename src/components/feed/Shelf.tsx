@@ -1,10 +1,16 @@
 import Image from "next/image";
 import Link from "next/link";
-import { BadgeRow } from "@/components/ui/BadgeRow";
-import { computeBadges } from "@/lib/badges";
+import { topBadge } from "@/lib/badges";
 import type { Video } from "@/lib/types";
 
 export type ShelfKind = "forYou" | "following" | "saved" | "history";
+
+/** "Shot on Sony" -> "ShotOnSony" — badge labels are written as normal
+ * phrases for BadgeRow's pill treatment elsewhere; compacted here so the
+ * inline tag next to the username reads as one word, not a run-on phrase. */
+function toCompactTag(label: string): string {
+  return label.replace(/\s+/g, "");
+}
 
 type Props = {
   kind: ShelfKind;
@@ -36,31 +42,34 @@ export function Shelf({ kind, title, videos, emptyMessage }: Props) {
         <p className="px-6 text-xs text-text-secondary">{emptyMessage ?? "Nothing here yet."}</p>
       ) : (
         <div className="flex gap-3 overflow-x-auto no-scrollbar px-6 pb-1">
-          {videos.map((video) => (
-            <Link
-              key={video.id}
-              href={`/?v=${video.id}&shelf=${kind}`}
-              aria-label={`Watch ${video.title} by @${video.creator.username}`}
-              style={{ aspectRatio: `${video.width} / ${video.height}` }}
-              className="group relative flex-shrink-0 h-28 md:h-32 rounded-xl overflow-hidden bg-card border border-border"
-            >
-              <Image
-                src={video.posterUrl}
-                alt={video.title}
-                fill
-                sizes="(max-width: 768px) 45vw, 320px"
-                className="object-cover transition-transform duration-300 group-hover:scale-105"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-bg/85 via-transparent to-transparent" />
-              <BadgeRow badges={computeBadges(video)} max={1} className="absolute top-1.5 left-1.5" />
-              <div className="absolute bottom-0 inset-x-0 p-2">
-                <p className="text-[11px] font-semibold truncate">{video.title}</p>
-                <p className="text-[10px] text-text-secondary truncate">
-                  @{video.creator.username}
-                </p>
-              </div>
-            </Link>
-          ))}
+          {videos.map((video) => {
+            const badge = topBadge(video);
+            return (
+              <Link
+                key={video.id}
+                href={`/?v=${video.id}&shelf=${kind}`}
+                aria-label={`Watch ${video.title} by @${video.creator.username}`}
+                style={{ aspectRatio: `${video.width} / ${video.height}` }}
+                className="group relative flex-shrink-0 h-28 md:h-32 rounded-xl overflow-hidden bg-card border border-border"
+              >
+                <Image
+                  src={video.posterUrl}
+                  alt={video.title}
+                  fill
+                  sizes="(max-width: 768px) 45vw, 320px"
+                  className="object-cover transition-transform duration-300 group-hover:scale-105"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-bg/85 via-transparent to-transparent" />
+                <div className="absolute bottom-0 inset-x-0 p-2">
+                  <p className="text-[11px] font-semibold truncate">{video.title}</p>
+                  <p className="text-[10px] text-text-secondary truncate">
+                    @{video.creator.username}
+                    {badge && ` ${toCompactTag(badge)}`}
+                  </p>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       )}
     </section>

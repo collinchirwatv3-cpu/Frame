@@ -17,3 +17,30 @@ export function computeBadges(video: Video): Badge[] {
   if (computeQualityScore(video) >= FRAMES_CERTIFIED_THRESHOLD) badges.add("FRAMES Certified");
   return Array.from(badges);
 }
+
+// Roughly most- to least-impressive, for contexts that only show one badge.
+// Shared by BadgeRow (pill rendering) and anywhere else that needs "the one
+// badge that matters most" without pulling in BadgeRow's own JSX.
+export const BADGE_PRIORITY: Badge[] = [
+  "FRAMES Certified",
+  "21:9 Cinema",
+  "4K",
+  "Dolby Vision",
+  "HDR",
+  "Spatial Audio",
+  "Drone",
+  "Shot on RED",
+  "Shot on Sony",
+  "Shot on Blackmagic",
+];
+
+export function sortBadgesByPriority(badges: Badge[]): Badge[] {
+  return [...badges].sort((a, b) => BADGE_PRIORITY.indexOf(a) - BADGE_PRIORITY.indexOf(b));
+}
+
+/** The single most-impressive badge a video has, if any — for compact
+ * contexts (a hashtag-style tag next to the creator's name) that only have
+ * room for one. */
+export function topBadge(video: Video): Badge | null {
+  return sortBadgesByPriority(computeBadges(video))[0] ?? null;
+}

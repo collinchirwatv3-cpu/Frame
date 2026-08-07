@@ -8,6 +8,7 @@ import {
   SunMedium,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { sortBadgesByPriority } from "@/lib/badges";
 import type { Badge } from "@/lib/types";
 
 const BADGE_ICON: Record<Badge, React.ElementType> = {
@@ -23,20 +24,6 @@ const BADGE_ICON: Record<Badge, React.ElementType> = {
   "Shot on Blackmagic": Camera,
 };
 
-// Roughly most- to least-impressive, for contexts that only show one badge.
-const BADGE_PRIORITY: Badge[] = [
-  "FRAMES Certified",
-  "21:9 Cinema",
-  "4K",
-  "Dolby Vision",
-  "HDR",
-  "Spatial Audio",
-  "Drone",
-  "Shot on RED",
-  "Shot on Sony",
-  "Shot on Blackmagic",
-];
-
 export function BadgeRow({
   badges,
   max,
@@ -48,9 +35,7 @@ export function BadgeRow({
 }) {
   if (badges.length === 0) return null;
 
-  const ordered = [...badges].sort(
-    (a, b) => BADGE_PRIORITY.indexOf(a) - BADGE_PRIORITY.indexOf(b)
-  );
+  const ordered = sortBadgesByPriority(badges);
   const shown = max ? ordered.slice(0, max) : ordered;
 
   return (
