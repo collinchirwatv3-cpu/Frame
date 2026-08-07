@@ -121,7 +121,7 @@ export function SwipeFeed({ videos }: { videos: Video[] }) {
         toggleMuted();
       } else if (e.key === " ") {
         e.preventDefault();
-        cardRefs.current[activeIndex]?.togglePlay();
+        cardRefs.current[activeIndex]?.handleTap();
       }
     }
 
