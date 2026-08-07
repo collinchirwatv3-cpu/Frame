@@ -329,12 +329,19 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.3 }}
-                className="fixed right-4 bottom-24 md:right-6 md:bottom-10 z-30"
+                // Same corner, laid out on the other axis in landscape — a
+                // vertical column reads naturally against the right edge in
+                // portrait; rotated 90° with the phone, that becomes a
+                // horizontal row along the bottom edge instead. right-20
+                // (not right-4) so it doesn't sit under LandscapeSideRail,
+                // which owns the true right edge in this same orientation.
+                className="fixed right-4 bottom-24 md:right-6 md:bottom-10 landscape:max-md:right-20 landscape:max-md:bottom-4 z-30"
               >
                 <ActionRail
                   video={shorts[activeIndex]}
                   onOpenComments={() => setCommentsOpen(true)}
                   onOpenOptions={() => setOptionsOpen(true)}
+                  className="landscape:max-md:flex-row landscape:max-md:gap-4"
                 />
               </motion.div>
             )}

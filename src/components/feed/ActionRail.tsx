@@ -58,10 +58,16 @@ export function ActionRail({
   video,
   onOpenComments,
   onOpenOptions,
+  className,
 }: {
   video: Video;
   onOpenComments: () => void;
   onOpenOptions: () => void;
+  /** Overrides the root's flex direction/gap — Shorts uses this to lay the
+   * rail out as a row instead of a column in landscape, the main feed
+   * leaves it at the default column (its cinematic player keeps a vertical
+   * control column even in landscape, per RotateDevicePrompt). */
+  className?: string;
 }) {
   const liked = useEngagementStore((s) => !!s.likedVideos[video.id]);
   const saved = useEngagementStore((s) => !!s.savedVideos[video.id]);
@@ -99,7 +105,7 @@ export function ActionRail({
   }
 
   return (
-    <div className="flex flex-col items-center gap-5">
+    <div className={cn("flex flex-col items-center gap-5", className)}>
       <div className="flex flex-col items-center gap-1.5">
         <Avatar src={video.creator.avatarUrl} alt={video.creator.displayName} size={44} ring />
         <AnimatePresence>
