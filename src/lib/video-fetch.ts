@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
-import type { Creator, Video } from "@/lib/types";
+import type { Category, Creator, Video } from "@/lib/types";
 
 type Row = {
   id: string;
@@ -92,15 +92,13 @@ export async function fetchVideoById(id: string): Promise<Video | null> {
 /** Recent public films (content_type = 'film') — the cinematic library,
  * excludes shorts. Client-side query-filtered against `matchesVideoQuery`
  * by callers (Explore, watch-together's queue picker) rather than a new
- * server-side search feature. */
-export async function fetchPublicVideos(limit = 30): Promise<Video[]> {
+ * server-side search feature. Optional `category` narrows server-side —
+ * Home's category chip strip. */
+export async function fetchPublicVideos(limit = 30, category?: Category): Promise<Video[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from("videos")
-    .select(SELECT)
-    .eq("content_type", "film")
-    .order("created_at", { ascending: false })
-    .limit(limit);
+  let query = supabase.from("videos").select(SELECT).eq("content_type", "film");
+  if (category) query = query.eq("category", category);
+  const { data, error } = await query.order("created_at", { ascending: false }).limit(limit);
   if (error || !data) return [];
   return (data as unknown as Row[]).map(toVideo).filter((v) => v !== null);
 }
@@ -120,19 +118,23 @@ export async function fetchShorts(limit = 30): Promise<Video[]> {
 
 type EmbeddedVideoRow = { videos: Row | null };
 
-/** This user's saved films, most recently saved first — the "Saved" section
- * of Home's composed feed. `videos!inner` (not a plain embed) so
- * .eq("videos.content_type", ...) actually filters which saves rows come
- * back, not just nulls out the embed on non-matching ones. */
-export async function fetchSavedVideos(userId: string, limit = 20): Promise<Video[]> {
+/** This user's saved films, most recently saved first — the "Saved" tab of
+ * Home. `videos!inner` (not a plain embed) so .eq("videos.content_type", …)
+ * actually filters which saves rows come back, not just nulls out the
+ * embed on non-matching ones — same reason `category` filters the same way. */
+export async function fetchSavedVideos(
+  userId: string,
+  limit = 20,
+  category?: Category
+): Promise<Video[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("saves")
     .select(`videos!inner ( ${SELECT} )`)
     .eq("user_id", userId)
-    .eq("videos.content_type", "film")
-    .order("created_at", { ascending: false })
-    .limit(limit);
+    .eq("videos.content_type", "film");
+  if (category) query = query.eq("videos.category", category);
+  const { data, error } = await query.order("created_at", { ascending: false }).limit(limit);
   if (error || !data) return [];
   return (data as unknown as EmbeddedVideoRow[])
     .map((row) => (row.videos ? toVideo(row.videos) : null))
@@ -140,18 +142,21 @@ export async function fetchSavedVideos(userId: string, limit = 20): Promise<Vide
 }
 
 /** This user's watch history, most recently watched first — the "History"
- * section of Home's composed feed. Written by VideoCard.tsx when a video
- * scrolls out of view (upserts watch_progress), not read anywhere until now
- * — Phase 4's cross-device-resume table finally has a first real reader. */
-export async function fetchHistoryVideos(userId: string, limit = 20): Promise<Video[]> {
+ * tab of Home. Written by VideoCard.tsx when a video scrolls out of view
+ * (upserts watch_progress). */
+export async function fetchHistoryVideos(
+  userId: string,
+  limit = 20,
+  category?: Category
+): Promise<Video[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("watch_progress")
     .select(`videos!inner ( ${SELECT} )`)
     .eq("user_id", userId)
-    .eq("videos.content_type", "film")
-    .order("updated_at", { ascending: false })
-    .limit(limit);
+    .eq("videos.content_type", "film");
+  if (category) query = query.eq("videos.category", category);
+  const { data, error } = await query.order("updated_at", { ascending: false }).limit(limit);
   if (error || !data) return [];
   return (data as unknown as EmbeddedVideoRow[])
     .map((row) => (row.videos ? toVideo(row.videos) : null))
@@ -164,7 +169,11 @@ export async function fetchHistoryVideos(userId: string, limit = 20): Promise<Vi
  * followee_id), so there's no single-level PostgREST embed shape for this —
  * fetch followee ids, then films by those creators, both RLS-scoped to
  * public+ready under the hood same as every other read here. */
-export async function fetchFollowingVideos(userId: string, limit = 20): Promise<Video[]> {
+export async function fetchFollowingVideos(
+  userId: string,
+  limit = 20,
+  category?: Category
+): Promise<Video[]> {
   const supabase = createClient();
   const { data: follows } = await supabase
     .from("follows")
@@ -173,13 +182,13 @@ export async function fetchFollowingVideos(userId: string, limit = 20): Promise<
   const followeeIds = (follows ?? []).map((row) => row.followee_id as string);
   if (followeeIds.length === 0) return [];
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("videos")
     .select(SELECT)
     .eq("content_type", "film")
-    .in("creator_id", followeeIds)
-    .order("created_at", { ascending: false })
-    .limit(limit);
+    .in("creator_id", followeeIds);
+  if (category) query = query.eq("category", category);
+  const { data, error } = await query.order("created_at", { ascending: false }).limit(limit);
   if (error || !data) return [];
   return (data as unknown as Row[]).map(toVideo).filter((v) => v !== null);
 }

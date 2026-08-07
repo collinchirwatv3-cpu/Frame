@@ -6,6 +6,7 @@ import Link from "next/link";
 import { VideoCard, type VideoCardHandle } from "./VideoCard";
 import { VideoPlaceholder } from "./VideoPlaceholder";
 import { FeedTabs, type FeedTab } from "./FeedTabs";
+import { CategoryChips } from "./CategoryChips";
 import { RotateDevicePrompt } from "./RotateDevicePrompt";
 
 // How many cards stay fully mounted on either side of the active one. Real
@@ -19,9 +20,10 @@ const RENDER_WINDOW = 2;
 // enough that the feed reads as cinematic rather than app-chrome-heavy.
 const AUTO_DIRECTOR_MODE_DELAY_MS = 2500;
 import { usePlayerStore } from "@/store/player-store";
-import type { Video } from "@/lib/types";
+import type { Category, Video } from "@/lib/types";
 
 type TabsConfig = { active: FeedTab; onChange: (tab: FeedTab) => void };
+type CategoryConfig = { active: Category | null; onChange: (category: Category | null) => void };
 
 /** Same copy across every empty forYou/untabbed case, deliberately —
  * e2e/feed-engagement.spec.ts asserts this exact string for Home. Exported
@@ -78,7 +80,15 @@ export function EmptyState({ tab }: { tab: FeedTab | null }) {
   );
 }
 
-export function SwipeFeed({ videos, tabsConfig }: { videos: Video[]; tabsConfig?: TabsConfig }) {
+export function SwipeFeed({
+  videos,
+  tabsConfig,
+  categoryConfig,
+}: {
+  videos: Video[];
+  tabsConfig?: TabsConfig;
+  categoryConfig?: CategoryConfig;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<(HTMLDivElement | null)[]>([]);
   const cardRefs = useRef<(VideoCardHandle | null)[]>([]);
@@ -113,11 +123,14 @@ export function SwipeFeed({ videos, tabsConfig }: { videos: Video[]; tabsConfig?
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Switching feed tabs starts a fresh list — reset scroll position and
-  // trim stale refs from the previous (possibly longer) list. Keyed off the
-  // active tab itself (a prop now, the parent owns tab state and fetches
-  // per-tab) rather than anything local — for untabbed callers this prop is
-  // always undefined, so the effect never re-fires after mount for them.
+  // Switching feed tabs or the category filter starts a fresh list — reset
+  // scroll position and trim stale refs from the previous (possibly longer)
+  // list. Keyed off both active selections directly (props now, the parent
+  // owns this state and fetches per-tab/category) rather than just
+  // videos.length — two different result sets can coincidentally have the
+  // same length, which wouldn't otherwise re-trigger this. For untabbed,
+  // unfiltered callers both props are always undefined, so the effect never
+  // re-fires after mount for them.
   const isFirstTabRender = useRef(true);
   useEffect(() => {
     if (isFirstTabRender.current) {
@@ -129,7 +142,7 @@ export function SwipeFeed({ videos, tabsConfig }: { videos: Video[]; tabsConfig?
     setActiveIndex(0);
     const container = containerRef.current;
     if (container) container.scrollTop = 0;
-  }, [tabsConfig?.active, videos.length]);
+  }, [tabsConfig?.active, categoryConfig?.active, videos.length]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -149,7 +162,7 @@ export function SwipeFeed({ videos, tabsConfig }: { videos: Video[]; tabsConfig?
 
     sectionRefs.current.forEach((el) => el && observer.observe(el));
     return () => observer.disconnect();
-  }, [videos.length, tabsConfig?.active]);
+  }, [videos.length, tabsConfig?.active, categoryConfig?.active]);
 
   // Scrolling to a new scene always brings chrome back — never let someone
   // land on a video with the nav/action rail already hidden.
@@ -195,6 +208,9 @@ export function SwipeFeed({ videos, tabsConfig }: { videos: Video[]; tabsConfig?
     <div className="relative h-dvh w-full">
       <RotateDevicePrompt />
       {tabsConfig && <FeedTabs active={tabsConfig.active} onChange={tabsConfig.onChange} />}
+      {categoryConfig && (
+        <CategoryChips active={categoryConfig.active} onChange={categoryConfig.onChange} />
+      )}
 
       {videos.length === 0 ? (
         <div className="h-dvh w-full flex flex-col items-center justify-center gap-3 text-center px-6">

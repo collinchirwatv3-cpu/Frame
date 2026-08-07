@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { SwipeFeed, EmptyState } from "./SwipeFeed";
 import { TABS, type FeedTab } from "./FeedTabs";
+import { CATEGORY_CHIPS } from "./CategoryChips";
 import { TrendingGrid } from "@/components/explore/TrendingGrid";
 import { useIsMobile } from "@/lib/use-portrait-mobile";
 import {
@@ -14,16 +15,16 @@ import {
 } from "@/lib/video-fetch";
 import { useEngagementStore } from "@/store/engagement-store";
 import { cn } from "@/lib/utils";
-import type { Video } from "@/lib/types";
+import type { Category, Video } from "@/lib/types";
 
 const CAP = 30;
 
-function fetchForTab(tab: FeedTab, userId: string | null): Promise<Video[]> {
-  if (tab === "forYou") return fetchPublicVideos(CAP);
+function fetchForTab(tab: FeedTab, userId: string | null, category: Category | null): Promise<Video[]> {
+  if (tab === "forYou") return fetchPublicVideos(CAP, category ?? undefined);
   if (!userId) return Promise.resolve([]);
-  if (tab === "following") return fetchFollowingVideos(userId, CAP);
-  if (tab === "saved") return fetchSavedVideos(userId, CAP);
-  return fetchHistoryVideos(userId, CAP);
+  if (tab === "following") return fetchFollowingVideos(userId, CAP, category ?? undefined);
+  if (tab === "saved") return fetchSavedVideos(userId, CAP, category ?? undefined);
+  return fetchHistoryVideos(userId, CAP, category ?? undefined);
 }
 
 /**
@@ -40,6 +41,11 @@ function fetchForTab(tab: FeedTab, userId: string | null): Promise<Video[]> {
  * FeedTabs (that component's drop-shadow/overlay styling is built for
  * sitting on top of video content, not a plain grid background). Tablets
  * and desktop always get SwipeFeed directly, tabs and all.
+ *
+ * A category chip strip (CategoryChips) sits under the tabs on every
+ * layout, narrowing whichever tab is active — shown regardless of sign-in
+ * state, unlike the tabs themselves, since filtering by category is useful
+ * even on the signed-out For-You-only view.
  */
 export function FeedRoot() {
   const isMobile = useIsMobile();
@@ -47,18 +53,19 @@ export function FeedRoot() {
   const userId = useEngagementStore((s) => s.userId);
   const hydrated = useEngagementStore((s) => s.hydrated);
   const [tab, setTab] = useState<FeedTab>("forYou");
+  const [category, setCategory] = useState<Category | null>(null);
   const [videos, setVideos] = useState<Video[]>([]);
 
   useEffect(() => {
     if (!hydrated) return;
     let cancelled = false;
-    fetchForTab(tab, userId).then((result) => {
+    fetchForTab(tab, userId, category).then((result) => {
       if (!cancelled) setVideos(result);
     });
     return () => {
       cancelled = true;
     };
-  }, [hydrated, userId, tab]);
+  }, [hydrated, userId, tab, category]);
 
   if (isMobile && !hasSelectedVideo) {
     return (
@@ -66,7 +73,7 @@ export function FeedRoot() {
         <h1 className="text-2xl font-bold px-6 mb-1">FRAMES</h1>
         <p className="text-text-secondary text-sm px-6 mb-4">Tap a film to watch.</p>
         {userId && (
-          <div className="flex items-center gap-1.5 px-6 mb-4 overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-1.5 px-6 mb-3 overflow-x-auto no-scrollbar">
             {TABS.map(({ id, label }) => (
               <button
                 key={id}
@@ -83,6 +90,24 @@ export function FeedRoot() {
             ))}
           </div>
         )}
+        <div className="flex items-center gap-2 px-6 mb-4 overflow-x-auto no-scrollbar">
+          {CATEGORY_CHIPS.map(({ label, value }) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() => setCategory(value)}
+              aria-pressed={category === value}
+              className={cn(
+                "flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors",
+                category === value
+                  ? "bg-primary text-bg"
+                  : "bg-card text-text-secondary hover:text-accent"
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <TrendingGrid
           videos={videos}
           emptyState={
@@ -96,6 +121,10 @@ export function FeedRoot() {
   }
 
   return (
-    <SwipeFeed videos={videos} tabsConfig={userId ? { active: tab, onChange: setTab } : undefined} />
+    <SwipeFeed
+      videos={videos}
+      tabsConfig={userId ? { active: tab, onChange: setTab } : undefined}
+      categoryConfig={{ active: category, onChange: setCategory }}
+    />
   );
 }
