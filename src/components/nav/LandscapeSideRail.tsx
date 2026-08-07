@@ -12,8 +12,9 @@ import { useIsLandscapeMobile } from "@/lib/use-landscape-mobile";
 
 // BottomNav rotated 90° for a phone turned sideways: the horizontal row of
 // four icons along the bottom in portrait becomes a vertical column along
-// the right edge in landscape, vertically centered rather than stretched
-// top-to-bottom. Individual floating circular buttons (matching
+// the left edge in landscape (same side as SideRail's own left-edge desktop
+// nav, for consistency between the two), vertically centered rather than
+// stretched top-to-bottom. Individual floating circular buttons (matching
 // SearchButton/ActionRail's own per-button styling) rather than one large
 // backdrop-blurred panel behind them — an earlier full-height bar-with-
 // background version read as too heavy for a screen already short on
@@ -36,10 +37,10 @@ export function LandscapeSideRail() {
       transition={CHROME_FADE_TRANSITION}
       aria-label="Primary"
       className={cn(
-        "fixed right-4 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-3",
+        "fixed left-4 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-3",
         directorMode && "pointer-events-none"
       )}
-      style={{ marginRight: "env(safe-area-inset-right)" }}
+      style={{ marginLeft: "env(safe-area-inset-left)" }}
     >
       {navItems.map(({ href, label, icon: Icon }) => {
         const active = pathname.startsWith(href);

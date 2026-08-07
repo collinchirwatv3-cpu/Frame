@@ -326,9 +326,9 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
                 // vertical column reads naturally against the right edge in
                 // portrait; rotated 90° with the phone, that becomes a
                 // horizontal row along the bottom edge instead.
-                // LandscapeSideRail sits vertically centered on the right
-                // edge in that same orientation, not full-height, so it
-                // doesn't reach down to the bottom edge this row occupies.
+                // LandscapeSideRail (the site nav) lives on the *left* edge
+                // in that same orientation now, so there's no shared edge to
+                // worry about colliding with at all.
                 className={cn(
                   "fixed right-4 bottom-24 md:right-6 md:bottom-10 z-30",
                   // Landscape-only safe-area padding on top of the base
