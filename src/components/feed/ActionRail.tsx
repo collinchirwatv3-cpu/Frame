@@ -75,10 +75,8 @@ export function ActionRail({
 }) {
   const liked = useEngagementStore((s) => !!s.likedVideos[video.id]);
   const saved = useEngagementStore((s) => !!s.savedVideos[video.id]);
-  const following = useEngagementStore((s) => !!s.followedCreators[video.creator.id]);
   const toggleLike = useEngagementStore((s) => s.toggleLike);
   const toggleSave = useEngagementStore((s) => s.toggleSave);
-  const toggleFollow = useEngagementStore((s) => s.toggleFollow);
   const fetchComments = useCommentsStore((s) => s.fetchComments);
   const liveCommentCount = useCommentsStore((s) => s.byVideoId[video.id]?.length ?? 0);
 
@@ -110,25 +108,10 @@ export function ActionRail({
 
   return (
     <div className={cn("flex flex-col items-center gap-5", className)}>
-      <div className="flex flex-col items-center gap-1.5">
-        <Avatar src={video.creator.avatarUrl} alt={video.creator.displayName} size={44} ring />
-        <AnimatePresence>
-          {!following && (
-            <motion.button
-              key="follow"
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: DURATION.fast }}
-              onClick={() => toggleFollow(video.creator.id)}
-              aria-label={`Follow @${video.creator.username}`}
-              className="px-2.5 py-1 rounded-full bg-card/80 backdrop-blur-md border border-border text-[10px] font-semibold text-accent"
-            >
-              Follow
-            </motion.button>
-          )}
-        </AnimatePresence>
-      </div>
+      {/* Follow used to be a pill under this avatar — moved to sit next to
+          the username in VideoOverlay.tsx instead, reads more naturally
+          next to the name it's actually about. Avatar stays here. */}
+      <Avatar src={video.creator.avatarUrl} alt={video.creator.displayName} size={44} ring />
 
       <RailButton
         icon={Heart}
