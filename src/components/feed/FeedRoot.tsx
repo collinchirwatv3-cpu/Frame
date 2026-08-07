@@ -40,8 +40,8 @@ function isShelfKind(value: string | null): value is ShelfKind {
 }
 
 /**
- * Home: a scrollable page of horizontal shelves — For You, Collections,
- * then (signed in) Following / Saved / History — Netflix/YouTube-shelf
+ * Home: a scrollable page of horizontal shelves — For You, then (signed in)
+ * Following / Saved / History, then Collections last — Netflix/YouTube-shelf
  * style, replacing the earlier tabs + full-screen-swipe-feed default (that
  * whole approach, including the portrait-vs-landscape tile-grid/SwipeFeed
  * branching and the category chip strip, is gone; see git history if any of
@@ -115,7 +115,6 @@ export function FeedRoot() {
       </div>
 
       <Shelf kind="forYou" title="For You" videos={shelves.forYou} />
-      <CollectionsShelf collections={collections} />
       {userId && (
         <>
           <Shelf
@@ -138,6 +137,7 @@ export function FeedRoot() {
           />
         </>
       )}
+      <CollectionsShelf collections={collections} />
     </div>
   );
 }
