@@ -95,12 +95,6 @@ export function SwipeFeed({ videos }: { videos: Video[] }) {
     return () => observer.disconnect();
   }, [videos.length]);
 
-  // Scrolling to a new scene always brings chrome back — never let someone
-  // land on a video with the nav/action rail already hidden.
-  useEffect(() => {
-    exitDirectorMode();
-  }, [activeIndex, exitDirectorMode]);
-
   // Auto-engage Director Mode after a beat so the feed defaults to
   // cinematic, chrome-free viewing rather than requiring an explicit tap.
   // Never while scrubbing (chrome fading mid-drag would yank the scrub bar
