@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { SwipeFeed, EmptyState } from "./SwipeFeed";
 import { TABS, type FeedTab } from "./FeedTabs";
 import { TrendingGrid } from "@/components/explore/TrendingGrid";
-import { useIsPortraitMobile } from "@/lib/use-portrait-mobile";
+import { useIsMobile } from "@/lib/use-portrait-mobile";
 import {
   fetchPublicVideos,
   fetchFollowingVideos,
@@ -33,16 +33,16 @@ function fetchForTab(tab: FeedTab, userId: string | null): Promise<Video[]> {
  * switcher at all — Following/Saved/History are inherently per-account, so
  * there's nothing useful behind them; they get For You only.
  *
- * Portrait phones get a browsable grid (TrendingGrid, same one Discover
- * uses) instead of the immersive swipe feed until a specific video is
- * selected — the tab switcher is reproduced above it as plain pill buttons
- * rather than reusing FeedTabs (that component's drop-shadow/overlay
- * styling is built for sitting on top of video content, not a plain grid
- * background). Landscape phones, tablets, and desktop always get SwipeFeed
- * directly, tabs and all.
+ * Phones get a browsable tile grid (TrendingGrid, same one Discover uses)
+ * instead of the immersive swipe feed until a specific video is selected —
+ * regardless of orientation, on purpose (see useIsMobile) — the tab
+ * switcher is reproduced above it as plain pill buttons rather than reusing
+ * FeedTabs (that component's drop-shadow/overlay styling is built for
+ * sitting on top of video content, not a plain grid background). Tablets
+ * and desktop always get SwipeFeed directly, tabs and all.
  */
 export function FeedRoot() {
-  const isPortraitMobile = useIsPortraitMobile();
+  const isMobile = useIsMobile();
   const hasSelectedVideo = useSearchParams().has("v");
   const userId = useEngagementStore((s) => s.userId);
   const hydrated = useEngagementStore((s) => s.hydrated);
@@ -60,13 +60,11 @@ export function FeedRoot() {
     };
   }, [hydrated, userId, tab]);
 
-  if (isPortraitMobile && !hasSelectedVideo) {
+  if (isMobile && !hasSelectedVideo) {
     return (
       <div className="pt-8 pb-24">
         <h1 className="text-2xl font-bold px-6 mb-1">FRAMES</h1>
-        <p className="text-text-secondary text-sm px-6 mb-4">
-          Tap a film to watch — turn your phone sideways for the full cinematic view.
-        </p>
+        <p className="text-text-secondary text-sm px-6 mb-4">Tap a film to watch.</p>
         {userId && (
           <div className="flex items-center gap-1.5 px-6 mb-4 overflow-x-auto no-scrollbar">
             {TABS.map(({ id, label }) => (
