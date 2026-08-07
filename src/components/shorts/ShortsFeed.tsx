@@ -2,14 +2,25 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { SearchButton } from "@/components/ui/SearchButton";
+import { ActionRail } from "@/components/feed/ActionRail";
+import { CommentDrawer } from "@/components/feed/CommentDrawer";
+import { VideoOptionsSheet } from "@/components/feed/VideoOptionsSheet";
 import type { Video } from "@/lib/types";
 
 // Real <video> elements are mounted only this close to the active short —
 // same reasoning as SwipeFeed's RENDER_WINDOW, just a smaller window since
-// shorts are lighter-weight (no Director Mode chrome, no action rail).
+// shorts are lighter-weight (no Director Mode chrome).
 const RENDER_WINDOW = 1;
+
+// Like/comment/share/save stay off the video entirely at first — they fade
+// in after a beat of actually watching, rather than sitting on screen
+// immediately the way they do in the main feed. Inverse of SwipeFeed's
+// auto-*hide* timer: here nothing shows until this delay elapses on the
+// currently active short, and it resets the instant you scroll to another.
+const ACTIONS_REVEAL_DELAY_MS = 3500;
 
 // Every tile is the same size — no separate active-vs-inactive width/scale
 // — and stacked with zero gap between them (the tile itself *is* the snap
@@ -33,7 +44,21 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
   }, []);
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const [edgeSpacer, setEdgeSpacer] = useState(0);
+  // revealedIndex (rather than a plain boolean + an explicit "reset to
+  // false" on every activeIndex change) so there's nothing to synchronously
+  // set at the top of the effect — showActions falls out of comparing the
+  // two, and naturally reads false the instant activeIndex moves on.
+  const [revealedIndex, setRevealedIndex] = useState<number | null>(null);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const hasScrolledToInitialRef = useRef(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setRevealedIndex(activeIndex), ACTIONS_REVEAL_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [activeIndex]);
+
+  const showActions = revealedIndex === activeIndex;
 
   // Tiles are uniform-size now (no more active-card-is-bigger treatment),
   // so nothing about a tile's own size distinguishes "centered on screen"
@@ -254,6 +279,45 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
           itself, leaving nothing to actually scroll — confirmed: exactly
           what happened with 3 demo shorts and no spacer at all). */}
       <div aria-hidden style={{ height: edgeSpacer }} />
+
+      {/* Fixed to the viewport, not nested in the active tile — the tile is
+          only ~220px tall at typical phone widths (a true 16:9 box), well
+          under the rail's own stacked height (avatar/follow, like, comment,
+          share, save, more), and the tile's overflow-hidden was clipping it
+          when it lived inline. This also means it doesn't need to migrate
+          tile-to-tile as activeIndex changes — it just points at whichever
+          short is active. */}
+      {shorts[activeIndex] && (
+        <>
+          <AnimatePresence>
+            {showActions && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                className="fixed right-4 bottom-24 md:right-6 md:bottom-10 z-30"
+              >
+                <ActionRail
+                  video={shorts[activeIndex]}
+                  onOpenComments={() => setCommentsOpen(true)}
+                  onOpenOptions={() => setOptionsOpen(true)}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <CommentDrawer
+            video={shorts[activeIndex]}
+            open={commentsOpen}
+            onClose={() => setCommentsOpen(false)}
+          />
+          <VideoOptionsSheet
+            video={shorts[activeIndex]}
+            open={optionsOpen}
+            onClose={() => setOptionsOpen(false)}
+          />
+        </>
+      )}
     </div>
   );
 }
