@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Send, X } from "lucide-react";
+import { CornerDownRight, Send, X } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { useCommentsStore, type Comment } from "@/store/comments-store";
 import { useEscapeToClose } from "@/lib/use-escape-to-close";
+import { cn } from "@/lib/utils";
 import type { Video } from "@/lib/types";
 
 const EMPTY_COMMENTS: Comment[] = [];
@@ -20,6 +21,7 @@ export function CommentDrawer({
   onClose: () => void;
 }) {
   const [draft, setDraft] = useState("");
+  const [replyingTo, setReplyingTo] = useState<Comment | null>(null);
   const allComments = useCommentsStore((s) => s.byVideoId[video.id] ?? EMPTY_COMMENTS);
   const fetchComments = useCommentsStore((s) => s.fetchComments);
   const addComment = useCommentsStore((s) => s.addComment);
@@ -30,12 +32,31 @@ export function CommentDrawer({
 
   useEscapeToClose(open, onClose);
 
+  // One level deep: top-level comments in order, each with its own replies
+  // (also in order) grouped underneath — mirrors how the reply composer
+  // only ever attaches to a top-level comment's id (see comments-store.ts).
+  const threads = useMemo(() => {
+    const repliesByParent = new Map<string, Comment[]>();
+    const topLevel: Comment[] = [];
+    for (const c of allComments) {
+      if (c.parentId) {
+        const list = repliesByParent.get(c.parentId) ?? [];
+        list.push(c);
+        repliesByParent.set(c.parentId, list);
+      } else {
+        topLevel.push(c);
+      }
+    }
+    return topLevel.map((comment) => ({ comment, replies: repliesByParent.get(comment.id) ?? [] }));
+  }, [allComments]);
+
   function submit(e: React.FormEvent) {
     e.preventDefault();
     const text = draft.trim();
     if (!text) return;
-    addComment(video.id, text);
+    addComment(video.id, text, replyingTo?.id);
     setDraft("");
+    setReplyingTo(null);
   }
 
   return (
@@ -76,28 +97,80 @@ export function CommentDrawer({
                   No comments yet — be the first.
                 </p>
               )}
-              {allComments.map((c) => (
-                <div key={c.id} className="flex items-start gap-3">
-                  <Avatar src={c.avatarUrl} alt={c.author} size={32} />
-                  <div>
-                    <p className="text-xs text-text-secondary">
-                      @{c.author} · {c.timestamp}
-                    </p>
-                    <p className="text-sm mt-0.5">{c.text}</p>
+              {threads.map(({ comment, replies }) => (
+                <div key={comment.id} className="flex flex-col gap-3">
+                  <div className="flex items-start gap-3">
+                    <Avatar src={comment.avatarUrl} alt={comment.author} size={32} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-text-secondary">
+                        @{comment.author} · {comment.timestamp}
+                      </p>
+                      <p className="text-sm mt-0.5">{comment.text}</p>
+                      <button
+                        onClick={() => setReplyingTo(comment)}
+                        className="text-xs text-text-secondary hover:text-accent transition-colors mt-1"
+                      >
+                        Reply
+                      </button>
+                    </div>
                   </div>
+
+                  {replies.length > 0 && (
+                    <div className="flex flex-col gap-3 pl-9">
+                      {replies.map((reply) => (
+                        <div key={reply.id} className="flex items-start gap-2.5">
+                          <CornerDownRight size={12} className="text-text-secondary shrink-0 mt-1.5" />
+                          <Avatar src={reply.avatarUrl} alt={reply.author} size={28} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs text-text-secondary">
+                              @{reply.author} · {reply.timestamp}
+                            </p>
+                            <p className="text-sm mt-0.5">{reply.text}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
 
+            <AnimatePresence>
+              {replyingTo && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="flex items-center justify-between px-5 py-2 border-t border-border bg-bg/50 overflow-hidden"
+                >
+                  <p className="text-xs text-text-secondary truncate">
+                    Replying to <span className="text-accent">@{replyingTo.author}</span>
+                  </p>
+                  <button
+                    onClick={() => setReplyingTo(null)}
+                    aria-label="Cancel reply"
+                    className="text-xs text-text-secondary hover:text-accent transition-colors shrink-0 ml-2"
+                  >
+                    Cancel
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             <form
               onSubmit={submit}
-              className="flex items-center gap-2 px-4 py-3 border-t border-border"
+              className={cn(
+                "flex items-center gap-2 px-4 py-3",
+                // The "Replying to" bar right above already draws this same
+                // border — skip a doubled-up line when it's showing.
+                !replyingTo && "border-t border-border"
+              )}
               style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 0.75rem)" }}
             >
               <input
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                placeholder="Add a comment…"
+                placeholder={replyingTo ? `Reply to @${replyingTo.author}…` : "Add a comment…"}
                 className="flex-1 bg-bg border border-border rounded-full px-4 py-2 text-sm outline-none focus:border-primary transition-colors"
               />
               <button
