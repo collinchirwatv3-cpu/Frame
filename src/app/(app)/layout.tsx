@@ -1,5 +1,6 @@
 import { BottomNav } from "@/components/nav/BottomNav";
 import { SideRail } from "@/components/nav/SideRail";
+import { LandscapeSideRail } from "@/components/nav/LandscapeSideRail";
 import { OnboardingGate } from "@/components/onboarding/OnboardingGate";
 
 // ProfileFloat lives on Home specifically ((app)/page.tsx), not here — it
@@ -11,6 +12,7 @@ export default function AppShellLayout({ children }: { children: React.ReactNode
         <SideRail />
         <main className="flex-1 min-w-0">{children}</main>
         <BottomNav />
+        <LandscapeSideRail />
       </div>
     </OnboardingGate>
   );

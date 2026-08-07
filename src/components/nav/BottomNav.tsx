@@ -17,7 +17,10 @@ export function BottomNav() {
       animate={{ opacity: directorMode ? 0 : 1 }}
       transition={CHROME_FADE_TRANSITION}
       className={cn(
-        "md:hidden fixed bottom-0 inset-x-0 z-50 border-t border-border bg-bg/80 backdrop-blur-xl",
+        // landscape:max-md:hidden — a phone turned sideways gets
+        // LandscapeSideRail on the right edge instead (see that
+        // component's comment for why).
+        "md:hidden landscape:max-md:hidden fixed bottom-0 inset-x-0 z-50 border-t border-border bg-bg/80 backdrop-blur-xl",
         directorMode && "pointer-events-none"
       )}
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
