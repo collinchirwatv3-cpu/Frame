@@ -1,11 +1,12 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { Music2 } from "lucide-react";
 import { BadgeRow } from "@/components/ui/BadgeRow";
 import { computeBadges } from "@/lib/badges";
 import { useEngagementStore } from "@/store/engagement-store";
-import { DURATION } from "@/lib/motion";
+import { CHROME_TAP_SCALE } from "@/lib/chrome";
+import { cn } from "@/lib/utils";
 import type { Video } from "@/lib/types";
 
 export function VideoOverlay({
@@ -25,26 +26,26 @@ export function VideoOverlay({
         <span className="text-xs text-text-secondary">{video.category}</span>
         {/* Moved here from ActionRail's avatar (was a pill underneath it in
             the right-side rail) — reads more naturally sitting right next to
-            the name it's about, rather than off in the action rail. */}
-        <AnimatePresence>
-          {!following && (
-            <motion.button
-              key="follow"
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: DURATION.fast }}
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleFollow(video.creator.id);
-              }}
-              aria-label={`Follow @${video.creator.username}`}
-              className="px-2.5 py-1 rounded-full bg-card/80 backdrop-blur-md border border-border text-[10px] font-semibold text-accent shrink-0"
-            >
-              Follow
-            </motion.button>
+            the name it's about, rather than off in the action rail. Stays
+            visible once followed (relabeled, dimmed) rather than
+            disappearing — same "Follow" -> "Following" convention
+            ProfileHeader.tsx already uses, just as a compact pill here. */}
+        <motion.button
+          whileTap={{ scale: CHROME_TAP_SCALE }}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleFollow(video.creator.id);
+          }}
+          aria-label={following ? `Unfollow @${video.creator.username}` : `Follow @${video.creator.username}`}
+          className={cn(
+            "px-2.5 py-1 rounded-full backdrop-blur-md border text-[10px] font-semibold shrink-0 transition-colors",
+            following
+              ? "bg-card/50 border-border text-text-secondary"
+              : "bg-card/80 border-border text-accent"
           )}
-        </AnimatePresence>
+        >
+          {following ? "Following" : "Follow"}
+        </motion.button>
       </div>
       <BadgeRow badges={computeBadges(video)} />
       <button onClick={onOpenDetails} className="text-left">
