@@ -32,49 +32,82 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [activeIndex, setActiveIndex] = useState(initialIndex);
-  const visibilityRef = useRef<Map<number, number>>(new Map());
+  const [edgeSpacer, setEdgeSpacer] = useState(0);
+  const hasScrolledToInitialRef = useRef(false);
 
-  // Jump straight to the deep-linked short before paint — no flash of index 0.
+  // Tiles are uniform-size now (no more active-card-is-bigger treatment),
+  // so nothing about a tile's own size distinguishes "centered on screen"
+  // from "just happens to be first" — a leading spacer sized to exactly
+  // half a viewport minus half a tile is what actually centers the first
+  // (and, mirrored, the last) tile at rest, rather than leaving them
+  // pinned flush to the top/bottom. Re-measures on resize since tile
+  // height is width-derived (aspect-video), and on shorts.length changing
+  // since there's no tile 0 to measure until the real data arrives.
+  //
+  // The deep-link scroll (jump straight to `initialId`'s short) has to
+  // account for this spacer, not measure against a pre-spacer layout —
+  // target.offsetTop below is read while `edgeSpacer` (the state, still
+  // whatever it was on the previous render) is what's actually in the DOM
+  // right now, but setEdgeSpacer above won't be reflected in the DOM until
+  // *after* this function returns. Correcting by the delta between the old
+  // and new spacer values gets the right answer in one pass, rather than
+  // trying to sequence two effects around a re-render this effect's own
+  // dependency array wouldn't even trigger a second time for.
   useLayoutEffect(() => {
     const container = containerRef.current;
-    const target = sectionRefs.current[initialIndex];
-    if (container && target && initialIndex > 0) {
-      container.scrollTop = target.offsetTop;
+    const firstTile = sectionRefs.current[0];
+    if (!container || !firstTile) return;
+
+    const newSpacer = Math.max(0, (container.clientHeight - firstTile.offsetHeight) / 2);
+    setEdgeSpacer(newSpacer);
+
+    if (!hasScrolledToInitialRef.current && initialIndex > 0) {
+      const target = sectionRefs.current[initialIndex];
+      if (target) {
+        container.scrollTop = target.offsetTop - edgeSpacer + newSpacer;
+        hasScrolledToInitialRef.current = true;
+      }
     }
+    // edgeSpacer deliberately excluded — it's read here as "whatever's
+    // currently in the DOM", not as a reactive trigger; depending on it
+    // would re-run this on every spacer change, including the one this
+    // effect itself just caused.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shorts.length]);
+
+  useEffect(() => {
+    function onResize() {
+      const container = containerRef.current;
+      const firstTile = sectionRefs.current[0];
+      if (!container || !firstTile) return;
+      setEdgeSpacer(Math.max(0, (container.clientHeight - firstTile.offsetHeight) / 2));
+    }
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, []);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    // IntersectionObserver callbacks are incremental — a given invocation
-    // only carries entries whose ratio just crossed one of `threshold`,
-    // not a full snapshot of every observed element. Cards are short
-    // enough now (true 16:9, not the old near-full-height portrait ones)
-    // that comparing only *this callback's* entries against each other
-    // isn't enough: the section that's actually most visible right now
-    // might not even be in this particular batch, since its own ratio
-    // hasn't changed recently. Track every section's latest known ratio
-    // persistently instead, and pick the max across all of them on every
-    // update — not just whichever happened to fire this time.
+    // rootMargin: "-50% 0px -50% 0px" shrinks the observed root to a
+    // zero-height line at the vertical center — a tile only "intersects"
+    // while its own box is crossing that exact line, i.e. exactly
+    // whichever tile currently occupies the center of the screen. Plain
+    // intersection ratio can't express this on its own: tiles are small
+    // enough now that more than one can be 100% visible simultaneously (the
+    // top one AND the one below it, say), so "highest ratio" doesn't
+    // distinguish "at the top" from "in the middle" — position is what
+    // actually matters for "the centered one is the main one."
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
-          const index = Number((entry.target as HTMLElement).dataset.index);
-          visibilityRef.current.set(index, entry.intersectionRatio);
-        }
-        let bestIndex = 0;
-        let bestRatio = -1;
-        for (const [index, ratio] of visibilityRef.current) {
-          if (ratio > bestRatio) {
-            bestRatio = ratio;
-            bestIndex = index;
+          if (entry.isIntersecting) {
+            setActiveIndex(Number((entry.target as HTMLElement).dataset.index));
           }
         }
-        setActiveIndex(bestIndex);
       },
-      { root: container, threshold: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1] }
+      { root: container, rootMargin: "-50% 0px -50% 0px", threshold: 0 }
     );
 
     sectionRefs.current.forEach((el) => el && observer.observe(el));
@@ -160,6 +193,7 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
       className="relative h-dvh w-full overflow-y-scroll snap-y snap-mandatory no-scrollbar bg-bg"
     >
       <SearchButton className="fixed top-4 right-4 md:top-6 md:right-6 z-20" />
+      <div aria-hidden style={{ height: edgeSpacer }} />
       {shorts.map((short, index) => {
         const active = index === activeIndex;
         const withinRenderWindow = Math.abs(index - activeIndex) <= RENDER_WINDOW;
@@ -195,7 +229,7 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
             )}
 
             {active && (
-              <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-bg/90 via-bg/30 to-transparent">
+              <div className="absolute inset-x-0 bottom-0 p-4">
                 <p className="text-sm font-semibold">@{short.creator.username}</p>
                 <p className="text-xs text-text-secondary truncate">{short.title}</p>
               </div>
@@ -203,14 +237,13 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
           </div>
         );
       })}
-      {/* Tiles are uniform-height 16:9 boxes now, not the old near-full-
-          screen ones — with only a handful of shorts, their combined height
-          can end up shorter than the viewport itself, leaving nothing to
-          actually scroll (confirmed: exactly what happened with 3 demo
-          shorts). This trailing spacer guarantees real scroll room past the
-          last tile regardless of how many shorts exist, without adding any
-          gap between the tiles themselves. */}
-      <div aria-hidden className="h-[60dvh]" />
+      {/* Same edgeSpacer as the leading one — centers the *last* tile at
+          rest too, not just guarantees scroll room past it (which a
+          same-size fixed spacer does either way; with only a handful of
+          shorts their combined height can end up shorter than the viewport
+          itself, leaving nothing to actually scroll — confirmed: exactly
+          what happened with 3 demo shorts and no spacer at all). */}
+      <div aria-hidden style={{ height: edgeSpacer }} />
     </div>
   );
 }
