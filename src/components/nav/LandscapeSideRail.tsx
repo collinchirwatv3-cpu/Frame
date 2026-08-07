@@ -8,6 +8,7 @@ import { navItems } from "./nav-items";
 import { CHROME_FADE_TRANSITION } from "@/lib/motion";
 import { CHROME_GLASS_CLASS, CHROME_TAP_SCALE } from "@/lib/chrome";
 import { usePlayerStore } from "@/store/player-store";
+import { useIsLandscapeMobile } from "@/lib/use-landscape-mobile";
 
 // BottomNav rotated 90° for a phone turned sideways: the horizontal row of
 // four icons along the bottom in portrait becomes a vertical column along
@@ -16,15 +17,18 @@ import { usePlayerStore } from "@/store/player-store";
 // SearchButton/ActionRail's own per-button styling) rather than one large
 // backdrop-blurred panel behind them — an earlier full-height bar-with-
 // background version read as too heavy for a screen already short on
-// vertical room. Orientation-driven (`landscape:`), not width-driven like
-// SideRail's `md:` — a phone rotated sideways can be wider or narrower than
-// the md breakpoint depending on the device, but it's always
-// `orientation: landscape`. Scoped to `max-md` so it never doubles up with
-// the real desktop SideRail, which is already visible any time the
-// viewport is landscape-shaped.
+// vertical room. Gated on useIsLandscapeMobile() (a real device-shape
+// check, orientation + short height) rather than a `landscape:max-md:`
+// width breakpoint — plenty of phones exceed md's 768px once rotated to
+// landscape, which was leaking SideRail's full 240px desktop treatment
+// onto phones instead of this compact rail. SideRail ducks out under the
+// same check, so the two never double up.
 export function LandscapeSideRail() {
   const pathname = usePathname();
   const directorMode = usePlayerStore((s) => s.directorMode);
+  const isLandscapeMobile = useIsLandscapeMobile();
+
+  if (!isLandscapeMobile) return null;
 
   return (
     <motion.nav
@@ -32,7 +36,7 @@ export function LandscapeSideRail() {
       transition={CHROME_FADE_TRANSITION}
       aria-label="Primary"
       className={cn(
-        "hidden landscape:max-md:flex fixed right-4 top-1/2 -translate-y-1/2 z-40 flex-col items-center gap-3",
+        "fixed right-4 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-3",
         directorMode && "pointer-events-none"
       )}
       style={{ marginRight: "env(safe-area-inset-right)" }}

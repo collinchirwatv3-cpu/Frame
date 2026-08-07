@@ -8,6 +8,7 @@ import { CHROME_FADE_TRANSITION } from "@/lib/motion";
 import { navItems } from "./nav-items";
 import { Logo } from "@/components/ui/Logo";
 import { usePlayerStore } from "@/store/player-store";
+import { useIsLandscapeMobile } from "@/lib/use-landscape-mobile";
 
 // Profile is a real destination in navItems again (it used to be excluded
 // and reached only via the separate floating ProfileFloat/ProfileAvatarLink
@@ -17,6 +18,16 @@ import { usePlayerStore } from "@/store/player-store";
 export function SideRail() {
   const pathname = usePathname();
   const directorMode = usePlayerStore((s) => s.directorMode);
+  const isLandscapeMobile = useIsLandscapeMobile();
+
+  // md:flex alone used to be the whole story, but width can't tell a
+  // rotated phone apart from an actual desktop window (see
+  // use-landscape-mobile.ts) — plenty of phones are wider than md in
+  // landscape and were getting this full 240px labeled sidebar instead of
+  // LandscapeSideRail's compact rail. Ducking out here, not returning null,
+  // so the width/directorMode-driven layout animation stays intact for the
+  // cases this rail does apply to.
+  if (isLandscapeMobile) return null;
 
   return (
     <motion.aside
