@@ -21,6 +21,10 @@ const RENDER_WINDOW = 1;
 // auto-*hide* timer: here nothing shows until this delay elapses on the
 // currently active short, and it resets the instant you scroll to another.
 const ACTIONS_REVEAL_DELAY_MS = 3500;
+// A tap reveals it immediately too — same as the passive dwell reveal, both
+// just start this same countdown, so however it got shown it fades back out
+// on its own after a few seconds rather than sitting there permanently.
+const ACTIONS_HIDE_DELAY_MS = 3000;
 
 // Every tile is the same size — no separate active-vs-inactive width/scale
 // — and stacked with zero gap between them (the tile itself *is* the snap
@@ -49,16 +53,44 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
   // set at the top of the effect — showActions falls out of comparing the
   // two, and naturally reads false the instant activeIndex moves on.
   const [revealedIndex, setRevealedIndex] = useState<number | null>(null);
+  // Bumped on every reveal (passive or tapped), including a re-tap while
+  // already visible — revealedIndex alone wouldn't change value in that
+  // last case (already equals activeIndex), and a same-value setState is a
+  // no-op that wouldn't restart the hide countdown below.
+  const [revealTick, setRevealTick] = useState(0);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const hasScrolledToInitialRef = useRef(false);
+  // Whichever trigger (the passive dwell timer or a tap) reveals the
+  // current short first "claims" it — without this, tapping early wouldn't
+  // stop the still-pending passive timer from firing later and re-arming
+  // the hide countdown, extending visibility past what the tap earned it.
+  const hasRevealedRef = useRef(false);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setRevealedIndex(activeIndex), ACTIONS_REVEAL_DELAY_MS);
+    hasRevealedRef.current = false;
+    const timer = window.setTimeout(() => {
+      if (hasRevealedRef.current) return;
+      hasRevealedRef.current = true;
+      setRevealedIndex(activeIndex);
+      setRevealTick((t) => t + 1);
+    }, ACTIONS_REVEAL_DELAY_MS);
     return () => window.clearTimeout(timer);
   }, [activeIndex]);
 
   const showActions = revealedIndex === activeIndex;
+
+  useEffect(() => {
+    if (!showActions) return;
+    const timer = window.setTimeout(() => setRevealedIndex(null), ACTIONS_HIDE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [showActions, revealTick]);
+
+  function revealActionsNow() {
+    hasRevealedRef.current = true;
+    setRevealedIndex(activeIndex);
+    setRevealTick((t) => t + 1);
+  }
 
   // Tiles are uniform-size now (no more active-card-is-bigger treatment),
   // so nothing about a tile's own size distinguishes "centered on screen"
@@ -215,6 +247,7 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
       ref={containerRef}
       role="region"
       aria-label={`Shorts, ${activeIndex + 1} of ${shorts.length}`}
+      onClick={revealActionsNow}
       className="relative h-dvh w-full overflow-y-scroll snap-y snap-mandatory no-scrollbar bg-bg"
     >
       <SearchButton className="fixed top-4 right-4 md:top-6 md:right-6 z-20" />
