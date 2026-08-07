@@ -1,13 +1,10 @@
-import { Suspense } from "react";
-import { FeedRoot } from "@/components/feed/FeedRoot";
+import { redirect } from "next/navigation";
 
-// FeedRoot renders its own profile avatar now — inline next to the FRAMES
-// logo on the shelf view, ProfileFloat (fixed) once a video's selected —
-// rather than one fixed button here that has to fit both.
+// The shelf feed that used to live here moved into /discover as part of the
+// 5-tab nav rebuild (Shorts/Discover/Search/Parties/Profile) — there's no
+// separate Home destination anymore. This redirect exists so `/` (bookmarks,
+// external links, onboarding's router.replace("/")) keeps working rather
+// than 404ing.
 export default function HomePage() {
-  return (
-    <Suspense fallback={null}>
-      <FeedRoot />
-    </Suspense>
-  );
+  redirect("/discover");
 }

@@ -19,12 +19,12 @@ export function LegalPage({
   return (
     <div className="min-h-dvh">
       <header className="border-b border-border px-6 py-5 flex items-center justify-between max-w-2xl mx-auto">
-        <Link href="/" className="flex items-center gap-2">
+        <Link href="/discover" className="flex items-center gap-2">
           <Logo size={24} />
           <span className="text-base font-bold tracking-tight">FRAMES</span>
         </Link>
         <Link
-          href="/"
+          href="/discover"
           className="flex items-center gap-1 text-xs text-text-secondary hover:text-accent transition-colors"
         >
           <ChevronLeft size={14} />

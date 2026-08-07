@@ -41,7 +41,7 @@ export default function WatchTogetherPage() {
         <p className="text-xs text-text-secondary max-w-sm">
           The video might have been removed, or the link is missing its video.
         </p>
-        <Link href="/" className="mt-2 text-xs text-primary underline underline-offset-2">
+        <Link href="/discover" className="mt-2 text-xs text-primary underline underline-offset-2">
           Go to FRAMES
         </Link>
       </div>

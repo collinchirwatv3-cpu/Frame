@@ -9,9 +9,11 @@ import { navItems } from "./nav-items";
 import { Logo } from "@/components/ui/Logo";
 import { usePlayerStore } from "@/store/player-store";
 
-// Profile used to be anchored at the bottom of this rail — it's now
-// ProfileFloat, a fixed top-right button rendered from (app)/layout.tsx
-// instead, so it's reachable on mobile too and doesn't scroll away here.
+// Profile is a real destination in navItems again (it used to be excluded
+// and reached only via the separate floating ProfileFloat/ProfileAvatarLink
+// buttons) — those still exist for pages outside this rail's reach
+// (/watch/[id] has no other path to Profile), but here it's just another
+// list item like everything else.
 export function SideRail() {
   const pathname = usePathname();
   const directorMode = usePlayerStore((s) => s.directorMode);
@@ -25,14 +27,14 @@ export function SideRail() {
         directorMode && "pointer-events-none border-r-0"
       )}
     >
-      <Link href="/" className="flex items-center gap-2 px-2 mb-10">
+      <Link href="/discover" className="flex items-center gap-2 px-2 mb-10">
         <Logo size={28} />
         <span className="text-lg font-bold tracking-tight">FRAMES</span>
       </Link>
 
       <ul className="flex flex-col gap-1">
         {navItems.map(({ href, label, icon: Icon }) => {
-          const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+          const active = pathname.startsWith(href);
           return (
             <li key={href}>
               <Link

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { topBadge } from "@/lib/badges";
 import type { Video } from "@/lib/types";
 
-export type ShelfKind = "forYou" | "following" | "saved" | "history";
+export type ShelfKind = "forYou" | "following" | "saved" | "history" | "discover";
 
 /** "Shot on Sony" -> "ShotOnSony" — badge labels are written as normal
  * phrases for BadgeRow's pill treatment elsewhere; compacted here so the
@@ -24,11 +24,12 @@ type Props = {
 
 /** One horizontal row of Home — a title plus a scrollable strip of cards,
  * Netflix/YouTube-shelf style, replacing the earlier tabs+full-screen-feed
- * default (see FeedRoot.tsx). Each card links to `/?v=<id>&shelf=<kind>`
- * rather than a bare `/?v=<id>` — FeedRoot needs to know *which* shelf's
- * list a tapped video came from, since each shelf is now its own separate
- * fetch rather than one shared array, and the immersive player it opens
- * into should keep scrolling through that same shelf, not always For You.
+ * default (see discover/page.tsx). Each card links to
+ * `/discover?v=<id>&shelf=<kind>` rather than a bare `/discover?v=<id>` —
+ * the page needs to know *which* shelf's list a tapped video came from,
+ * since each shelf is its own separate fetch rather than one shared array,
+ * and the immersive player it opens into should keep scrolling through that
+ * same shelf, not always For You.
  *
  * Fixed card height with the poster's own aspect ratio determining width
  * (not the other way around) — the standard shelf pattern: every row reads
@@ -47,7 +48,7 @@ export function Shelf({ kind, title, videos, emptyMessage }: Props) {
             return (
               <Link
                 key={video.id}
-                href={`/?v=${video.id}&shelf=${kind}`}
+                href={`/discover?v=${video.id}&shelf=${kind}`}
                 aria-label={`Watch ${video.title} by @${video.creator.username}`}
                 style={{ aspectRatio: `${video.width} / ${video.height}` }}
                 className="group relative flex-shrink-0 h-28 md:h-32 rounded-xl overflow-hidden bg-card border border-border"

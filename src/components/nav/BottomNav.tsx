@@ -27,8 +27,7 @@ export function BottomNav() {
     >
       <ul className="flex items-center justify-around h-16 px-2">
         {navItems.map(({ href, label, icon: Icon }) => {
-          const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
-          const isUpload = href === "/upload";
+          const active = pathname.startsWith(href);
 
           return (
             <li key={href} className="flex-1">
@@ -37,35 +36,24 @@ export function BottomNav() {
                 aria-label={label}
                 className="flex flex-col items-center justify-center gap-1 py-2"
               >
-                {isUpload ? (
-                  <motion.span
-                    whileTap={{ scale: 0.88 }}
-                    className="flex items-center justify-center w-9 h-9 rounded-xl bg-primary text-bg"
-                  >
-                    <Icon size={18} strokeWidth={2.5} />
-                  </motion.span>
-                ) : (
-                  <motion.span whileTap={{ scale: 0.85 }}>
-                    <Icon
-                      size={22}
-                      strokeWidth={active ? 2.5 : 1.75}
-                      className={cn(
-                        "transition-colors",
-                        active ? "text-accent" : "text-text-secondary"
-                      )}
-                    />
-                  </motion.span>
-                )}
-                {!isUpload && (
-                  <span
+                <motion.span whileTap={{ scale: 0.85 }}>
+                  <Icon
+                    size={22}
+                    strokeWidth={active ? 2.5 : 1.75}
                     className={cn(
-                      "text-[10px] font-medium tracking-tight transition-colors",
+                      "transition-colors",
                       active ? "text-accent" : "text-text-secondary"
                     )}
-                  >
-                    {label}
-                  </span>
-                )}
+                  />
+                </motion.span>
+                <span
+                  className={cn(
+                    "text-[10px] font-medium tracking-tight transition-colors",
+                    active ? "text-accent" : "text-text-secondary"
+                  )}
+                >
+                  {label}
+                </span>
               </Link>
             </li>
           );

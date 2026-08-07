@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Link as LinkIcon, MessageCircle, Settings } from "lucide-react";
+import { Check, Link as LinkIcon, MessageCircle, Settings, UploadCloud } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { SearchButton } from "@/components/ui/SearchButton";
 import { EditProfileModal } from "@/components/profile/EditProfileModal";
@@ -69,13 +69,27 @@ export function ProfileHeader({
         <div className="absolute top-4 right-4 flex items-center gap-2">
           <SearchButton className="bg-bg/70" />
           {own && (
-            <Link
-              href="/settings"
-              aria-label="Settings"
-              className="w-9 h-9 rounded-full bg-bg/70 backdrop-blur-md flex items-center justify-center"
-            >
-              <Settings size={16} />
-            </Link>
+            <>
+              {/* Upload's only other entry point is buried in
+                  StudioVideoGrid's empty-videos-tab CTA, only shown when the
+                  owner has zero public videos — this is the persistent one,
+                  always here regardless of catalog size, now that Upload
+                  isn't a primary nav destination anymore. */}
+              <Link
+                href="/upload"
+                aria-label="Upload"
+                className="w-9 h-9 rounded-full bg-bg/70 backdrop-blur-md flex items-center justify-center"
+              >
+                <UploadCloud size={16} />
+              </Link>
+              <Link
+                href="/settings"
+                aria-label="Settings"
+                className="w-9 h-9 rounded-full bg-bg/70 backdrop-blur-md flex items-center justify-center"
+              >
+                <Settings size={16} />
+              </Link>
+            </>
           )}
         </div>
       </div>

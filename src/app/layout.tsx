@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Fraunces } from "next/font/google";
 import { MotionConfig } from "framer-motion";
 import { AuthListener } from "@/components/auth/AuthListener";
 import { InviteGate } from "@/components/auth/InviteGate";
@@ -13,6 +13,15 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+// Display serif for page titles only (Discover, Frame Parties, etc.) —
+// everything else (body copy, nav labels, buttons) stays on Geist. Exposed
+// as --font-serif / the `font-serif` Tailwind utility via globals.css.
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
+  subsets: ["latin"],
+  style: ["normal", "italic"],
 });
 
 // The CSP (src/proxy.ts) is nonce-based with 'strict-dynamic', which per
@@ -37,7 +46,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-bg text-accent overscroll-none">
         {/* Every Framer Motion animation in the app respects the OS-level

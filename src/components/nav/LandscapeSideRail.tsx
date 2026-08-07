@@ -38,34 +38,20 @@ export function LandscapeSideRail() {
       style={{ marginRight: "env(safe-area-inset-right)" }}
     >
       {navItems.map(({ href, label, icon: Icon }) => {
-        const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
-        const isUpload = href === "/upload";
+        const active = pathname.startsWith(href);
 
         return (
           <Link key={href} href={href} aria-label={label}>
-            {isUpload ? (
-              // Upload keeps its own distinct shape/color — same rounded-xl
-              // "squircle" + primary color BottomNav uses for it in
-              // portrait, the one deliberate exception to "every button
-              // matches" since it's the single CTA among four destinations.
-              <motion.span
-                whileTap={{ scale: CHROME_TAP_SCALE }}
-                className="flex items-center justify-center w-9 h-9 rounded-xl bg-primary text-bg"
-              >
-                <Icon size={17} strokeWidth={2.5} />
-              </motion.span>
-            ) : (
-              <motion.span
-                whileTap={{ scale: CHROME_TAP_SCALE }}
-                className={cn(CHROME_GLASS_CLASS, "flex items-center justify-center w-9 h-9")}
-              >
-                <Icon
-                  size={17}
-                  strokeWidth={active ? 2.5 : 1.75}
-                  className={cn("transition-colors", active ? "text-accent" : "text-text-secondary")}
-                />
-              </motion.span>
-            )}
+            <motion.span
+              whileTap={{ scale: CHROME_TAP_SCALE }}
+              className={cn(CHROME_GLASS_CLASS, "flex items-center justify-center w-9 h-9")}
+            >
+              <Icon
+                size={17}
+                strokeWidth={active ? 2.5 : 1.75}
+                className={cn("transition-colors", active ? "text-accent" : "text-text-secondary")}
+              />
+            </motion.span>
           </Link>
         );
       })}

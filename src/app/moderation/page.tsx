@@ -122,7 +122,7 @@ export default function ModerationPage() {
       <div className="flex flex-col items-center justify-center gap-3 h-dvh text-center px-6">
         <ShieldAlert size={32} className="text-text-secondary" />
         <p className="text-sm font-medium">You don&apos;t have access to this page</p>
-        <Link href="/" className="text-xs text-primary underline underline-offset-2">
+        <Link href="/discover" className="text-xs text-primary underline underline-offset-2">
           Back to FRAMES
         </Link>
       </div>

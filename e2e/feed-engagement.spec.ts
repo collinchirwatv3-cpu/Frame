@@ -6,15 +6,13 @@ import { skipOnboarding } from "./test-utils";
 // ci.yml), and no seeded video/creator content exists in this environment
 // (mock data was deliberately removed — see MIGRATION_PLAN.md), so there is
 // nothing on screen to like or follow here. What's real and reachable
-// without either of those is the empty state Home's composed feed
-// (lib/home-feed.ts: For You + Saved + History) falls back to when nothing
-// comes back from any of those three, which is exactly what this test
-// covers instead. The old "For You"/"Following" tabs this used to also
-// cover were retired from Home along with that composition — SwipeFeed's
-// `tabs` prop still exists for any future caller that wants them, Home just
-// doesn't pass it anymore.
+// without either of those is the empty state Discover's composed feed
+// (app/(app)/discover/page.tsx: For You + Following + Saved + History +
+// Discover) falls back to when For You itself comes back empty, which is
+// exactly what this test covers instead. "/" redirects to "/discover" now —
+// skipOnboarding's page.goto("/") lands here after following that redirect.
 
-test("Home shows the honest empty state with an upload CTA", async ({ page }) => {
+test("Discover shows the honest empty state with an upload CTA", async ({ page }) => {
   await skipOnboarding(page);
 
   await expect(page.getByText("No videos yet")).toBeVisible();

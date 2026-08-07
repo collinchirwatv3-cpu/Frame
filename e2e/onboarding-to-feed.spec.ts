@@ -12,7 +12,10 @@ test("first-time visitor completes onboarding and lands on the feed", async ({ p
   await expect(page.getByText("What do you love watching?")).toBeVisible();
   await page.getByRole("button", { name: "Skip for now" }).click();
 
-  await expect(page).toHaveURL("/");
+  // "/" redirects to "/discover" — the shelf feed moved there as part of the
+  // 5-tab nav rebuild (Shorts/Discover/Search/Parties/Profile), no separate
+  // Home destination anymore.
+  await expect(page).toHaveURL("/discover");
   // No real content exists in this environment (see MIGRATION_PLAN.md — mock
   // data was deliberately removed) — the honest empty state is the real,
   // reachable proof that the feed itself rendered, not a stand-in for content.
@@ -21,5 +24,5 @@ test("first-time visitor completes onboarding and lands on the feed", async ({ p
 
   // Onboarding is a one-time gate — reloading must not bounce back to it.
   await page.reload();
-  await expect(page).toHaveURL("/");
+  await expect(page).toHaveURL("/discover");
 });
