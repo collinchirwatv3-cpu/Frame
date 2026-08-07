@@ -236,24 +236,11 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
                 monitors, so captions/actions stay visually anchored near the video
                 instead of floating at the far edges of a huge viewport. */}
             <div className="absolute inset-0 max-w-[1920px] mx-auto pointer-events-none">
-              {/* Profile/Inbox live off the main nav now — this is the only
-                  standing way back to your own profile from the feed. */}
-              {ownProfile && (
-                <Link
-                  href="/profile"
-                  aria-label="Your profile"
-                  className="pointer-events-auto absolute top-4 left-4 md:top-6 md:left-6 z-10 w-9 h-9 rounded-full ring-2 ring-bg/70 overflow-hidden"
-                >
-                  <Avatar
-                    src={ownProfile.avatarUrl}
-                    alt={ownProfile.displayName}
-                    size={36}
-                    className="w-full h-full"
-                  />
-                </Link>
-              )}
-
-              {/* search + director mode + mute */}
+              {/* search + director mode + mute + your own profile — Profile/
+                  Inbox live off the main nav now, so the avatar here is the
+                  only standing way back to your own profile from the feed.
+                  Kept in the same top-right cluster as everything else
+                  rather than its own top-left corner. */}
               <div className="pointer-events-auto absolute top-4 right-4 md:top-6 md:right-6 z-10 flex items-center gap-2">
                 <SearchButton />
                 <button
@@ -276,6 +263,20 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
                 >
                   {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
                 </button>
+                {ownProfile && (
+                  <Link
+                    href="/profile"
+                    aria-label="Your profile"
+                    className="w-9 h-9 rounded-full ring-2 ring-bg/70 overflow-hidden shrink-0"
+                  >
+                    <Avatar
+                      src={ownProfile.avatarUrl}
+                      alt={ownProfile.displayName}
+                      size={36}
+                      className="w-full h-full"
+                    />
+                  </Link>
+                )}
               </div>
 
               {/* bottom overlay: creator info + action rail — cleared above the mobile bottom nav */}
