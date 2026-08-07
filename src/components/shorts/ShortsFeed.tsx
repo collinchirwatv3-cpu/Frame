@@ -55,7 +55,6 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
   const isScrubbing = usePlayerStore((s) => s.isScrubbing);
   const enterDirectorMode = usePlayerStore((s) => s.enterDirectorMode);
   const exitDirectorMode = usePlayerStore((s) => s.exitDirectorMode);
-  const setActiveId = usePlayerStore((s) => s.setActiveId);
   const showActions = !directorMode;
 
   // Director Mode is scoped to whichever feed is actually on screen —
@@ -73,14 +72,6 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
     const timer = window.setTimeout(enterDirectorMode, AUTO_DIRECTOR_MODE_DELAY_MS);
     return () => window.clearTimeout(timer);
   }, [activeIndex, directorMode, isScrubbing, enterDirectorMode]);
-
-  // Lets LandscapeNavDock (rendered in the app shell, outside this feed)
-  // know the active video changed, so it can close itself immediately on a
-  // swipe rather than staying open across videos.
-  useEffect(() => {
-    const short = shorts[activeIndex];
-    if (short) setActiveId(short.id);
-  }, [activeIndex, shorts, setActiveId]);
 
   // Tiles are uniform-size now (no more active-card-is-bigger treatment),
   // so nothing about a tile's own size distinguishes "centered on screen"
@@ -332,11 +323,11 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
                 // Same corner, laid out on the other axis in landscape — a
                 // vertical column reads naturally against the right edge in
                 // portrait; rotated 90° with the phone, that becomes a
-                // horizontal row along the bottom edge instead. bottom-32
-                // (not the portrait bottom-24) clears LandscapeNavDock's
-                // 88px-tall panel plus safe-area when it's open, so the two
-                // don't collide when both are visible at once.
-                className="fixed right-4 bottom-24 md:right-6 md:bottom-10 landscape:max-md:right-4 landscape:max-md:bottom-32 z-30"
+                // horizontal row along the bottom edge instead.
+                // LandscapeSideRail sits vertically centered on the right
+                // edge in that same orientation, not full-height, so it
+                // doesn't reach down to the bottom edge this row occupies.
+                className="fixed right-4 bottom-24 md:right-6 md:bottom-10 landscape:max-md:bottom-4 z-30"
               >
                 <ActionRail
                   video={shorts[activeIndex]}

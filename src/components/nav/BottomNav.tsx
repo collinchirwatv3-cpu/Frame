@@ -18,8 +18,8 @@ export function BottomNav() {
       transition={CHROME_FADE_TRANSITION}
       className={cn(
         // landscape:max-md:hidden — a phone turned sideways gets
-        // LandscapeNavDock's handle/dock instead (see that component's
-        // comment for why).
+        // LandscapeSideRail on the right edge instead (see that
+        // component's comment for why).
         "md:hidden landscape:max-md:hidden fixed bottom-0 inset-x-0 z-50 border-t border-border bg-bg/80 backdrop-blur-xl",
         directorMode && "pointer-events-none"
       )}
