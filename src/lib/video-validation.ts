@@ -36,13 +36,13 @@ export function checkUpload(width: number, height: number): UploadCheck {
   return { ok: true, aspect };
 }
 
-export type ShortUploadCheck = { ok: true } | { ok: false; reason: "not-portrait" };
+export type ShortUploadCheck = { ok: true } | { ok: false; reason: "not-landscape" };
 
 /** Shorts (videos.content_type = 'short') skip checkUpload entirely — no
- * ratio banding, no "cinematic" classification, just "is it portrait."
+ * ratio banding, no "cinematic" classification, just "is it landscape."
  * They're a deliberately different, simpler bar from the film library. */
 export function checkShortUpload(width: number, height: number): ShortUploadCheck {
-  if (width >= height) return { ok: false, reason: "not-portrait" };
+  if (width <= height) return { ok: false, reason: "not-landscape" };
   return { ok: true };
 }
 

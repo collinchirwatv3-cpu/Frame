@@ -24,10 +24,11 @@ export const uploadMetadataSchema = z
     description: z.string().trim().max(2000, "Description is too long").optional().default(""),
     category: z.enum(categories as [Category, ...Category[]]),
     // Films are the cinematic landscape library (the app's core identity);
-    // shorts are the separate, portrait, non-cinematic Discover feed — see
-    // supabase/migrations/20260806120000_shorts_content_type.sql. Defaults
-    // to "film" so every pre-existing caller of this schema keeps working
-    // unchanged.
+    // shorts are the separate, also-landscape, non-cinematic Discover feed —
+    // see supabase/migrations/20260806120000_shorts_content_type.sql (that
+    // migration's own comment is explicit the film/short split was never
+    // about shape). Defaults to "film" so every pre-existing caller of this
+    // schema keeps working unchanged.
     contentType: z.enum(["film", "short"]).default("film"),
     // Structural sanity only — the actual supported-ratio banding (16:9/21:9/
     // 16:10) is a business rule owned by checkUpload() in
@@ -47,19 +48,10 @@ export const uploadMetadataSchema = z
   })
   .superRefine((data, ctx) => {
     const landscape = data.width > data.height;
-    if (data.contentType === "film" && !landscape) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "FRAMES films are landscape-only",
-        path: ["width"],
-      });
-    }
-    if (data.contentType === "short" && landscape) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Shorts are portrait-only",
-        path: ["width"],
-      });
+    if (!landscape) {
+      const message =
+        data.contentType === "short" ? "Shorts are landscape-only" : "FRAMES films are landscape-only";
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message, path: ["width"] });
     }
   });
 

@@ -33,11 +33,12 @@ const POLL_INTERVAL_MS = 3000;
 /**
  * Shorts skip everything checkUpload/UploadDropzone does for the cinematic
  * film library — no ratio banding, no rotate/crop recovery UI. The only
- * bar is "is it portrait" (checkShortUpload); this exists as its own
+ * bar is "is it landscape" (checkShortUpload); this exists as its own
  * component rather than a mode inside UploadDropzone because that pipeline
- * is genuinely built around landscape-specific recovery flows shorts don't
- * need at all. Publishes through the same /api/uploads + Cloudflare Stream
- * pipeline, just with contentType: "short".
+ * is built around ratio-banding/rotate-crop recovery flows shorts don't
+ * need at all — shorts just need one clean yes/no. Publishes through the
+ * same /api/uploads + Cloudflare Stream pipeline, just with
+ * contentType: "short".
  */
 export function ShortUploadDropzone({ onClose }: { onClose: () => void }) {
   const [status, setStatus] = useState<Status>("idle");
@@ -302,11 +303,8 @@ export function ShortUploadDropzone({ onClose }: { onClose: () => void }) {
       return (
         <div className="flex flex-col items-center justify-center gap-3 text-center h-full px-6">
           <AlertCircle size={36} className="text-primary" />
-          <p className="text-sm font-medium">That video is landscape</p>
-          <p className="text-xs text-text-secondary max-w-sm">
-            Shorts are portrait only — for landscape films, use Upload from the main upload page
-            instead.
-          </p>
+          <p className="text-sm font-medium">That video is portrait</p>
+          <p className="text-xs text-text-secondary max-w-sm">Shorts are landscape only, same as films.</p>
           <button
             onClick={reset}
             className="mt-2 px-5 py-2.5 rounded-full border border-border text-sm font-medium"
@@ -385,7 +383,7 @@ export function ShortUploadDropzone({ onClose }: { onClose: () => void }) {
       <div
         role="button"
         tabIndex={0}
-        aria-label="Choose a portrait video to upload as a short"
+        aria-label="Choose a landscape video to upload as a short"
         onDragOver={(e) => {
           e.preventDefault();
           setDragOver(true);
@@ -417,7 +415,7 @@ export function ShortUploadDropzone({ onClose }: { onClose: () => void }) {
         />
         <UploadCloud size={28} className="text-text-secondary" />
         <p className="text-sm font-medium">Drag & drop, or tap to browse</p>
-        <p className="text-xs text-text-secondary">Portrait video, any length</p>
+        <p className="text-xs text-text-secondary">Landscape video, any length</p>
       </div>
     );
   })();

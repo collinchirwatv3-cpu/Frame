@@ -202,20 +202,22 @@ const VIDEOS = [
   },
 ];
 
-// Discover's shorts — content_type: "short", portrait, no ratio banding,
-// deliberately not cinematic (see supabase/migrations/20260806120000_shorts_content_type.sql).
+// Discover's shorts — content_type: "short", landscape (same shape as
+// films — the film/short split was never about aspect ratio, see
+// supabase/migrations/20260806120000_shorts_content_type.sql), no ratio
+// banding, deliberately not cinematic.
 const SHORTS = [
   {
     id: "b6b9b1a0-2f8e-4b0f-9d3c-7b6a1e2f9c01",
     creator_id: CREATORS[1].id,
-    playback_url: sampleMp4(720, 1280),
+    playback_url: sampleMp4(1280, 720),
     poster_url: poster("s1"),
     title: "POV: the tunnel run everyone's talking about",
     description: "No context needed.",
     category: "Cars",
     duration_seconds: 14,
-    width: 720,
-    height: 1280,
+    width: 1280,
+    height: 720,
     likes_count: 18_200,
     comments_count: 340,
     shares_count: 2_100,
@@ -224,14 +226,14 @@ const SHORTS = [
   {
     id: "c7cae2b1-3f9f-4c1a-8e4d-8c7b2f3a0d12",
     creator_id: CREATORS[3].id,
-    playback_url: sampleMp4(720, 1280),
+    playback_url: sampleMp4(1280, 720),
     poster_url: poster("s2"),
     title: "3am soundcheck chaos",
     description: "This is why we're always late.",
     category: "Music",
     duration_seconds: 9,
-    width: 720,
-    height: 1280,
+    width: 1280,
+    height: 720,
     likes_count: 44_900,
     comments_count: 1_020,
     shares_count: 5_400,
@@ -240,14 +242,14 @@ const SHORTS = [
   {
     id: "d8dbf3c2-4a0a-4d2b-9f5e-9d8c3a4b1e23",
     creator_id: CREATORS[2].id,
-    playback_url: sampleMp4(720, 1280),
+    playback_url: sampleMp4(1280, 720),
     poster_url: poster("s3"),
     title: "the coastline drone almost didn't make it back",
     description: "wind was NOT it today",
     category: "Nature",
     duration_seconds: 21,
-    width: 720,
-    height: 1280,
+    width: 1280,
+    height: 720,
     likes_count: 9_600,
     comments_count: 210,
     shares_count: 480,
