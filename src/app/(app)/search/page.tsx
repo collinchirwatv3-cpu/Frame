@@ -66,7 +66,7 @@ export default function SearchPage() {
     if (shorts.some((v) => v.id === selectedId)) {
       return <ShortsFeed shorts={shorts} initialId={selectedId} />;
     }
-    return <SwipeFeed videos={films} tabs={false} />;
+    return <SwipeFeed videos={films} />;
   }
 
   return (

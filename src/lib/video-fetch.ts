@@ -158,6 +158,32 @@ export async function fetchHistoryVideos(userId: string, limit = 20): Promise<Vi
     .filter((v) => v !== null);
 }
 
+/** Recent films from creators this user follows, newest first — the
+ * "Following" tab of Home. Two-step, same reasoning as fetchDiscoverVideos:
+ * `follows` has no direct FK to `videos` (it references profiles via
+ * followee_id), so there's no single-level PostgREST embed shape for this —
+ * fetch followee ids, then films by those creators, both RLS-scoped to
+ * public+ready under the hood same as every other read here. */
+export async function fetchFollowingVideos(userId: string, limit = 20): Promise<Video[]> {
+  const supabase = createClient();
+  const { data: follows } = await supabase
+    .from("follows")
+    .select("followee_id")
+    .eq("follower_id", userId);
+  const followeeIds = (follows ?? []).map((row) => row.followee_id as string);
+  if (followeeIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("videos")
+    .select(SELECT)
+    .eq("content_type", "film")
+    .in("creator_id", followeeIds)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error || !data) return [];
+  return (data as unknown as Row[]).map(toVideo).filter((v) => v !== null);
+}
+
 /** Public films the given user hasn't watched yet (or every recent public
  * film, for a signed-out/anonymous caller) — Discover's full-screen feed.
  * Two-step rather than a single query: PostgREST's JS client doesn't expose

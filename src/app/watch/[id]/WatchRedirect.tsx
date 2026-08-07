@@ -39,5 +39,5 @@ export function WatchRedirect({ videoId }: { videoId: string }) {
     );
   }
 
-  return <SwipeFeed videos={[video]} tabs={false} />;
+  return <SwipeFeed videos={[video]} />;
 }

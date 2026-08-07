@@ -19,10 +19,66 @@ const RENDER_WINDOW = 2;
 // enough that the feed reads as cinematic rather than app-chrome-heavy.
 const AUTO_DIRECTOR_MODE_DELAY_MS = 2500;
 import { usePlayerStore } from "@/store/player-store";
-import { useEngagementStore } from "@/store/engagement-store";
 import type { Video } from "@/lib/types";
 
-export function SwipeFeed({ videos, tabs = true }: { videos: Video[]; tabs?: boolean }) {
+type TabsConfig = { active: FeedTab; onChange: (tab: FeedTab) => void };
+
+/** Same copy across every empty forYou/untabbed case, deliberately —
+ * e2e/feed-engagement.spec.ts asserts this exact string for Home. Exported
+ * so FeedRoot's portrait-grid layout can reuse the same per-tab messaging
+ * around TrendingGrid instead of duplicating it. */
+export function EmptyState({ tab }: { tab: FeedTab | null }) {
+  if (tab === null || tab === "forYou") {
+    return (
+      <>
+        <p className="text-lg font-semibold">No videos yet</p>
+        <p className="text-sm text-text-secondary max-w-xs">
+          FRAMES is just getting started — be the first to upload something worth watching.
+        </p>
+        <Link
+          href="/upload"
+          className="mt-2 px-5 py-2.5 rounded-full bg-primary text-bg text-sm font-semibold"
+        >
+          Upload a video
+        </Link>
+      </>
+    );
+  }
+  if (tab === "following") {
+    return (
+      <>
+        <p className="text-lg font-semibold">Follow creators to see them here</p>
+        <p className="text-sm text-text-secondary max-w-xs">
+          Videos from creators you follow will show up in this tab.
+        </p>
+        <Link
+          href="/discover"
+          className="mt-2 px-5 py-2.5 rounded-full bg-primary text-bg text-sm font-semibold"
+        >
+          Find creators to follow
+        </Link>
+      </>
+    );
+  }
+  if (tab === "saved") {
+    return (
+      <>
+        <p className="text-lg font-semibold">Nothing saved yet</p>
+        <p className="text-sm text-text-secondary max-w-xs">
+          Save a video from the feed and it&apos;ll show up here.
+        </p>
+      </>
+    );
+  }
+  return (
+    <>
+      <p className="text-lg font-semibold">No watch history yet</p>
+      <p className="text-sm text-text-secondary max-w-xs">Videos you watch will show up here.</p>
+    </>
+  );
+}
+
+export function SwipeFeed({ videos, tabsConfig }: { videos: Video[]; tabsConfig?: TabsConfig }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<(HTMLDivElement | null)[]>([]);
   const cardRefs = useRef<(VideoCardHandle | null)[]>([]);
@@ -31,19 +87,11 @@ export function SwipeFeed({ videos, tabs = true }: { videos: Video[]; tabs?: boo
   const isScrubbing = usePlayerStore((s) => s.isScrubbing);
   const enterDirectorMode = usePlayerStore((s) => s.enterDirectorMode);
   const exitDirectorMode = usePlayerStore((s) => s.exitDirectorMode);
-  const followedCreators = useEngagementStore((s) => s.followedCreators);
 
   // Director Mode is a feed-only experience — never let it leak into other routes.
   useEffect(() => {
     return () => exitDirectorMode();
   }, [exitDirectorMode]);
-
-  const [feedTab, setFeedTab] = useState<FeedTab>("forYou");
-  const displayedVideos = useMemo(() => {
-    if (!tabs) return videos;
-    if (feedTab === "forYou") return videos;
-    return videos.filter((v) => followedCreators[v.creator.id]);
-  }, [tabs, feedTab, videos, followedCreators]);
 
   const searchParams = useSearchParams();
   const initialIndex = useMemo(() => {
@@ -66,19 +114,22 @@ export function SwipeFeed({ videos, tabs = true }: { videos: Video[]; tabs?: boo
   }, []);
 
   // Switching feed tabs starts a fresh list — reset scroll position and
-  // trim stale refs from the previous (possibly longer) list.
+  // trim stale refs from the previous (possibly longer) list. Keyed off the
+  // active tab itself (a prop now, the parent owns tab state and fetches
+  // per-tab) rather than anything local — for untabbed callers this prop is
+  // always undefined, so the effect never re-fires after mount for them.
   const isFirstTabRender = useRef(true);
   useEffect(() => {
     if (isFirstTabRender.current) {
       isFirstTabRender.current = false;
       return;
     }
-    sectionRefs.current.length = displayedVideos.length;
-    cardRefs.current.length = displayedVideos.length;
+    sectionRefs.current.length = videos.length;
+    cardRefs.current.length = videos.length;
     setActiveIndex(0);
     const container = containerRef.current;
     if (container) container.scrollTop = 0;
-  }, [feedTab, displayedVideos.length]);
+  }, [tabsConfig?.active, videos.length]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -98,7 +149,7 @@ export function SwipeFeed({ videos, tabs = true }: { videos: Video[]; tabs?: boo
 
     sectionRefs.current.forEach((el) => el && observer.observe(el));
     return () => observer.disconnect();
-  }, [displayedVideos.length, feedTab]);
+  }, [videos.length, tabsConfig?.active]);
 
   // Scrolling to a new scene always brings chrome back — never let someone
   // land on a video with the nav/action rail already hidden.
@@ -112,10 +163,10 @@ export function SwipeFeed({ videos, tabs = true }: { videos: Video[]; tabs?: boo
   // out from under the user's finger) or with nothing playing — no point
   // hiding the nav over an empty state.
   useEffect(() => {
-    if (directorMode || isScrubbing || displayedVideos.length === 0) return;
+    if (directorMode || isScrubbing || videos.length === 0) return;
     const timer = window.setTimeout(enterDirectorMode, AUTO_DIRECTOR_MODE_DELAY_MS);
     return () => window.clearTimeout(timer);
-  }, [activeIndex, directorMode, isScrubbing, displayedVideos.length, enterDirectorMode]);
+  }, [activeIndex, directorMode, isScrubbing, videos.length, enterDirectorMode]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -143,44 +194,18 @@ export function SwipeFeed({ videos, tabs = true }: { videos: Video[]; tabs?: boo
   return (
     <div className="relative h-dvh w-full">
       <RotateDevicePrompt />
-      {tabs && <FeedTabs active={feedTab} onChange={setFeedTab} />}
+      {tabsConfig && <FeedTabs active={tabsConfig.active} onChange={tabsConfig.onChange} />}
 
-      {displayedVideos.length === 0 ? (
+      {videos.length === 0 ? (
         <div className="h-dvh w-full flex flex-col items-center justify-center gap-3 text-center px-6">
-          {!tabs || feedTab === "forYou" ? (
-            <>
-              <p className="text-lg font-semibold">No videos yet</p>
-              <p className="text-sm text-text-secondary max-w-xs">
-                FRAMES is just getting started — be the first to upload something worth watching.
-              </p>
-              <Link
-                href="/upload"
-                className="mt-2 px-5 py-2.5 rounded-full bg-primary text-bg text-sm font-semibold"
-              >
-                Upload a video
-              </Link>
-            </>
-          ) : (
-            <>
-              <p className="text-lg font-semibold">Follow creators to see them here</p>
-              <p className="text-sm text-text-secondary max-w-xs">
-                Videos from creators you follow will show up in this tab.
-              </p>
-              <Link
-                href="/discover"
-                className="mt-2 px-5 py-2.5 rounded-full bg-primary text-bg text-sm font-semibold"
-              >
-                Find creators to follow
-              </Link>
-            </>
-          )}
+          <EmptyState tab={tabsConfig?.active ?? null} />
         </div>
       ) : (
         <div
           ref={containerRef}
           className="h-dvh w-full overflow-y-scroll snap-y snap-mandatory no-scrollbar"
         >
-          {displayedVideos.map((video, index) => {
+          {videos.map((video, index) => {
             const withinRenderWindow = Math.abs(index - activeIndex) <= RENDER_WINDOW;
 
             if (!withinRenderWindow) {

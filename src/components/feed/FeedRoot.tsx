@@ -2,48 +2,102 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { SwipeFeed } from "./SwipeFeed";
+import { SwipeFeed, EmptyState } from "./SwipeFeed";
+import { TABS, type FeedTab } from "./FeedTabs";
 import { TrendingGrid } from "@/components/explore/TrendingGrid";
 import { useIsPortraitMobile } from "@/lib/use-portrait-mobile";
-import { fetchHomeFeed } from "@/lib/home-feed";
+import {
+  fetchPublicVideos,
+  fetchFollowingVideos,
+  fetchSavedVideos,
+  fetchHistoryVideos,
+} from "@/lib/video-fetch";
 import { useEngagementStore } from "@/store/engagement-store";
+import { cn } from "@/lib/utils";
 import type { Video } from "@/lib/types";
 
+const CAP = 30;
+
+function fetchForTab(tab: FeedTab, userId: string | null): Promise<Video[]> {
+  if (tab === "forYou") return fetchPublicVideos(CAP);
+  if (!userId) return Promise.resolve([]);
+  if (tab === "following") return fetchFollowingVideos(userId, CAP);
+  if (tab === "saved") return fetchSavedVideos(userId, CAP);
+  return fetchHistoryVideos(userId, CAP);
+}
+
 /**
- * Home's feed: For You, then Saved, then History, one continuous sequence
- * capped at 50 (see lib/home-feed.ts) — no more "For You"/"Following" tabs,
- * that split is retired in favor of this composition.
+ * Home: four real tabs (For You / Following / Saved / History), each its
+ * own fetch — replaces the earlier one-continuous-composed-feed version
+ * (lib/home-feed.ts, deleted). Signed-out visitors never see the tab
+ * switcher at all — Following/Saved/History are inherently per-account, so
+ * there's nothing useful behind them; they get For You only.
  *
- * Portrait phones get a browsable grid (same TrendingGrid Explore/Discover
+ * Portrait phones get a browsable grid (TrendingGrid, same one Discover
  * uses) instead of the immersive swipe feed until a specific video is
- * selected — scrolling the home feed no longer requires rotating first.
- * Tapping a video sets `?v=<id>` (TrendingGrid's cards already link to
- * `/?v=<id>`), which flips this over to the real SwipeFeed. Landscape
- * phones, tablets, and desktop always get SwipeFeed directly.
+ * selected — the tab switcher is reproduced above it as plain pill buttons
+ * rather than reusing FeedTabs (that component's drop-shadow/overlay
+ * styling is built for sitting on top of video content, not a plain grid
+ * background). Landscape phones, tablets, and desktop always get SwipeFeed
+ * directly, tabs and all.
  */
 export function FeedRoot() {
   const isPortraitMobile = useIsPortraitMobile();
   const hasSelectedVideo = useSearchParams().has("v");
   const userId = useEngagementStore((s) => s.userId);
   const hydrated = useEngagementStore((s) => s.hydrated);
+  const [tab, setTab] = useState<FeedTab>("forYou");
   const [videos, setVideos] = useState<Video[]>([]);
 
   useEffect(() => {
     if (!hydrated) return;
-    fetchHomeFeed(userId).then(setVideos);
-  }, [hydrated, userId]);
+    let cancelled = false;
+    fetchForTab(tab, userId).then((result) => {
+      if (!cancelled) setVideos(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, userId, tab]);
 
   if (isPortraitMobile && !hasSelectedVideo) {
     return (
       <div className="pt-8 pb-24">
         <h1 className="text-2xl font-bold px-6 mb-1">FRAMES</h1>
-        <p className="text-text-secondary text-sm px-6 mb-6">
+        <p className="text-text-secondary text-sm px-6 mb-4">
           Tap a film to watch — turn your phone sideways for the full cinematic view.
         </p>
-        <TrendingGrid videos={videos} />
+        {userId && (
+          <div className="flex items-center gap-1.5 px-6 mb-4 overflow-x-auto no-scrollbar">
+            {TABS.map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTab(id)}
+                aria-pressed={tab === id}
+                className={cn(
+                  "flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors",
+                  tab === id ? "bg-primary text-bg" : "text-text-secondary hover:text-accent"
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+        <TrendingGrid
+          videos={videos}
+          emptyState={
+            <div className="flex flex-col items-center gap-3 text-center px-6 py-16">
+              <EmptyState tab={userId ? tab : "forYou"} />
+            </div>
+          }
+        />
       </div>
     );
   }
 
-  return <SwipeFeed videos={videos} tabs={false} />;
+  return (
+    <SwipeFeed videos={videos} tabsConfig={userId ? { active: tab, onChange: setTab } : undefined} />
+  );
 }

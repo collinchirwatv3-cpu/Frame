@@ -23,5 +23,5 @@ export default function DiscoverPage() {
     fetchDiscoverVideos(userId).then(setVideos);
   }, [hydrated, userId]);
 
-  return <SwipeFeed videos={videos} tabs={false} />;
+  return <SwipeFeed videos={videos} />;
 }
