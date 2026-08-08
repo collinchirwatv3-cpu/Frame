@@ -87,3 +87,12 @@ export async function createParty(params: { title: string; videoId: string }): P
   if (error || !data) return null;
   return toParty(data as unknown as Row);
 }
+
+/** No host_id check needed client-side — watch_parties_delete_own's
+ * `using (auth.uid() = host_id)` already means this silently affects zero
+ * rows for anyone but the host, same reasoning as createParty above. */
+export async function deleteParty(id: string): Promise<boolean> {
+  const supabase = createClient();
+  const { error } = await supabase.from("watch_parties").delete().eq("id", id);
+  return !error;
+}
