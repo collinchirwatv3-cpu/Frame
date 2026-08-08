@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { uploadMetadataSchema } from "@/lib/validation/upload";
+import { uploadMetadataSchema, LONGFORM_MIN_DURATION_SECONDS } from "@/lib/validation/upload";
 import { createTusUploadSession } from "@/lib/cloudflare-stream";
 import { uploadRateLimiter, checkRateLimit, rateLimitedResponse } from "@/lib/rate-limit";
 
@@ -20,6 +20,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Sign in required" }, { status: 401 });
   }
 
+  // RLS (videos_insert_own, see 20260808030000_invite_gate_rls.sql) already
+  // enforces this at the database layer — this is a clearer, faster-failing
+  // error than letting an uninvited insert bubble up as a raw RLS violation.
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("invite_redeemed_at")
+    .eq("id", user.id)
+    .single();
+  if (!profile?.invite_redeemed_at) {
+    return NextResponse.json({ error: "An invite is required" }, { status: 403 });
+  }
+
   const rateLimit = await checkRateLimit(uploadRateLimiter, user.id);
   if (!rateLimit.success) {
     return rateLimitedResponse(rateLimit);
@@ -31,6 +43,14 @@ export async function POST(request: NextRequest) {
   }
   const { title, description, category, contentType, width, height, durationSeconds, fileSizeBytes } =
     parsed.data;
+
+  // Authoritative, not client-trusted: under 3 minutes is always "short",
+  // full stop — the schema's superRefine already rejects an explicit
+  // longform request that's too short, but this covers every other case
+  // too (e.g. a client that just sent "film" for a 90-second clip). Above
+  // the threshold, the schema has already validated contentType is a real
+  // choice ("film" or "longform"), so it's trusted as-is here.
+  const contentTypeFinal = durationSeconds < LONGFORM_MIN_DURATION_SECONDS ? "short" : contentType;
 
   let session: Awaited<ReturnType<typeof createTusUploadSession>>;
   try {
@@ -48,7 +68,7 @@ export async function POST(request: NextRequest) {
       creator_id: user.id,
       stream_uid: session.uid,
       processing_status: "uploading",
-      content_type: contentType,
+      content_type: contentTypeFinal,
       title,
       description,
       category,

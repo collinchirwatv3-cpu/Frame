@@ -17,9 +17,11 @@ export type Participant = { id: string; joinedAt: number };
 export type QueueItem = { id: string; title: string; posterUrl: string; creatorUsername: string };
 
 // Corrections smaller than this are invisible as a stutter; anything bigger
-// gets a hard seek rather than trying to smoothly catch up.
-const DRIFT_THRESHOLD_SECONDS = 1.5;
-const HEARTBEAT_INTERVAL_MS = 5000;
+// gets a hard seek rather than trying to smoothly catch up. Exported only
+// so use-watch-room.test.ts can reference the real values instead of
+// duplicating magic numbers — not otherwise used outside this module.
+export const DRIFT_THRESHOLD_SECONDS = 1.5;
+export const HEARTBEAT_INTERVAL_MS = 5000;
 
 function applySync(video: HTMLVideoElement, payload: SyncPayload) {
   // Only extrapolate elapsed time when the source was actually playing —

@@ -1,0 +1,14 @@
+-- FRAME — add "longform" as a third video content type, alongside the
+-- existing 'film' and 'short' (created in 20260806120000_shorts_content_type.sql).
+-- 'film' already means what the product calls "Standard" — no rename, this
+-- just extends the same enum with one more explicit, creator-selected value
+-- for documentaries/extended cinematic pieces >= 3 minutes.
+--
+-- Deliberately nothing else in this migration: Postgres forbids using a
+-- newly-added enum value in the same transaction that added it, so any
+-- check constraint referencing 'longform' has to live in a later migration
+-- (or, as chosen here, stay at the application layer — this codebase
+-- already validates business rules like aspect-ratio banding in
+-- src/lib/validation/upload.ts rather than SQL CHECK constraints, and the
+-- duration/content-type consistency rule follows that same pattern).
+alter type video_content_type add value if not exists 'longform';

@@ -46,6 +46,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Sign in required" }, { status: 401 });
   }
 
+  // Same check as /api/uploads (see 20260808030000_invite_gate_rls.sql) —
+  // an uninvited user can't own a video to begin with (videos_insert_own
+  // already blocks that upstream), but this gives a clearer error than the
+  // generic "Video not found" that'd otherwise result from an empty select.
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("invite_redeemed_at")
+    .eq("id", user.id)
+    .single();
+  if (!profile?.invite_redeemed_at) {
+    return NextResponse.json({ error: "An invite is required" }, { status: 403 });
+  }
+
   const rateLimit = await checkRateLimit(uploadRateLimiter, user.id);
   if (!rateLimit.success) {
     return rateLimitedResponse(rateLimit);

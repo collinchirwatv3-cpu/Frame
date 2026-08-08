@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { categories } from "@/lib/mock-data";
 import { checkUpload, qualityLabel, type UploadCheck } from "@/lib/video-validation";
 import { deriveTitleFromFilename } from "@/lib/upload";
+import { LONGFORM_MIN_DURATION_SECONDS } from "@/lib/validation/upload";
 import { useUploadDraftStore } from "@/store/upload-draft-store";
 import { createClient } from "@/lib/supabase/client";
 import { UploadRejection } from "./UploadRejection";
@@ -77,6 +78,11 @@ export function UploadDropzone() {
   const [check, setCheck] = useState<UploadCheck | null>(null);
   const [appliedFix, setAppliedFix] = useState<AppliedFix>(null);
   const [fileName, setFileName] = useState("");
+  // Not in useUploadDraftStore with title/description/category — those
+  // persist across reloads for a real reason (don't lose typed-out copy
+  // mid-upload); this is a lightweight toggle that only ever makes sense
+  // once a duration is already probed, no persistence needed.
+  const [isLongform, setIsLongform] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [videoId, setVideoId] = useState<string | null>(null);
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
@@ -167,6 +173,7 @@ export function UploadDropzone() {
     setVideoId(null);
     setPosterUrl(null);
     setErrorMessage("");
+    setIsLongform(false);
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -221,6 +228,11 @@ export function UploadDropzone() {
           title: draftTitle,
           description: draftDescription,
           category,
+          // The server re-derives "short" from duration regardless of what's
+          // sent here (never client-trusted for that boundary) — this is
+          // only the film-vs-longform choice, and only reachable at all
+          // when the LongForm toggle is shown (>= 3 minutes).
+          contentType: isLongform ? "longform" : "film",
           width: effectiveDims.width,
           height: effectiveDims.height,
           durationSeconds: probe?.duration ?? 0,
@@ -540,6 +552,40 @@ export function UploadDropzone() {
               ))}
             </select>
           </div>
+
+          {/* Only reachable once the probed duration actually clears the
+              threshold — for anything shorter, LongForm literally isn't a
+              selectable option, not just an unenforced client hint (the
+              server independently re-derives "short" regardless either
+              way). Same pill-toggle pattern as the Upload/Record source
+              switch above, not a new UI pattern. */}
+          {probe && probe.duration >= LONGFORM_MIN_DURATION_SECONDS && (
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Format</label>
+              <div className="inline-flex items-center gap-1 p-1 rounded-full bg-card border border-border">
+                <button
+                  type="button"
+                  onClick={() => setIsLongform(false)}
+                  className={cn(
+                    "px-4 py-1.5 rounded-full text-xs font-semibold transition-colors",
+                    !isLongform ? "bg-primary text-bg" : "text-text-secondary hover:text-accent"
+                  )}
+                >
+                  Standard
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsLongform(true)}
+                  className={cn(
+                    "px-4 py-1.5 rounded-full text-xs font-semibold transition-colors",
+                    isLongform ? "bg-primary text-bg" : "text-text-secondary hover:text-accent"
+                  )}
+                >
+                  LongForm
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="flex gap-3 mt-2">
             <button

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { uploadMetadataSchema } from "./upload";
+import { uploadMetadataSchema, LONGFORM_MIN_DURATION_SECONDS } from "./upload";
 
 const validInput = {
   title: "Iceland, from 400ft",
@@ -60,5 +60,58 @@ describe("uploadMetadataSchema", () => {
       fileSizeBytes: 21 * 1024 * 1024 * 1024,
     });
     expect(result.success).toBe(false);
+  });
+
+  describe("contentType", () => {
+    it("defaults a missing contentType to film", () => {
+      const result = uploadMetadataSchema.safeParse(validInput);
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.contentType).toBe("film");
+    });
+
+    it("accepts an explicit film, short, or longform (duration permitting)", () => {
+      for (const contentType of ["film", "short"] as const) {
+        const result = uploadMetadataSchema.safeParse({ ...validInput, contentType });
+        expect(result.success).toBe(true);
+      }
+      const longform = uploadMetadataSchema.safeParse({
+        ...validInput,
+        contentType: "longform",
+        durationSeconds: LONGFORM_MIN_DURATION_SECONDS,
+      });
+      expect(longform.success).toBe(true);
+    });
+
+    it("rejects an unknown contentType", () => {
+      const result = uploadMetadataSchema.safeParse({ ...validInput, contentType: "documentary" });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects longform on a video under the 3-minute threshold", () => {
+      const result = uploadMetadataSchema.safeParse({
+        ...validInput,
+        contentType: "longform",
+        durationSeconds: LONGFORM_MIN_DURATION_SECONDS - 1,
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("accepts longform right at the threshold, not just above it", () => {
+      const result = uploadMetadataSchema.safeParse({
+        ...validInput,
+        contentType: "longform",
+        durationSeconds: LONGFORM_MIN_DURATION_SECONDS,
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it("does not reject film/short for a short duration — only longform has a duration floor", () => {
+      const result = uploadMetadataSchema.safeParse({
+        ...validInput,
+        contentType: "film",
+        durationSeconds: 10,
+      });
+      expect(result.success).toBe(true);
+    });
   });
 });

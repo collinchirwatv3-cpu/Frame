@@ -63,8 +63,11 @@ export type Video = {
   category: Category;
   /** Absent on videos built before content_type existed (mock data, some
    * client-side conversions) — always treat a missing value as "film",
-   * never as "short"; shorts are always explicitly tagged. */
-  contentType?: "film" | "short";
+   * never as "short"/"longform"; those are always explicitly tagged.
+   * "film" is the default/standard library; "longform" is an explicit
+   * creator choice for documentaries/extended cinematic pieces >= 3
+   * minutes — see src/lib/validation/upload.ts for the duration rule. */
+  contentType?: "film" | "short" | "longform";
   soundName?: string;
   likes: number;
   comments: number;
