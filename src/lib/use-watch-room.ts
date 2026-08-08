@@ -40,24 +40,40 @@ function applySync(video: HTMLVideoElement, payload: SyncPayload) {
 
 /**
  * Genuinely synced playback + a shared queue for a "watch together" room,
- * built on Supabase Realtime Broadcast + Presence — no new table, no
- * migration, no RLS: an open (non-private) channel keyed by roomId, same
- * trust model as the existing /s/[token] share links (anyone with the link
- * can join).
+ * built on Supabase Realtime Broadcast + Presence, keyed by roomId.
  *
  * No fixed host — whoever has been in the room longest (earliest tracked
- * presence) is the sync authority. That falls out for free on disconnect:
- * presence drops their entry, the next-earliest immediately becomes
- * authoritative, no explicit handoff code needed. Only the authority's
- * play/pause/seek/heartbeat and queue-advance get broadcast; everyone
- * else's <video> is driven by applySync, not local interaction.
+ * presence) is the sync *authority* for playback (play/pause/seek/
+ * heartbeat get broadcast only by them; everyone else's <video> is driven
+ * by applySync, not local interaction). That falls out for free on
+ * disconnect: presence drops their entry, the next-earliest immediately
+ * becomes authoritative, no explicit handoff code needed.
  *
- * The queue itself is a free-for-all — any participant can add, remove, or
- * reorder it, not just the authority. Every mutation broadcasts the whole
- * resulting array (`queue-set`) rather than a diff, so there's no ordering
- * dependency between two people editing near-simultaneously — whichever
- * broadcast a client sees last is authoritative for that client, same as
- * how any last-write-wins list would behave.
+ * PRODUCT RULE — host is a sync-authority role, not an authorization
+ * boundary: the queue is deliberately collaborative. ANY member can add,
+ * remove, reorder, or advance it, not just the host — this was audited
+ * once already and the "fix" of making advanceQueue host-only was
+ * explicitly rejected as wrong for the product. Do not reintroduce a
+ * host-only gate here. Every mutation broadcasts the whole resulting array
+ * (`queue-set`) rather than a diff, so there's no ordering dependency
+ * between two people editing near-simultaneously — whichever broadcast a
+ * client sees last is authoritative for that client, same as how any
+ * last-write-wins list would behave.
+ *
+ * The real boundary is membership, not host status, and it's enforced
+ * server-side, not here: this channel is opened with `private: true`, and
+ * for any roomId that corresponds to a real, listed party (a row in
+ * watch_parties), Supabase Realtime Authorization (RLS on
+ * realtime.messages, see supabase/migrations/20260808050000_watch_room_
+ * realtime_rls.sql) rejects the connection entirely unless the caller is
+ * an invited FRAME member — before any broadcast/presence message is ever
+ * sent or received, not just before advanceQueue. A rejected connection
+ * surfaces here as `denied` (see the CHANNEL_ERROR handling below), not as
+ * a silently-ignored button press. Ad-hoc, unlisted rooms (the "Watch
+ * together" button on a video) were never given a watch_parties row at
+ * all, so that same RLS check falls through to permissive for them,
+ * unchanged from before — this is intentionally scoped to listed parties
+ * only, not a blanket auth requirement on every room.
  */
 export function useWatchRoom(
   roomId: string,
@@ -68,6 +84,10 @@ export function useWatchRoom(
   const [isHost, setIsHost] = useState(false);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [currentVideoId, setCurrentVideoId] = useState(initialVideoId);
+  // True once the Realtime server has actually rejected this connection —
+  // not merely "not yet subscribed". Only meaningful for listed parties
+  // (see the module doc comment); ad-hoc rooms should never hit this.
+  const [denied, setDenied] = useState(false);
   const channelRef = useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null);
   const queueRef = useRef<QueueItem[]>([]);
   const selfId = useMemo(() => crypto.randomUUID(), []);
@@ -109,9 +129,15 @@ export function useWatchRoom(
     [setQueueSynced]
   );
 
-  // Authority-only — called from the current video's onEnded. Reads
-  // queueRef (not the `queue` state) so it works from a handler that isn't
-  // itself part of a render, without needing to be a dependency anywhere.
+  // Callable by any member — see this file's own top-level doc comment for
+  // why advanceQueue is deliberately not host-gated. WatchTogetherPlayer
+  // only actually calls it from onEnded when `isHost`, but that's a
+  // duplicate-broadcast guard (every participant's <video> fires `ended` at
+  // once; only one of them should trigger the auto-advance), not an
+  // authorization check — a "skip"/manual-advance control open to any
+  // participant would call this the same way. Reads queueRef (not the
+  // `queue` state) so it works from a handler that isn't itself part of a
+  // render, without needing to be a dependency anywhere.
   const advanceQueue = useCallback(() => {
     const [next, ...rest] = queueRef.current;
     if (!next) return;
@@ -131,7 +157,7 @@ export function useWatchRoom(
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase.channel(`watch-room:${roomId}`, {
-      config: { broadcast: { self: false }, presence: { key: selfId } },
+      config: { broadcast: { self: false }, presence: { key: selfId }, private: true },
     });
 
     channel.on("presence", { event: "sync" }, () => {
@@ -167,6 +193,12 @@ export function useWatchRoom(
     channel.subscribe((status) => {
       if (status === "SUBSCRIBED") {
         channel.track({ joinedAt } satisfies PresenceMeta);
+      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        // RLS on realtime.messages rejected this connection (not an
+        // invited member, for a listed party — see the module doc
+        // comment) — surfaced to callers rather than left as a silently
+        // frozen room.
+        setDenied(true);
       }
     });
 
@@ -197,5 +229,6 @@ export function useWatchRoom(
     moveQueueItem,
     advanceQueue,
     currentVideoId,
+    denied,
   };
 }

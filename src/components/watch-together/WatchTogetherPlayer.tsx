@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import NextLink from "next/link";
 import { Check, ChevronDown, ChevronUp, Link2, Plus, Users, Volume2, VolumeX, X } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import { Avatar } from "@/components/ui/Avatar";
@@ -37,6 +38,7 @@ export function WatchTogetherPlayer({
     moveQueueItem,
     advanceQueue,
     currentVideoId,
+    denied,
   } = useWatchRoom(roomId, initialVideo.id, videoRef);
 
   // currentVideoId only ever changes via the room's "advance" broadcast
@@ -71,6 +73,24 @@ export function WatchTogetherPlayer({
   }
 
   const showAddPrompt = nearEnd;
+
+  // Realtime Authorization rejected this connection (not an invited
+  // member, for a listed party) — same "not available" pattern as this
+  // room's own not-found state (see the [roomId] page), rather than
+  // leaving a silently frozen, non-syncing player on screen.
+  if (denied) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 h-dvh bg-bg text-center px-6">
+        <p className="text-sm font-medium">You don&apos;t have access to this watch party</p>
+        <p className="text-xs text-text-secondary max-w-sm">
+          This party is invite-only — you&apos;ll need a FRAMES invite to join.
+        </p>
+        <NextLink href="/discover" className="mt-2 text-xs text-primary underline underline-offset-2">
+          Go to FRAMES
+        </NextLink>
+      </div>
+    );
+  }
 
   return (
     <div className="relative h-dvh w-full overflow-hidden bg-bg">

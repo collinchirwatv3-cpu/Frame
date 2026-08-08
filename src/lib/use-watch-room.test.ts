@@ -11,7 +11,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // a plain object here.
 type Handler = (arg: unknown) => void;
 
-function createFakeChannel() {
+// `status` mimics what Supabase Realtime actually reports once
+// `private: true` is set (see use-watch-room.ts): "SUBSCRIBED" for a
+// connection the RLS policy on realtime.messages allowed through,
+// "CHANNEL_ERROR" for one it rejected. Defaults to the happy path — only
+// the denial test overrides it.
+function createFakeChannel(status: "SUBSCRIBED" | "CHANNEL_ERROR" = "SUBSCRIBED") {
   const handlers = new Map<string, Handler>();
   const sent: { event: string; payload: unknown }[] = [];
   const tracked: unknown[] = [];
@@ -27,7 +32,7 @@ function createFakeChannel() {
       return Promise.resolve("ok");
     }),
     subscribe(cb: (status: string) => void) {
-      cb("SUBSCRIBED");
+      cb(status);
       return channel;
     },
     send: vi.fn((msg: { event: string; payload: unknown }) => {
@@ -58,10 +63,14 @@ function createFakeVideo(paused = true): HTMLVideoElement {
 
 let fakeChannel: ReturnType<typeof createFakeChannel>;
 const removeChannelSpy = vi.fn();
+const channelSpy = vi.fn();
 
 vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({
-    channel: () => fakeChannel,
+    channel: (topic: string, config: unknown) => {
+      channelSpy(topic, config);
+      return fakeChannel;
+    },
     removeChannel: removeChannelSpy,
   }),
 }));
@@ -133,6 +142,46 @@ describe("useWatchRoom — host election", () => {
     const { unmount } = renderHook(() => useWatchRoom("room-1", "v1", videoRef));
     unmount();
     expect(removeChannelSpy).toHaveBeenCalledWith(fakeChannel);
+  });
+});
+
+// Real membership/authorization is enforced server-side (RLS on
+// realtime.messages, keyed off `private: true` — see
+// supabase/migrations/20260808050000_watch_room_realtime_rls.sql and this
+// module's own doc comment), not in this hook. What's actually unit-
+// testable here is (a) that the hook asks Realtime for a private/
+// authenticated channel at all, and (b) that a real server-side rejection
+// surfaces as `denied` instead of a silently frozen room. Whether a
+// specific non-member/unauthenticated caller is actually rejected is a
+// live-database property, verified separately the same way the invite
+// gate was (real Supabase connections, real bypass attempts) — not
+// something a mocked channel can honestly assert.
+describe("useWatchRoom — authorization", () => {
+  it("opens the channel as private, so Realtime Authorization RLS actually applies", () => {
+    const videoRef = { current: createFakeVideo() };
+    renderHook(() => useWatchRoom("room-1", "v1", videoRef));
+
+    expect(channelSpy).toHaveBeenCalledWith(
+      "watch-room:room-1",
+      expect.objectContaining({ config: expect.objectContaining({ private: true }) })
+    );
+  });
+
+  it("surfaces a server-side rejection as `denied` rather than a silently frozen room", () => {
+    fakeChannel = createFakeChannel("CHANNEL_ERROR");
+    const videoRef = { current: createFakeVideo() };
+    const { result } = renderHook(() => useWatchRoom("room-1", "v1", videoRef));
+
+    expect(result.current.denied).toBe(true);
+    // Never got to track presence — the connection was rejected before that.
+    expect(fakeChannel.track).not.toHaveBeenCalled();
+  });
+
+  it("does not report denied on a normal, accepted connection", () => {
+    const videoRef = { current: createFakeVideo() };
+    const { result } = renderHook(() => useWatchRoom("room-1", "v1", videoRef));
+
+    expect(result.current.denied).toBe(false);
   });
 });
 
@@ -229,12 +278,37 @@ describe("useWatchRoom — heartbeat", () => {
   });
 });
 
-describe("useWatchRoom — queue", () => {
-  it("addToQueue broadcasts the full updated array, not a diff", () => {
+// Product rule (see use-watch-room.ts's own doc comment): the queue is
+// deliberately collaborative. Host status is a sync-authority role, not an
+// authorization boundary — host-only queue control was considered and
+// explicitly rejected as wrong for this product. Every test below exists
+// in a host and a non-host/participant variant specifically to prove
+// neither addToQueue nor advanceQueue is gated by isHost.
+describe("useWatchRoom — queue (collaborative — host and participant both allowed)", () => {
+  it("host can add a video to the queue", () => {
     const videoRef = { current: createFakeVideo() };
     const { result } = renderHook(() => useWatchRoom("room-1", "v1", videoRef));
-    const item = { id: "vid-2", title: "Next up", posterUrl: "p.jpg", creatorUsername: "reddrift" };
+    act(() => {
+      fakeChannel._setPresence({ "self-id": [{ joinedAt: 100 }] });
+      fakeChannel._fire("presence", "sync", undefined);
+    });
+    expect(result.current.isHost).toBe(true);
 
+    const item = { id: "vid-2", title: "Next up", posterUrl: "p.jpg", creatorUsername: "reddrift" };
+    act(() => result.current.addToQueue(item));
+
+    expect(result.current.queue).toEqual([item]);
+    expect(fakeChannel._sent.at(-1)).toEqual({ event: "queue-set", payload: [item] });
+  });
+
+  it("a non-host participant can add a video to the queue", () => {
+    const videoRef = { current: createFakeVideo() };
+    const { result } = renderHook(() => useWatchRoom("room-1", "v1", videoRef));
+    // Never fired a presence sync where self is earliest — isHost stays
+    // false (its default).
+    expect(result.current.isHost).toBe(false);
+
+    const item = { id: "vid-2", title: "Next", posterUrl: "", creatorUsername: "x" };
     act(() => result.current.addToQueue(item));
 
     expect(result.current.queue).toEqual([item]);
@@ -268,25 +342,35 @@ describe("useWatchRoom — queue", () => {
     expect(result.current.queue).toEqual([b, a]);
   });
 
-  it("queue mutations are a free-for-all — not gated by host status (matches the hook's own documented design, not a bug)", () => {
+  it("a queue-set broadcast from another participant updates this participant's own queue state", () => {
+    // Covers "participant can see the resulting queue state" / "queue
+    // changes synchronize to all party members" — this is the receiving
+    // side (someone ELSE's mutation arriving here), not this client's own
+    // addToQueue/removeFromQueue/moveQueueItem (already covered above,
+    // and all three already broadcast via this same queue-set event).
     const videoRef = { current: createFakeVideo() };
     const { result } = renderHook(() => useWatchRoom("room-1", "v1", videoRef));
-    // Never fired a presence sync — isHost is false (its default) here.
-    expect(result.current.isHost).toBe(false);
+    const item = { id: "vid-9", title: "Added by someone else", posterUrl: "", creatorUsername: "reddrift" };
 
-    const item = { id: "vid-2", title: "Next", posterUrl: "", creatorUsername: "x" };
-    act(() => result.current.addToQueue(item));
+    act(() => {
+      fakeChannel._fire("broadcast", "queue-set", { payload: [item] });
+    });
 
     expect(result.current.queue).toEqual([item]);
   });
 });
 
-describe("useWatchRoom — advanceQueue", () => {
-  it("advances to the next queued video and broadcasts it", () => {
+describe("useWatchRoom — advanceQueue (collaborative — host and participant both allowed)", () => {
+  it("host can advance the queue", () => {
     const videoRef = { current: createFakeVideo() };
     const { result } = renderHook(() => useWatchRoom("room-1", "v1", videoRef));
-    const next = { id: "vid-2", title: "Next", posterUrl: "", creatorUsername: "x" };
+    act(() => {
+      fakeChannel._setPresence({ "self-id": [{ joinedAt: 100 }] });
+      fakeChannel._fire("presence", "sync", undefined);
+    });
+    expect(result.current.isHost).toBe(true);
 
+    const next = { id: "vid-2", title: "Next", posterUrl: "", creatorUsername: "x" };
     act(() => result.current.addToQueue(next));
     act(() => result.current.advanceQueue());
 
@@ -298,24 +382,7 @@ describe("useWatchRoom — advanceQueue", () => {
     });
   });
 
-  it("is a no-op with an empty queue", () => {
-    const videoRef = { current: createFakeVideo() };
-    const { result } = renderHook(() => useWatchRoom("room-1", "v1", videoRef));
-
-    act(() => result.current.advanceQueue());
-
-    expect(result.current.currentVideoId).toBe("v1");
-  });
-
-  // Documenting real, current behavior rather than asserting a protection
-  // that doesn't exist: advanceQueue has no host check inside the hook
-  // itself (see use-watch-room.ts's own doc comment — "Authority-only" is
-  // enforced only by the caller, WatchTogetherPlayer.tsx's onEnded, not
-  // here). A non-host calling it directly still works. This is a real,
-  // accepted gap (no server-side authority for this open Realtime channel,
-  // by design — see the module doc comment), not something this test
-  // suite fixes; flagged in the final report rather than papered over.
-  it("advances the queue even when called by a non-host (no server-side authority check — a known, accepted gap)", () => {
+  it("a non-host participant can advance the queue — not host-gated, by design", () => {
     const videoRef = { current: createFakeVideo() };
     const { result } = renderHook(() => useWatchRoom("room-1", "v1", videoRef));
     expect(result.current.isHost).toBe(false);
@@ -325,5 +392,34 @@ describe("useWatchRoom — advanceQueue", () => {
     act(() => result.current.advanceQueue());
 
     expect(result.current.currentVideoId).toBe("vid-2");
+    expect(fakeChannel._sent.at(-1)).toEqual({
+      event: "advance",
+      payload: { videoId: "vid-2", queue: [] },
+    });
+  });
+
+  it("an advance broadcast from another participant updates this participant's video and queue too", () => {
+    const videoRef = { current: createFakeVideo() };
+    const { result } = renderHook(() => useWatchRoom("room-1", "v1", videoRef));
+
+    act(() => {
+      fakeChannel._fire("broadcast", "advance", {
+        payload: { videoId: "vid-7", queue: [] },
+      });
+    });
+
+    expect(result.current.currentVideoId).toBe("vid-7");
+    expect(result.current.queue).toEqual([]);
+  });
+
+  it("rejects the invalid transition of advancing an already-empty queue (no-op, no broadcast)", () => {
+    const videoRef = { current: createFakeVideo() };
+    const { result } = renderHook(() => useWatchRoom("room-1", "v1", videoRef));
+
+    const sentBefore = fakeChannel._sent.length;
+    act(() => result.current.advanceQueue());
+
+    expect(result.current.currentVideoId).toBe("v1");
+    expect(fakeChannel._sent.length).toBe(sentBefore);
   });
 });
