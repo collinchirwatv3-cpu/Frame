@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// setUser's hydration reads still go straight through the Supabase client
+// (unchanged) — only the toggle writes moved to /api/engagement/[kind] (see
+// engagement-store.ts's own comment on why: server-side rate limiting
+// needed a route to attach to). Two separate mocks accordingly.
 let mockResponses: Record<string, { data?: unknown; error?: unknown }> = {};
 
 vi.mock("@/lib/supabase/client", () => ({
@@ -10,19 +14,21 @@ vi.mock("@/lib/supabase/client", () => ({
       const chain = () => builder;
       builder.select = chain;
       builder.eq = chain;
-      builder.match = chain;
-      builder.insert = chain;
-      builder.delete = chain;
       builder.then = (resolve: (v: unknown) => unknown) => Promise.resolve(response).then(resolve);
       return builder;
     },
   }),
 }));
 
+const fetchMock = vi.fn();
+
 const { useEngagementStore } = await import("./engagement-store");
 
 beforeEach(() => {
   mockResponses = {};
+  fetchMock.mockReset();
+  fetchMock.mockResolvedValue({ ok: true });
+  vi.stubGlobal("fetch", fetchMock);
   Object.defineProperty(window, "location", {
     value: { ...window.location, assign: vi.fn() },
     writable: true,
@@ -40,7 +46,6 @@ beforeEach(() => {
 
 describe("engagement store", () => {
   it("toggles a video like on and off", async () => {
-    mockResponses.likes = { error: null };
     await useEngagementStore.getState().toggleLike("v1");
     expect(useEngagementStore.getState().likedVideos.v1).toBe(true);
 
@@ -49,25 +54,21 @@ describe("engagement store", () => {
   });
 
   it("tracks likes independently per video", async () => {
-    mockResponses.likes = { error: null };
     await useEngagementStore.getState().toggleLike("v1");
     expect(useEngagementStore.getState().likedVideos.v2).toBeFalsy();
   });
 
   it("toggles follow state per creator", async () => {
-    mockResponses.follows = { error: null };
     await useEngagementStore.getState().toggleFollow("c1");
     expect(useEngagementStore.getState().followedCreators.c1).toBe(true);
   });
 
   it("toggles save state per video", async () => {
-    mockResponses.saves = { error: null };
     await useEngagementStore.getState().toggleSave("v1");
     expect(useEngagementStore.getState().savedVideos.v1).toBe(true);
   });
 
   it("toggles saved-collection state independently of video saves", async () => {
-    mockResponses.saved_collections = { error: null };
     await useEngagementStore.getState().toggleSavedCollection("col-drone-masters");
     expect(useEngagementStore.getState().savedCollections["col-drone-masters"]).toBe(true);
     expect(useEngagementStore.getState().savedVideos["col-drone-masters"]).toBeFalsy();
@@ -76,8 +77,25 @@ describe("engagement store", () => {
     expect(useEngagementStore.getState().savedCollections["col-drone-masters"]).toBe(false);
   });
 
-  it("rolls back the optimistic update if the write fails", async () => {
-    mockResponses.likes = { error: { message: "boom" } };
+  it("posts to the right /api/engagement/[kind] route with targetId and the new active state", async () => {
+    await useEngagementStore.getState().toggleLike("v1");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/engagement/like",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ targetId: "v1", active: true }),
+      })
+    );
+
+    await useEngagementStore.getState().toggleFollow("c1");
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/engagement/follow",
+      expect.objectContaining({ body: JSON.stringify({ targetId: "c1", active: true }) })
+    );
+  });
+
+  it("rolls back the optimistic update if the request fails", async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false });
     await useEngagementStore.getState().toggleLike("v1");
     expect(useEngagementStore.getState().likedVideos.v1).toBeFalsy();
   });
