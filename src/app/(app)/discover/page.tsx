@@ -87,7 +87,7 @@ export default function DiscoverPage() {
   }, [hydrated, userId]);
 
   if (selectedVideoId) {
-    return <SwipeFeed videos={shelves[activeShelf]} />;
+    return <SwipeFeed videos={shelves[activeShelf]} showSearchButton={false} />;
   }
 
   if (shelves.forYou.length === 0) {

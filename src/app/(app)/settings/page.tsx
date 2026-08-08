@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LogOut, ShieldAlert, Trash2, Volume2, VolumeX } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { SearchButton } from "@/components/ui/SearchButton";
 import { categories } from "@/lib/mock-data";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePlayerStore } from "@/store/player-store";
@@ -61,9 +60,8 @@ export default function SettingsPage() {
 
   return (
     <div className="pb-24 md:pb-8">
-      <div className="flex items-center justify-between px-6 pt-8 pb-6">
+      <div className="px-6 pt-8 pb-6">
         <h1 className="text-2xl font-bold">Settings</h1>
-        <SearchButton className="bg-card border border-border" />
       </div>
 
       <SettingsSection title="Interests">

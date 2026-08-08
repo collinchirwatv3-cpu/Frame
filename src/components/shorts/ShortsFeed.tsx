@@ -4,7 +4,6 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { SearchButton } from "@/components/ui/SearchButton";
 import { ActionRail } from "@/components/feed/ActionRail";
 import { CommentDrawer } from "@/components/feed/CommentDrawer";
 import { VideoOptionsSheet } from "@/components/feed/VideoOptionsSheet";
@@ -217,7 +216,6 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
   if (shorts.length === 0) {
     return (
       <div className="relative flex flex-col items-center justify-center h-dvh text-center px-6 gap-2">
-        <SearchButton className="fixed top-4 right-4 md:top-6 md:right-6 z-20" />
         <p className="text-sm font-medium">No shorts yet</p>
         <p className="text-xs text-text-secondary">Be the first to post one.</p>
       </div>
@@ -232,14 +230,6 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
       onClick={exitDirectorMode}
       className="relative h-dvh w-full overflow-y-scroll snap-y snap-mandatory no-scrollbar bg-bg"
     >
-      <motion.div
-        animate={{ opacity: directorMode ? 0 : 1 }}
-        transition={CHROME_FADE_TRANSITION}
-        className={cn(directorMode && "pointer-events-none")}
-        style={{ marginRight: "env(safe-area-inset-right)" }}
-      >
-        <SearchButton className="fixed top-4 right-4 md:top-6 md:right-6 z-20" />
-      </motion.div>
       <div aria-hidden style={{ height: edgeSpacer }} />
       {shorts.map((short, index) => {
         const active = index === activeIndex;

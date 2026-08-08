@@ -30,10 +30,15 @@ type VideoCardProps = {
   active: boolean;
   index: number;
   sectionRef: (el: HTMLElement | null) => void;
+  /** Pages inside the (app) shell already have Search on the dock/rail —
+   * this only needs to render on /watch/[id], the one chrome-free route
+   * with no dock at all. Defaults true so that route (which passes no
+   * prop) keeps it. */
+  showSearchButton?: boolean;
 };
 
 export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard(
-  { video, active, index, sectionRef },
+  { video, active, index, sectionRef, showSearchButton = true },
   ref
 ) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -241,9 +246,11 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
                   in this cluster too — now ProfileFloat, fixed a row below
                   this one, present on every page rather than just while a
                   video's on screen. */}
-              <div className="pointer-events-auto absolute top-4 right-4 md:top-6 md:right-6 z-10 flex items-center gap-2">
-                <SearchButton />
-              </div>
+              {showSearchButton && (
+                <div className="pointer-events-auto absolute top-4 right-4 md:top-6 md:right-6 z-10 flex items-center gap-2">
+                  <SearchButton />
+                </div>
+              )}
 
               {/* bottom overlay: creator info + action rail — cleared above the mobile bottom nav */}
               <div className="pointer-events-auto absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 px-4 md:px-8 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] md:pb-10">

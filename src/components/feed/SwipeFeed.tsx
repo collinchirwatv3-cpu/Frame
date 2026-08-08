@@ -40,7 +40,17 @@ export function EmptyState() {
   );
 }
 
-export function SwipeFeed({ videos }: { videos: Video[] }) {
+export function SwipeFeed({
+  videos,
+  showSearchButton,
+}: {
+  videos: Video[];
+  /** Forwarded to VideoCard — see its own doc comment. Omit to keep the
+   * default (shown), which is what /watch/[id] (this feed's one dockless
+   * caller) wants; every (app)-shell caller passes false explicitly since
+   * the dock/rail already has Search there. */
+  showSearchButton?: boolean;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<(HTMLDivElement | null)[]>([]);
   const cardRefs = useRef<(VideoCardHandle | null)[]>([]);
@@ -168,6 +178,7 @@ export function SwipeFeed({ videos }: { videos: Video[] }) {
                 video={video}
                 index={index}
                 active={index === activeIndex}
+                showSearchButton={showSearchButton}
                 sectionRef={(el) => {
                   sectionRefs.current[index] = el as HTMLDivElement | null;
                 }}

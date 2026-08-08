@@ -2,7 +2,6 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import { TrendingGrid } from "@/components/explore/TrendingGrid";
 import { SaveCollectionButton } from "@/components/collections/SaveCollectionButton";
-import { SearchButton } from "@/components/ui/SearchButton";
 import { collections, videos } from "@/lib/mock-data";
 
 export default async function CollectionDetailPage({
@@ -21,7 +20,6 @@ export default async function CollectionDetailPage({
       <div className="relative h-48 md:h-64 w-full">
         <Image src={collection.coverUrl} alt="" fill className="object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-bg via-bg/40 to-bg/10" />
-        <SearchButton className="absolute top-4 right-4 md:top-6 md:right-6" />
       </div>
 
       <div className="px-6 -mt-12 relative">
