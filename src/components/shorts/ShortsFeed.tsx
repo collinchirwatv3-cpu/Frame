@@ -8,7 +8,9 @@ import { ActionRail } from "@/components/feed/ActionRail";
 import { CommentDrawer } from "@/components/feed/CommentDrawer";
 import { VideoOptionsSheet } from "@/components/feed/VideoOptionsSheet";
 import { usePlayerStore } from "@/store/player-store";
+import { useEngagementStore } from "@/store/engagement-store";
 import { CHROME_FADE_TRANSITION, FOCUS_PULL_TRANSITION } from "@/lib/motion";
+import { CHROME_TAP_SCALE } from "@/lib/chrome";
 import type { Video } from "@/lib/types";
 
 // Real <video> elements are mounted only this close to the active short —
@@ -56,6 +58,11 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
   const enterDirectorMode = usePlayerStore((s) => s.enterDirectorMode);
   const exitDirectorMode = usePlayerStore((s) => s.exitDirectorMode);
   const showActions = !directorMode;
+
+  // Read once per render, looked up per-tile below — same store VideoOverlay
+  // (the main feed's equivalent caption) uses for its own Follow pill.
+  const followedCreators = useEngagementStore((s) => s.followedCreators);
+  const toggleFollow = useEngagementStore((s) => s.toggleFollow);
 
   // Director Mode is scoped to whichever feed is actually on screen —
   // don't leave it engaged for some other route after navigating away.
@@ -249,9 +256,38 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
                 <motion.div
                   animate={{ opacity: directorMode ? 0 : 1 }}
                   transition={CHROME_FADE_TRANSITION}
-                  className="absolute inset-x-0 bottom-0 p-4 flex flex-col gap-0.5"
+                  // Bottom padding clears the floating mobile bottom-nav
+                  // dock — same clearance VideoCard.tsx's own caption uses,
+                  // needed here now that the tile is full-viewport (a small
+                  // cascading card never reached the true screen bottom).
+                  className="absolute inset-x-0 bottom-0 px-4 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] md:pb-10 flex flex-col gap-0.5"
                 >
-                  <p className="text-sm font-semibold leading-tight">@{short.creator.username}</p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold leading-tight">@{short.creator.username}</span>
+                    {/* Same "Follow" -> "Following" pill as VideoOverlay.tsx's
+                        main-feed caption — stays visible once followed
+                        (relabeled, dimmed) rather than disappearing. */}
+                    <motion.button
+                      whileTap={{ scale: CHROME_TAP_SCALE }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleFollow(short.creator.id);
+                      }}
+                      aria-label={
+                        followedCreators[short.creator.id]
+                          ? `Unfollow @${short.creator.username}`
+                          : `Follow @${short.creator.username}`
+                      }
+                      className={cn(
+                        "px-2.5 py-1 rounded-full backdrop-blur-md border text-[10px] font-semibold shrink-0 transition-colors",
+                        followedCreators[short.creator.id]
+                          ? "bg-card/50 border-border text-text-secondary"
+                          : "bg-card/80 border-border text-accent"
+                      )}
+                    >
+                      {followedCreators[short.creator.id] ? "Following" : "Follow"}
+                    </motion.button>
+                  </div>
                   <p className="text-xs text-text-secondary leading-tight truncate">{short.title}</p>
                 </motion.div>
               </>

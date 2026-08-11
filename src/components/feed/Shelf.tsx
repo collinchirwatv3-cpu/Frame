@@ -20,11 +20,6 @@ type Props = {
    * empty (e.g. For You — FeedRoot shows a page-level empty state instead
    * of getting this far when it's empty). */
   emptyMessage?: string;
-  /** Which page's own shelf-fetch this card should reopen into — Discover
-   * and Shorts each keep their own separate set of shelves (film vs. short
-   * `content_type`), so a card here has to link back to whichever page it
-   * came from, not always /discover. */
-  basePath?: string;
 };
 
 /** One horizontal row of Home — a title plus a scrollable strip of cards,
@@ -39,7 +34,7 @@ type Props = {
  * Fixed card height with the poster's own aspect ratio determining width
  * (not the other way around) — the standard shelf pattern: every row reads
  * at a consistent height regardless of how each film happens to be shaped. */
-export function Shelf({ kind, title, videos, emptyMessage, basePath = "/discover" }: Props) {
+export function Shelf({ kind, title, videos, emptyMessage }: Props) {
   return (
     <section className="py-3">
       <h2 className="px-6 text-sm font-semibold mb-2.5">{title}</h2>
@@ -53,7 +48,7 @@ export function Shelf({ kind, title, videos, emptyMessage, basePath = "/discover
             return (
               <Link
                 key={video.id}
-                href={`${basePath}?v=${video.id}&shelf=${kind}`}
+                href={`/discover?v=${video.id}&shelf=${kind}`}
                 aria-label={`Watch ${video.title} by @${video.creator.username}`}
                 style={{ aspectRatio: `${video.width} / ${video.height}` }}
                 className="group relative flex-shrink-0 h-28 md:h-32 rounded-xl overflow-hidden bg-card border border-border"
