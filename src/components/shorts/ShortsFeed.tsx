@@ -308,7 +308,7 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={CHROME_FADE_TRANSITION}
-                    className="absolute right-2 bottom-2 pointer-events-auto"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-auto"
                   >
                     <ActionRail
                       video={shorts[activeIndex]}
