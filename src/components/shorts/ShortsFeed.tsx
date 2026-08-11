@@ -288,42 +288,39 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
 
       {/* Fixed to the viewport, not nested in the active tile — doesn't
           need to migrate tile-to-tile as activeIndex changes, it just
-          points at whichever short is active. */}
+          points at whichever short is active. An invisible box with the
+          exact same w-full + aspect-ratio + vertical-centering as the real
+          video (see the tile above) lines this up with the video's own
+          visible bounds without measuring anything — same trick as
+          Shelf.tsx sizing cards off video.width/height, just for layout
+          math instead of a fixed aspect box. */}
       {shorts[activeIndex] && (
         <>
-          <AnimatePresence>
-            {showActions && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={CHROME_FADE_TRANSITION}
-                // Same corner, laid out on the other axis in landscape — a
-                // vertical column reads naturally against the right edge in
-                // portrait; rotated 90° with the phone, that becomes a
-                // horizontal row along the bottom edge instead.
-                // LandscapeSideRail (the site nav) lives on the *left* edge
-                // in that same orientation now, so there's no shared edge to
-                // worry about colliding with at all.
-                className={cn(
-                  "fixed right-4 bottom-24 md:right-6 md:bottom-10 z-30",
-                  // Landscape-only safe-area padding on top of the base
-                  // offset — portrait's bottom-24 already clears BottomNav
-                  // (which bakes in its own inset), so this only applies
-                  // where it's actually needed: the notch/gesture-nav sides
-                  // a rotated phone exposes on the right and bottom edges.
-                  "landscape:max-md:bottom-4 landscape:max-md:mr-[env(safe-area-inset-right)] landscape:max-md:mb-[env(safe-area-inset-bottom)]"
+          <div className="fixed inset-0 h-dvh w-full flex items-center justify-center pointer-events-none z-30">
+            <div
+              className="relative w-full"
+              style={{ aspectRatio: `${shorts[activeIndex].width} / ${shorts[activeIndex].height}` }}
+            >
+              <AnimatePresence>
+                {showActions && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={CHROME_FADE_TRANSITION}
+                    className="absolute right-2 bottom-2 pointer-events-auto"
+                  >
+                    <ActionRail
+                      video={shorts[activeIndex]}
+                      onOpenComments={() => setCommentsOpen(true)}
+                      onOpenOptions={() => setOptionsOpen(true)}
+                      compact
+                    />
+                  </motion.div>
                 )}
-              >
-                <ActionRail
-                  video={shorts[activeIndex]}
-                  onOpenComments={() => setCommentsOpen(true)}
-                  onOpenOptions={() => setOptionsOpen(true)}
-                  className="landscape:max-md:flex-row landscape:max-md:gap-4"
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
+              </AnimatePresence>
+            </div>
+          </div>
           <CommentDrawer
             video={shorts[activeIndex]}
             open={commentsOpen}

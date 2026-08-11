@@ -20,6 +20,7 @@ function RailButton({
   filled,
   pulseKey,
   onClick,
+  compact,
 }: {
   icon: React.ElementType;
   label: string;
@@ -29,9 +30,20 @@ function RailButton({
   filled?: boolean;
   pulseKey?: number;
   onClick?: () => void;
+  /** Shrinks the circle/icon and drops the count label entirely so the
+   * whole rail fits inside a short 16:9 video band (Shorts) instead of the
+   * default size tuned for the main feed's full-height player — even a
+   * tiny label was still too tall to fit six stacked items in ~220px. The
+   * count is still announced via srLabel/aria-pressed for screen readers. */
+  compact?: boolean;
 }) {
   return (
-    <button onClick={onClick} className="flex flex-col items-center gap-1 group" aria-pressed={active} aria-label={srLabel}>
+    <button
+      onClick={onClick}
+      className={cn("flex flex-col items-center group", compact ? "gap-0" : "gap-0.5")}
+      aria-pressed={active}
+      aria-label={compact ? `${srLabel} (${label})` : srLabel}
+    >
       <motion.span
         key={pulseKey}
         whileTap={{ scale: CHROME_TAP_SCALE }}
@@ -40,20 +52,23 @@ function RailButton({
         transition={{ duration: DURATION.base }}
         className={cn(
           CHROME_GLASS_CLASS,
-          "w-11 h-11 flex items-center justify-center group-hover:bg-card transition-colors"
+          "flex items-center justify-center group-hover:bg-card transition-colors",
+          compact ? "w-7 h-7" : "w-11 h-11"
         )}
       >
         <Icon
-          size={22}
+          size={compact ? 14 : 22}
           strokeWidth={2}
           style={active ? { color: activeColor } : undefined}
           fill={active && filled ? activeColor : "none"}
           className={cn(!active && "text-accent")}
         />
       </motion.span>
-      <span className="text-[11px] font-medium text-text-secondary" aria-hidden="true">
-        {label}
-      </span>
+      {!compact && (
+        <span className="text-[11px] font-medium text-text-secondary" aria-hidden="true">
+          {label}
+        </span>
+      )}
     </button>
   );
 }
@@ -63,6 +78,7 @@ export function ActionRail({
   onOpenComments,
   onOpenOptions,
   className,
+  compact,
 }: {
   video: Video;
   onOpenComments: () => void;
@@ -72,6 +88,10 @@ export function ActionRail({
    * leaves it at the default column (its cinematic player keeps a vertical
    * control column even in landscape, per RotateDevicePrompt). */
   className?: string;
+  /** Shrinks every icon/avatar/label and tightens the gaps — Shorts uses
+   * this so the whole rail fits inside its own 16:9 video band instead of
+   * spilling into the black letterboxing above/below it. */
+  compact?: boolean;
 }) {
   const liked = useEngagementStore((s) => !!s.likedVideos[video.id]);
   const saved = useEngagementStore((s) => !!s.savedVideos[video.id]);
@@ -107,11 +127,11 @@ export function ActionRail({
   }
 
   return (
-    <div className={cn("flex flex-col items-center gap-5", className)}>
+    <div className={cn("flex flex-col items-center", compact ? "gap-1.5" : "gap-5", className)}>
       {/* Follow used to be a pill under this avatar — moved to sit next to
           the username in VideoOverlay.tsx instead, reads more naturally
           next to the name it's actually about. Avatar stays here. */}
-      <Avatar src={video.creator.avatarUrl} alt={video.creator.displayName} size={44} ring />
+      <Avatar src={video.creator.avatarUrl} alt={video.creator.displayName} size={compact ? 26 : 44} ring />
 
       <RailButton
         icon={Heart}
@@ -121,12 +141,14 @@ export function ActionRail({
         filled
         pulseKey={likePulse}
         onClick={handleLike}
+        compact={compact}
       />
       <RailButton
         icon={MessageCircle}
         label={formatCount(commentCount)}
         srLabel="View comments"
         onClick={onOpenComments}
+        compact={compact}
       />
       <div className="relative">
         <RailButton
@@ -136,6 +158,7 @@ export function ActionRail({
           active={shareState === "done"}
           activeColor="var(--color-accent)"
           onClick={handleShare}
+          compact={compact}
         />
         <AnimatePresence>
           {shareState === "done" && (
@@ -158,15 +181,20 @@ export function ActionRail({
         activeColor="var(--color-accent)"
         filled
         onClick={() => toggleSave(video.id)}
+        compact={compact}
       />
 
       <motion.button
         whileTap={{ scale: CHROME_TAP_SCALE }}
         onClick={onOpenOptions}
         aria-label="More options"
-        className={cn(CHROME_GLASS_CLASS, "w-11 h-11 flex items-center justify-center hover:bg-card transition-colors")}
+        className={cn(
+          CHROME_GLASS_CLASS,
+          "flex items-center justify-center hover:bg-card transition-colors",
+          compact ? "w-7 h-7" : "w-11 h-11"
+        )}
       >
-        <MoreHorizontal size={22} className="text-accent" />
+        <MoreHorizontal size={compact ? 14 : 22} className="text-accent" />
       </motion.button>
     </div>
   );
