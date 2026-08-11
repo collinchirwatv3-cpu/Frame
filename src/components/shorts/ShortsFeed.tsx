@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -257,13 +258,21 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
                     {/* Moved down from the action rail — reads more
                         naturally next to the name it's actually about,
                         same reasoning VideoOverlay.tsx already applied to
-                        the Follow pill next to it. */}
-                    <Avatar
-                      src={short.creator.avatarUrl}
-                      alt={short.creator.displayName}
-                      size={28}
-                      ring
-                    />
+                        the Follow pill next to it. Links to the creator's
+                        profile, same /profile/[username] route search
+                        results/profile grids already use. */}
+                    <Link
+                      href={`/profile/${short.creator.username}`}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`View @${short.creator.username}'s profile`}
+                    >
+                      <Avatar
+                        src={short.creator.avatarUrl}
+                        alt={short.creator.displayName}
+                        size={28}
+                        ring
+                      />
+                    </Link>
                     <span className="text-sm font-semibold leading-tight">@{short.creator.username}</span>
                     {/* Same "Follow" -> "Following" pill as VideoOverlay.tsx's
                         main-feed caption — stays visible once followed
