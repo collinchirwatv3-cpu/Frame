@@ -133,7 +133,7 @@ export function ActionRail({
   }
 
   return (
-    <div className={cn("flex flex-col items-center", compact ? "gap-1" : "gap-5", className)}>
+    <div className={cn("flex flex-col items-center", compact ? "gap-1.5" : "gap-5", className)}>
       {/* Follow used to be a pill under this avatar — moved to sit next to
           the username in VideoOverlay.tsx instead, reads more naturally
           next to the name it's actually about. Avatar stays here on the
