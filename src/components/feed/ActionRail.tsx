@@ -53,11 +53,11 @@ function RailButton({
         className={cn(
           CHROME_GLASS_CLASS,
           "flex items-center justify-center group-hover:bg-card transition-colors",
-          compact ? "w-7 h-7" : "w-11 h-11"
+          compact ? "w-9 h-9" : "w-11 h-11"
         )}
       >
         <Icon
-          size={compact ? 14 : 22}
+          size={compact ? 18 : 22}
           strokeWidth={2}
           style={active ? { color: activeColor } : undefined}
           fill={active && filled ? activeColor : "none"}
@@ -79,6 +79,7 @@ export function ActionRail({
   onOpenOptions,
   className,
   compact,
+  showAvatar = true,
 }: {
   video: Video;
   onOpenComments: () => void;
@@ -92,6 +93,11 @@ export function ActionRail({
    * this so the whole rail fits inside its own 16:9 video band instead of
    * spilling into the black letterboxing above/below it. */
   compact?: boolean;
+  /** The main feed keeps the creator's avatar at the top of this rail;
+   * Shorts moves it down into the caption instead, next to the username
+   * (where the Follow pill already lives) — set false there so it isn't
+   * shown twice. */
+  showAvatar?: boolean;
 }) {
   const liked = useEngagementStore((s) => !!s.likedVideos[video.id]);
   const saved = useEngagementStore((s) => !!s.savedVideos[video.id]);
@@ -127,11 +133,15 @@ export function ActionRail({
   }
 
   return (
-    <div className={cn("flex flex-col items-center", compact ? "gap-1.5" : "gap-5", className)}>
+    <div className={cn("flex flex-col items-center", compact ? "gap-2" : "gap-5", className)}>
       {/* Follow used to be a pill under this avatar — moved to sit next to
           the username in VideoOverlay.tsx instead, reads more naturally
-          next to the name it's actually about. Avatar stays here. */}
-      <Avatar src={video.creator.avatarUrl} alt={video.creator.displayName} size={compact ? 26 : 44} ring />
+          next to the name it's actually about. Avatar stays here on the
+          main feed; Shorts opts out via showAvatar and renders its own in
+          the caption instead. */}
+      {showAvatar && (
+        <Avatar src={video.creator.avatarUrl} alt={video.creator.displayName} size={compact ? 26 : 44} ring />
+      )}
 
       <RailButton
         icon={Heart}
@@ -191,10 +201,10 @@ export function ActionRail({
         className={cn(
           CHROME_GLASS_CLASS,
           "flex items-center justify-center hover:bg-card transition-colors",
-          compact ? "w-7 h-7" : "w-11 h-11"
+          compact ? "w-9 h-9" : "w-11 h-11"
         )}
       >
-        <MoreHorizontal size={compact ? 14 : 22} className="text-accent" />
+        <MoreHorizontal size={compact ? 18 : 22} className="text-accent" />
       </motion.button>
     </div>
   );

@@ -5,6 +5,7 @@ import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { ActionRail } from "@/components/feed/ActionRail";
+import { Avatar } from "@/components/ui/Avatar";
 import { CommentDrawer } from "@/components/feed/CommentDrawer";
 import { VideoOptionsSheet } from "@/components/feed/VideoOptionsSheet";
 import { usePlayerStore } from "@/store/player-store";
@@ -253,6 +254,16 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
                   className="absolute inset-x-0 bottom-0 px-4 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] md:pb-10 flex flex-col gap-0.5"
                 >
                   <div className="flex items-center gap-2">
+                    {/* Moved down from the action rail — reads more
+                        naturally next to the name it's actually about,
+                        same reasoning VideoOverlay.tsx already applied to
+                        the Follow pill next to it. */}
+                    <Avatar
+                      src={short.creator.avatarUrl}
+                      alt={short.creator.displayName}
+                      size={28}
+                      ring
+                    />
                     <span className="text-sm font-semibold leading-tight">@{short.creator.username}</span>
                     {/* Same "Follow" -> "Following" pill as VideoOverlay.tsx's
                         main-feed caption — stays visible once followed
@@ -315,6 +326,7 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
                       onOpenComments={() => setCommentsOpen(true)}
                       onOpenOptions={() => setOptionsOpen(true)}
                       compact
+                      showAvatar={false}
                     />
                   </motion.div>
                 )}
