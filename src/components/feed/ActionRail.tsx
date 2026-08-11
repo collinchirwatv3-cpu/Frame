@@ -53,11 +53,11 @@ function RailButton({
         className={cn(
           CHROME_GLASS_CLASS,
           "flex items-center justify-center group-hover:bg-card transition-colors",
-          compact ? "w-9 h-9" : "w-11 h-11"
+          compact ? "w-10 h-10" : "w-11 h-11"
         )}
       >
         <Icon
-          size={compact ? 18 : 22}
+          size={compact ? 20 : 22}
           strokeWidth={2}
           style={active ? { color: activeColor } : undefined}
           fill={active && filled ? activeColor : "none"}
@@ -133,7 +133,7 @@ export function ActionRail({
   }
 
   return (
-    <div className={cn("flex flex-col items-center", compact ? "gap-2" : "gap-5", className)}>
+    <div className={cn("flex flex-col items-center", compact ? "gap-1" : "gap-5", className)}>
       {/* Follow used to be a pill under this avatar — moved to sit next to
           the username in VideoOverlay.tsx instead, reads more naturally
           next to the name it's actually about. Avatar stays here on the
@@ -201,10 +201,10 @@ export function ActionRail({
         className={cn(
           CHROME_GLASS_CLASS,
           "flex items-center justify-center hover:bg-card transition-colors",
-          compact ? "w-9 h-9" : "w-11 h-11"
+          compact ? "w-10 h-10" : "w-11 h-11"
         )}
       >
-        <MoreHorizontal size={compact ? 18 : 22} className="text-accent" />
+        <MoreHorizontal size={compact ? 20 : 22} className="text-accent" />
       </motion.button>
     </div>
   );
