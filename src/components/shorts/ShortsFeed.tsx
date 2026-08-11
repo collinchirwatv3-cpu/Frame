@@ -8,7 +8,7 @@ import { ActionRail } from "@/components/feed/ActionRail";
 import { CommentDrawer } from "@/components/feed/CommentDrawer";
 import { VideoOptionsSheet } from "@/components/feed/VideoOptionsSheet";
 import { usePlayerStore } from "@/store/player-store";
-import { CHROME_FADE_TRANSITION } from "@/lib/motion";
+import { CHROME_FADE_TRANSITION, FOCUS_PULL_TRANSITION } from "@/lib/motion";
 import type { Video } from "@/lib/types";
 
 // Real <video> elements are mounted only this close to the active short —
@@ -25,10 +25,12 @@ const RENDER_WINDOW = 1;
 // across every video-watching surface in the app.
 const AUTO_DIRECTOR_MODE_DELAY_MS = 2500;
 
-// Every tile is the same size — no separate active-vs-inactive width/scale
-// — and stacked with zero gap between them (the tile itself *is* the snap
-// section now, no extra wrapping height around it). Only opacity/blur mark
-// which one is active.
+// One full-viewport video at a time, snap-scrolled — same "no black bars,
+// never cropped" tile as SwipeFeed's VideoCard: a blurred backdrop fills
+// any letterbox space around the video rather than cropping it or leaving
+// black bars. Was a small aspect-video card cascade before (multiple tiles
+// visible at once, peeking above/below); this matches the main feed's own
+// full-screen-per-tile pattern instead.
 
 /** `initialId` lets a caller open this feed scoped to an arbitrary list
  * (search results, a creator's profile) starting at one specific short —
@@ -46,10 +48,8 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [activeIndex, setActiveIndex] = useState(initialIndex);
-  const [edgeSpacer, setEdgeSpacer] = useState(0);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
-  const hasScrolledToInitialRef = useRef(false);
 
   const directorMode = usePlayerStore((s) => s.directorMode);
   const isScrubbing = usePlayerStore((s) => s.isScrubbing);
@@ -73,70 +73,26 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
     return () => window.clearTimeout(timer);
   }, [activeIndex, directorMode, isScrubbing, enterDirectorMode]);
 
-  // Tiles are uniform-size now (no more active-card-is-bigger treatment),
-  // so nothing about a tile's own size distinguishes "centered on screen"
-  // from "just happens to be first" — a leading spacer sized to exactly
-  // half a viewport minus half a tile is what actually centers the first
-  // (and, mirrored, the last) tile at rest, rather than leaving them
-  // pinned flush to the top/bottom. Re-measures on resize since tile
-  // height is width-derived (aspect-video), and on shorts.length changing
-  // since there's no tile 0 to measure until the real data arrives.
-  //
-  // The deep-link scroll (jump straight to `initialId`'s short) has to
-  // account for this spacer, not measure against a pre-spacer layout —
-  // target.offsetTop below is read while `edgeSpacer` (the state, still
-  // whatever it was on the previous render) is what's actually in the DOM
-  // right now, but setEdgeSpacer above won't be reflected in the DOM until
-  // *after* this function returns. Correcting by the delta between the old
-  // and new spacer values gets the right answer in one pass, rather than
-  // trying to sequence two effects around a re-render this effect's own
-  // dependency array wouldn't even trigger a second time for.
+  // Tiles are exactly one viewport each now (snap-start), same as
+  // SwipeFeed's own deep-link jump — no spacer math needed, just scroll
+  // straight to the target tile's offset before first paint.
   useLayoutEffect(() => {
     const container = containerRef.current;
-    const firstTile = sectionRefs.current[0];
-    if (!container || !firstTile) return;
-
-    const newSpacer = Math.max(0, (container.clientHeight - firstTile.offsetHeight) / 2);
-    setEdgeSpacer(newSpacer);
-
-    if (!hasScrolledToInitialRef.current && initialIndex > 0) {
-      const target = sectionRefs.current[initialIndex];
-      if (target) {
-        container.scrollTop = target.offsetTop - edgeSpacer + newSpacer;
-        hasScrolledToInitialRef.current = true;
-      }
+    const target = sectionRefs.current[initialIndex];
+    if (container && target && initialIndex > 0) {
+      container.scrollTop = target.offsetTop;
     }
-    // edgeSpacer deliberately excluded — it's read here as "whatever's
-    // currently in the DOM", not as a reactive trigger; depending on it
-    // would re-run this on every spacer change, including the one this
-    // effect itself just caused.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shorts.length]);
-
-  useEffect(() => {
-    function onResize() {
-      const container = containerRef.current;
-      const firstTile = sectionRefs.current[0];
-      if (!container || !firstTile) return;
-      setEdgeSpacer(Math.max(0, (container.clientHeight - firstTile.offsetHeight) / 2));
-    }
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
   }, []);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    // rootMargin: "-50% 0px -50% 0px" shrinks the observed root to a
-    // zero-height line at the vertical center — a tile only "intersects"
-    // while its own box is crossing that exact line, i.e. exactly
-    // whichever tile currently occupies the center of the screen. Plain
-    // intersection ratio can't express this on its own: tiles are small
-    // enough now that more than one can be 100% visible simultaneously (the
-    // top one AND the one below it, say), so "highest ratio" doesn't
-    // distinguish "at the top" from "in the middle" — position is what
-    // actually matters for "the centered one is the main one."
+    // Same as SwipeFeed's own observer — each tile is exactly one viewport
+    // tall (snap-start), so a plain intersection-ratio threshold is enough;
+    // no center-line rootMargin trick needed now that tiles can't overlap
+    // the viewport two-at-a-time at rest.
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
@@ -145,7 +101,7 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
           }
         }
       },
-      { root: container, rootMargin: "-50% 0px -50% 0px", threshold: 0 }
+      { root: container, threshold: 0.6 }
     );
 
     sectionRefs.current.forEach((el) => el && observer.observe(el));
@@ -191,22 +147,18 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
 
   // Had no keyboard path at all before this — SwipeFeed's own arrow-key
   // scroll (src/components/feed/SwipeFeed.tsx) was never mirrored here.
-  // Scrolls by one tile's actual rendered height (measured directly, not a
-  // fixed constant — tile height is aspect-ratio-derived from its width
-  // now, which varies by viewport) rather than the full container, so a
-  // press never overshoots past more than one short.
+  // Each tile is exactly one viewport tall now, so scrolling by
+  // clientHeight (same as SwipeFeed) always moves exactly one short.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const container = containerRef.current;
-      const firstTile = sectionRefs.current[0];
-      if (!container || !firstTile) return;
-      const step = firstTile.offsetHeight;
+      if (!container) return;
       if (e.key === "ArrowDown" || e.key === "j") {
         e.preventDefault();
-        container.scrollBy({ top: step, behavior: "smooth" });
+        container.scrollBy({ top: container.clientHeight, behavior: "smooth" });
       } else if (e.key === "ArrowUp" || e.key === "k") {
         e.preventDefault();
-        container.scrollBy({ top: -step, behavior: "smooth" });
+        container.scrollBy({ top: -container.clientHeight, behavior: "smooth" });
       }
     }
     window.addEventListener("keydown", onKeyDown);
@@ -230,7 +182,6 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
       onClick={exitDirectorMode}
       className="relative h-dvh w-full overflow-y-scroll snap-y snap-mandatory no-scrollbar bg-bg"
     >
-      <div aria-hidden style={{ height: edgeSpacer }} />
       {shorts.map((short, index) => {
         const active = index === activeIndex;
         const withinRenderWindow = Math.abs(index - activeIndex) <= RENDER_WINDOW;
@@ -244,65 +195,74 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
             data-index={index}
             aria-label={`${short.title} by @${short.creator.username}`}
             aria-hidden={!active}
-            className={cn(
-              // snap-always (scroll-snap-stop: always) is the actual fix
-              // for "swipe feels rough" — without it, a fast/hard swipe
-              // flings straight past the next tile to whichever one
-              // momentum happens to land on, skipping 2-3 at once
-              // unpredictably. This forces the browser to stop at every
-              // tile regardless of fling speed, so one swipe always moves
-              // exactly one short — the standard fix for erratic-feeling
-              // snap-scroll. Longer, gentler crossfade on top (was 300ms
-              // ease-out) so the focus/blur handoff itself doesn't feel
-              // like a hard cut mid-scroll.
-              "relative aspect-video w-full max-w-[720px] mx-auto overflow-hidden bg-card snap-center snap-always transition-[opacity,filter] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]",
-              active ? "opacity-100 blur-none" : "opacity-50 blur-sm"
-            )}
+            // snap-always (scroll-snap-stop: always) is the actual fix for
+            // "swipe feels rough" — without it, a fast/hard swipe flings
+            // straight past the next tile to whichever one momentum
+            // happens to land on, skipping 2-3 at once unpredictably. This
+            // forces the browser to stop at every tile regardless of fling
+            // speed, so one swipe always moves exactly one short.
+            className="relative h-dvh w-full snap-start snap-always overflow-hidden bg-bg"
           >
-            {withinRenderWindow ? (
-              <video
-                ref={(el) => {
-                  videoRefs.current[index] = el;
-                }}
-                src={short.playbackUrl}
-                poster={short.posterUrl}
-                className="w-full h-full object-cover"
-                muted
-                loop
-                playsInline
+            {/* Blurred cinematic backdrop fills any letterbox space —
+                same "no black bars" treatment as VideoCard.tsx's main
+                feed, not a crop-to-fill: the video itself is never
+                cropped or stretched. */}
+            <div className="absolute inset-0">
+              <Image
+                src={short.posterUrl}
+                alt=""
+                fill
+                className="object-cover scale-125 blur-3xl opacity-40"
+                priority={active}
               />
-            ) : (
-              <Image src={short.posterUrl} alt="" fill className="object-cover" />
-            )}
+            </div>
+
+            <motion.div
+              className="absolute inset-0 flex items-center justify-center"
+              animate={{
+                opacity: active ? 1 : 0.85,
+                scale: active ? 1 : 0.98,
+                filter: active ? "blur(0px)" : "blur(3px)",
+              }}
+              transition={FOCUS_PULL_TRANSITION}
+            >
+              {withinRenderWindow ? (
+                <video
+                  ref={(el) => {
+                    videoRefs.current[index] = el;
+                  }}
+                  src={short.playbackUrl}
+                  poster={short.posterUrl}
+                  className="w-full h-full object-contain"
+                  muted
+                  loop
+                  playsInline
+                />
+              ) : (
+                <Image src={short.posterUrl} alt="" fill className="object-contain" />
+              )}
+            </motion.div>
 
             {active && (
-              <motion.div
-                animate={{ opacity: directorMode ? 0 : 1 }}
-                transition={CHROME_FADE_TRANSITION}
-                className="absolute inset-x-0 bottom-0 p-4 flex flex-col gap-0.5"
-              >
-                <p className="text-sm font-semibold leading-tight">@{short.creator.username}</p>
-                <p className="text-xs text-text-secondary leading-tight truncate">{short.title}</p>
-              </motion.div>
+              <>
+                <div className="absolute inset-x-0 bottom-0 h-64 bg-gradient-to-t from-bg/90 via-bg/30 to-transparent pointer-events-none" />
+                <motion.div
+                  animate={{ opacity: directorMode ? 0 : 1 }}
+                  transition={CHROME_FADE_TRANSITION}
+                  className="absolute inset-x-0 bottom-0 p-4 flex flex-col gap-0.5"
+                >
+                  <p className="text-sm font-semibold leading-tight">@{short.creator.username}</p>
+                  <p className="text-xs text-text-secondary leading-tight truncate">{short.title}</p>
+                </motion.div>
+              </>
             )}
           </div>
         );
       })}
-      {/* Same edgeSpacer as the leading one — centers the *last* tile at
-          rest too, not just guarantees scroll room past it (which a
-          same-size fixed spacer does either way; with only a handful of
-          shorts their combined height can end up shorter than the viewport
-          itself, leaving nothing to actually scroll — confirmed: exactly
-          what happened with 3 demo shorts and no spacer at all). */}
-      <div aria-hidden style={{ height: edgeSpacer }} />
 
-      {/* Fixed to the viewport, not nested in the active tile — the tile is
-          only ~220px tall at typical phone widths (a true 16:9 box), well
-          under the rail's own stacked height (avatar/follow, like, comment,
-          share, save, more), and the tile's overflow-hidden was clipping it
-          when it lived inline. This also means it doesn't need to migrate
-          tile-to-tile as activeIndex changes — it just points at whichever
-          short is active. */}
+      {/* Fixed to the viewport, not nested in the active tile — doesn't
+          need to migrate tile-to-tile as activeIndex changes, it just
+          points at whichever short is active. */}
       {shorts[activeIndex] && (
         <>
           <AnimatePresence>
