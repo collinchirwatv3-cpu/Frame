@@ -210,20 +210,10 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
             // speed, so one swipe always moves exactly one short.
             className="relative h-dvh w-full snap-start snap-always overflow-hidden bg-bg"
           >
-            {/* Blurred cinematic backdrop fills any letterbox space —
-                same "no black bars" treatment as VideoCard.tsx's main
-                feed, not a crop-to-fill: the video itself is never
-                cropped or stretched. */}
-            <div className="absolute inset-0">
-              <Image
-                src={short.posterUrl}
-                alt=""
-                fill
-                className="object-cover scale-125 blur-3xl opacity-40"
-                priority={active}
-              />
-            </div>
-
+            {/* Plain black letterboxing above/below the video (bg-bg on
+                the section itself) — no blurred backdrop here, unlike
+                VideoCard.tsx's main feed. The video itself is still never
+                cropped or stretched (object-contain below). */}
             <motion.div
               className="absolute inset-0 flex items-center justify-center"
               animate={{
