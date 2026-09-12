@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Fraunces } from "next/font/google";
 import { MotionConfig } from "framer-motion";
 import { AuthListener } from "@/components/auth/AuthListener";
@@ -36,6 +36,21 @@ export const metadata: Metadata = {
   title: "FRAMES — Cinematic Landscape Video",
   description:
     "FRAMES is the home for landscape creators. Every video full-screen and cinematic — 16:9, 21:9, and 16:10.",
+  icons: {
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
+};
+
+// viewportFit: "cover" is what makes env(safe-area-inset-*) resolve to real
+// values instead of 0 — required once this runs full-screen with no browser
+// chrome (a Capacitor-wrapped WKWebView, or an installed PWA).
+export const viewport: Viewport = {
+  themeColor: "#090909",
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
