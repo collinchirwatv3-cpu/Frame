@@ -45,7 +45,17 @@ export default function PartiesPage() {
       </div>
 
       {!loading && parties.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20">
+        // Explicit dock clearance on the bottom, not the symmetric py-20
+        // this used to have — that padding is generous enough on normal
+        // phone heights to keep this comfortably above the floating
+        // bottom-nav dock, but at a genuinely short viewport (a folded/
+        // cover-screen device, ~400px tall) this page's whole content is
+        // short enough that py-20's fixed 80px wasn't guaranteed to clear
+        // the dock's own ~86px footprint — confirmed live, the heading
+        // was rendering partially behind it. Same
+        // pb-[calc(env(safe-area-inset-bottom)+6rem)] clearance
+        // VideoCard.tsx/ShortsFeed.tsx use for exactly this.
+        <div className="flex flex-col items-center justify-center pt-12 pb-[calc(env(safe-area-inset-bottom)+6rem)]">
           <EmptyState
             icon={Users}
             heading="No parties yet"

@@ -252,7 +252,13 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
                   // dock — same clearance VideoCard.tsx's own caption uses,
                   // needed here now that the tile is full-viewport (a small
                   // cascading card never reached the true screen bottom).
-                  className="absolute inset-x-0 bottom-0 px-4 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] md:pb-10 flex flex-col gap-0.5"
+                  // 6rem, not 5.5rem: measured live at a very short (~400px)
+                  // viewport, 5.5rem left only ~2px of actual gap above the
+                  // dock — the two values happen to nearly cancel out
+                  // regardless of device height, not just at short ones, so
+                  // this is a real fix everywhere, not just a short-screen
+                  // patch.
+                  className="absolute inset-x-0 bottom-0 px-4 pb-[calc(env(safe-area-inset-bottom)+6rem)] md:pb-10 flex flex-col gap-0.5"
                 >
                   <div className="flex items-center gap-2">
                     {/* Moved down from the action rail — reads more

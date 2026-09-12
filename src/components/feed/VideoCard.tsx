@@ -252,8 +252,12 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
                 </div>
               )}
 
-              {/* bottom overlay: creator info + action rail — cleared above the mobile bottom nav */}
-              <div className="pointer-events-auto absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 px-4 md:px-8 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] md:pb-10">
+              {/* bottom overlay: creator info + action rail — cleared above the
+                  mobile bottom nav. 6rem, not 5.5rem — measured live at a
+                  very short (~400px) viewport, 5.5rem left only ~2px of
+                  actual gap above the dock regardless of device height, so
+                  this is a real fix everywhere, not just short screens. */}
+              <div className="pointer-events-auto absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 px-4 md:px-8 pb-[calc(env(safe-area-inset-bottom)+6rem)] md:pb-10">
                 <VideoOverlay video={video} onOpenDetails={() => setDetailsOpen(true)} />
                 <ActionRail
                   video={video}
