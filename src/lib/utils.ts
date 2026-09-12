@@ -12,7 +12,7 @@ export function formatCount(n: number): string {
 }
 
 /** Matches the "2h"/"1d" shorthand style already used across the app's mock
- * timestamps (dmThreads, seeded comments) so real and seeded data read the same. */
+ * timestamps (seeded comments) so real and seeded data read the same. */
 export function formatRelativeTime(date: string | Date): string {
   const ms = Date.now() - new Date(date).getTime();
   const minutes = Math.floor(ms / 60_000);

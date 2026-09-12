@@ -239,36 +239,3 @@ export const collections: Collection[] = [
 // and never touches this array — it's only here for the /s/[token] share-
 // link demo path, and stays empty since no fake share token exists to reach it.
 export const privateVideos: Video[] = [];
-
-export type DMThread = {
-  id: string;
-  creator: Creator;
-  lastMessage: string;
-  timestamp: string;
-  unread: boolean;
-};
-
-export const dmThreads: DMThread[] = [
-  {
-    id: "dm-1",
-    creator: creators[1],
-    lastMessage: "That grade on the Iceland piece is insane, who colored it?",
-    timestamp: "2h",
-    unread: true,
-  },
-  {
-    id: "dm-2",
-    creator: creators[3],
-    lastMessage: "Sent over the multitrack for the Warehouse 12 set",
-    timestamp: "1d",
-    unread: false,
-  },
-];
-
-export const notificationSummary = [
-  { id: "likes", label: "Likes", count: 12 },
-  { id: "comments", label: "Comments", count: 4 },
-  { id: "followers", label: "Followers", count: 3 },
-  { id: "mentions", label: "Mentions", count: 0 },
-  { id: "system", label: "System", count: 1 },
-];

@@ -1,6 +1,6 @@
 import { NotificationSummary } from "@/components/inbox/NotificationSummary";
+import { NotificationList } from "@/components/inbox/NotificationList";
 import { DMThreadList } from "@/components/inbox/DMThreadList";
-import { dmThreads } from "@/lib/mock-data";
 
 export default function InboxPage() {
   return (
@@ -9,7 +9,8 @@ export default function InboxPage() {
         <h1 className="text-2xl font-bold">Inbox</h1>
       </div>
       <NotificationSummary />
-      <DMThreadList threads={dmThreads} />
+      <NotificationList />
+      <DMThreadList />
     </div>
   );
 }
