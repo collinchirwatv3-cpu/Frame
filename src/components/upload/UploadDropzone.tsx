@@ -20,6 +20,7 @@ import { checkUpload, qualityLabel, type UploadCheck } from "@/lib/video-validat
 import { deriveTitleFromFilename } from "@/lib/upload";
 import { LONGFORM_MIN_DURATION_SECONDS } from "@/lib/validation/upload";
 import { useUploadDraftStore } from "@/store/upload-draft-store";
+import { useCurrentUserStore } from "@/store/current-user-store";
 import { createClient } from "@/lib/supabase/client";
 import { UploadRejection } from "./UploadRejection";
 import { CameraCapture } from "./CameraCapture";
@@ -83,6 +84,10 @@ export function UploadDropzone() {
   // mid-upload); this is a lightweight toggle that only ever makes sense
   // once a duration is already probed, no persistence needed.
   const [isLongform, setIsLongform] = useState(false);
+  // Same reasoning as isLongform above — a lightweight toggle, not draft
+  // state worth persisting across reloads.
+  const [publishMode, setPublishMode] = useState<"post" | "promote" | "monetise">("post");
+  const [isApprovedBusiness, setIsApprovedBusiness] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [videoId, setVideoId] = useState<string | null>(null);
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
@@ -90,6 +95,9 @@ export function UploadDropzone() {
   const inputRef = useRef<HTMLInputElement>(null);
   const tusUploadRef = useRef<TusUpload | null>(null);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const monetizationEligible = useCurrentUserStore((s) => s.monetizationEligible);
+  const currentUserId = useCurrentUserStore((s) => s.profile?.id);
 
   const hasHydrated = useUploadDraftStore((s) => s.hasHydrated);
   const draftTitle = useUploadDraftStore((s) => s.title);
@@ -102,6 +110,23 @@ export function UploadDropzone() {
   // No real per-creator upload history exists yet (that's Milestone 2 —
   // real video data replacing mock-data.ts) to derive a smarter default from.
   const category = draftCategory ?? categories[0];
+
+  // A different table than current-user-store's profile (business_channels
+  // isn't part of the profiles row), so it's fetched locally here rather
+  // than folded into AuthListener's global hydration — only the upload
+  // flow currently cares whether the signed-in user is an approved
+  // Business Channel (Promote is hidden for them; they Run as an Ad
+  // instead, once that surface exists).
+  useEffect(() => {
+    if (!currentUserId) return;
+    const supabase = createClient();
+    supabase
+      .from("business_channels")
+      .select("status")
+      .eq("profile_id", currentUserId)
+      .maybeSingle()
+      .then(({ data }) => setIsApprovedBusiness(data?.status === "approved"));
+  }, [currentUserId]);
 
   // Pre-fill the title from the filename the moment the upload validates —
   // one fewer required action before a creator can publish. Only seeds an
@@ -174,6 +199,7 @@ export function UploadDropzone() {
     setPosterUrl(null);
     setErrorMessage("");
     setIsLongform(false);
+    setPublishMode("post");
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -233,6 +259,7 @@ export function UploadDropzone() {
           // only the film-vs-longform choice, and only reachable at all
           // when the LongForm toggle is shown (>= 3 minutes).
           contentType: isLongform ? "longform" : "film",
+          publishMode,
           width: effectiveDims.width,
           height: effectiveDims.height,
           durationSeconds: probe?.duration ?? 0,
@@ -586,6 +613,66 @@ export function UploadDropzone() {
               </div>
             </div>
           )}
+
+          {/* Post (free, always available) / Promote (creator pays to
+              boost visibility — hidden for approved Business Channels,
+              who Run as an Ad instead) / Monetise (long-form only, shown
+              only past the same duration threshold LongForm uses, disabled
+              unless the account is actually eligible — server re-verifies
+              this regardless, same as every other client hint here). No
+              payment processor exists yet: Promote is fully selectable and
+              genuinely saved, it just can't be charged/activated until
+              that ships — see the note below the pills. */}
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">Publish as</label>
+            <div className="inline-flex flex-wrap items-center gap-1 p-1 rounded-full bg-card border border-border">
+              <button
+                type="button"
+                onClick={() => setPublishMode("post")}
+                className={cn(
+                  "px-4 py-1.5 rounded-full text-xs font-semibold transition-colors",
+                  publishMode === "post" ? "bg-primary text-bg" : "text-text-secondary hover:text-accent"
+                )}
+              >
+                Post
+              </button>
+              {!isApprovedBusiness && (
+                <button
+                  type="button"
+                  onClick={() => setPublishMode("promote")}
+                  className={cn(
+                    "px-4 py-1.5 rounded-full text-xs font-semibold transition-colors",
+                    publishMode === "promote"
+                      ? "bg-primary text-bg"
+                      : "text-text-secondary hover:text-accent"
+                  )}
+                >
+                  Promote
+                </button>
+              )}
+              {probe && probe.duration >= LONGFORM_MIN_DURATION_SECONDS && (
+                <button
+                  type="button"
+                  onClick={() => monetizationEligible && setPublishMode("monetise")}
+                  disabled={!monetizationEligible}
+                  title={monetizationEligible ? undefined : "You're not eligible to monetise videos yet"}
+                  className={cn(
+                    "px-4 py-1.5 rounded-full text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
+                    publishMode === "monetise"
+                      ? "bg-primary text-bg"
+                      : "text-text-secondary hover:text-accent"
+                  )}
+                >
+                  Monetise
+                </button>
+              )}
+            </div>
+            {publishMode === "promote" && (
+              <p className="text-xs text-text-secondary mt-1.5">
+                Saved — boosted visibility starts once payments launch.
+              </p>
+            )}
+          </div>
 
           <div className="flex gap-3 mt-2">
             <button

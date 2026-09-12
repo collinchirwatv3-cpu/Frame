@@ -23,6 +23,7 @@ type ProfileRow = {
   following_count: number;
   total_views: number;
   invite_redeemed_at: string | null;
+  monetization_eligible: boolean;
 };
 
 function toCreator(row: ProfileRow): Creator {
@@ -61,7 +62,7 @@ export function AuthListener() {
     async function syncProfile(userId: string | null) {
       setUser(userId);
       if (!userId) {
-        setProfile(null, null);
+        setProfile(null, null, false);
         return;
       }
 
@@ -81,7 +82,7 @@ export function AuthListener() {
       }
 
       const row = data as ProfileRow | null;
-      setProfile(row ? toCreator(row) : null, row?.invite_redeemed_at ?? null);
+      setProfile(row ? toCreator(row) : null, row?.invite_redeemed_at ?? null, row?.monetization_eligible ?? false);
     }
 
     supabase.auth.getUser().then(({ data }) => syncProfile(data.user?.id ?? null));

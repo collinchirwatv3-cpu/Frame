@@ -38,6 +38,7 @@ export function EditProfileModal({
   const profile = useCurrentUserStore((s) => s.profile);
   const setProfile = useCurrentUserStore((s) => s.setProfile);
   const inviteRedeemedAt = useCurrentUserStore((s) => s.inviteRedeemedAt);
+  const monetizationEligible = useCurrentUserStore((s) => s.monetizationEligible);
 
   const [username, setUsername] = useState(profile?.username ?? "");
   const [displayName, setDisplayName] = useState(profile?.displayName ?? "");
@@ -183,7 +184,8 @@ export function EditProfileModal({
           avatarUrl: data.avatar_url ?? "",
           bannerUrl: data.banner_url ?? "",
         },
-        inviteRedeemedAt
+        inviteRedeemedAt,
+        monetizationEligible
       );
       if (avatar) URL.revokeObjectURL(avatar.previewUrl);
       if (banner) URL.revokeObjectURL(banner.previewUrl);

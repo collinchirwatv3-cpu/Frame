@@ -45,6 +45,14 @@ export const uploadMetadataSchema = z
     // below for the one rule this schema *does* enforce: longform requires
     // a video already long enough not to be a short).
     contentType: z.enum(["film", "short", "longform"]).default("film"),
+    // Post (free, default) / Promote (creator pays to boost visibility,
+    // src/app/api/uploads/route.ts additionally inserts a `campaigns` row
+    // when this is chosen) / Monetise (eligible creators only — ads run
+    // inside their long-form video). Eligibility itself is re-verified
+    // server-side against profiles.monetization_eligible/business_channels,
+    // never trusted from this schema alone — same "client claims, server
+    // re-derives" posture as contentType's own short-duration boundary.
+    publishMode: z.enum(["post", "promote", "monetise"]).default("post"),
     // Structural sanity only — the actual supported-ratio banding (16:9/21:9/
     // 16:10) is a business rule owned by checkUpload() in
     // lib/video-validation.ts, not duplicated here. This schema just refuses
@@ -81,6 +89,18 @@ export const uploadMetadataSchema = z
         code: z.ZodIssueCode.custom,
         message: "LongForm requires a video at least 3 minutes long",
         path: ["contentType"],
+      });
+    }
+
+    // Monetise is long-form-only — Shorts creators earn through the
+    // Shorts creator pool automatically (ad revenue split across eligible
+    // creators by watch time), not via a per-video opt-in the way a
+    // long-form creator's own video can carry ads directly.
+    if (data.publishMode === "monetise" && data.contentType === "short") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Monetise is for long-form videos — Shorts earn through the creator pool instead",
+        path: ["publishMode"],
       });
     }
   });

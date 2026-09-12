@@ -114,4 +114,53 @@ describe("uploadMetadataSchema", () => {
       expect(result.success).toBe(true);
     });
   });
+
+  describe("publishMode", () => {
+    it("defaults a missing publishMode to post", () => {
+      const result = uploadMetadataSchema.safeParse(validInput);
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.publishMode).toBe("post");
+    });
+
+    it("accepts an explicit post or promote regardless of contentType", () => {
+      for (const publishMode of ["post", "promote"] as const) {
+        const result = uploadMetadataSchema.safeParse({ ...validInput, publishMode, contentType: "short" });
+        expect(result.success).toBe(true);
+      }
+    });
+
+    it("rejects an unknown publishMode", () => {
+      const result = uploadMetadataSchema.safeParse({ ...validInput, publishMode: "sponsor" });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects monetise on a short", () => {
+      const result = uploadMetadataSchema.safeParse({
+        ...validInput,
+        publishMode: "monetise",
+        contentType: "short",
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("accepts monetise on a film (long-form, not just explicit longform)", () => {
+      const result = uploadMetadataSchema.safeParse({
+        ...validInput,
+        publishMode: "monetise",
+        contentType: "film",
+        durationSeconds: LONGFORM_MIN_DURATION_SECONDS,
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it("accepts monetise on an explicit longform", () => {
+      const result = uploadMetadataSchema.safeParse({
+        ...validInput,
+        publishMode: "monetise",
+        contentType: "longform",
+        durationSeconds: LONGFORM_MIN_DURATION_SECONDS,
+      });
+      expect(result.success).toBe(true);
+    });
+  });
 });

@@ -10,11 +10,20 @@ type CurrentUserState = {
    * engagement-store's `hydrated` (the shared "auth check finished" signal)
    * before treating a null here as "hasn't redeemed," not just "unknown." */
   inviteRedeemedAt: string | null;
-  setProfile: (profile: Creator | null, inviteRedeemedAt: string | null) => void;
+  /** Gates the Monetise upload option (UploadDropzone.tsx) — a UI nicety
+   * only. The real enforcement is server-side (videos_insert_own RLS +
+   * /api/uploads/route.ts), same "client claims, server re-derives"
+   * posture as everything else in this store. False (not just falsy/null)
+   * both when signed out and before the profile is fetched, same as every
+   * other field here. */
+  monetizationEligible: boolean;
+  setProfile: (profile: Creator | null, inviteRedeemedAt: string | null, monetizationEligible: boolean) => void;
 };
 
 export const useCurrentUserStore = create<CurrentUserState>()((set) => ({
   profile: null,
   inviteRedeemedAt: null,
-  setProfile: (profile, inviteRedeemedAt) => set({ profile, inviteRedeemedAt }),
+  monetizationEligible: false,
+  setProfile: (profile, inviteRedeemedAt, monetizationEligible) =>
+    set({ profile, inviteRedeemedAt, monetizationEligible }),
 }));

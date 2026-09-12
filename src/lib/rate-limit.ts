@@ -51,6 +51,20 @@ export const engagementRateLimiter = makeLimiter(60, "1 m", "engagement");
  * moderator session. */
 export const moderationRateLimiter = makeLimiter(30, "1 m", "moderation");
 
+/** Starting a watch session — one call per video someone starts watching,
+ * similar volume to engagement actions (scrolling through many shorts). */
+export const watchSessionStartRateLimiter = makeLimiter(60, "1 m", "watch-session-start");
+
+/** Heartbeats fire repeatedly *during* a single session (every few seconds
+ * of playback), a much higher natural call volume than starting a session
+ * — a separate, looser limiter rather than sharing one with start and
+ * getting either wrong. */
+export const watchSessionHeartbeatRateLimiter = makeLimiter(120, "1 m", "watch-session-heartbeat");
+
+/** Serving an ad slot — similar volume to starting a watch session (once
+ * per feed position/video that could show one). */
+export const adServeRateLimiter = makeLimiter(60, "1 m", "ad-serve");
+
 export type RateLimitResult = { success: boolean; limit: number; remaining: number; reset: number };
 
 export async function checkRateLimit(
@@ -58,8 +72,12 @@ export async function checkRateLimit(
   identifier: string
 ): Promise<RateLimitResult> {
   if (!limiter) {
-    // No Redis configured — allow everything through rather than fail closed
-    // in local/CI environments. See module doc comment.
+    // Local development and CI do not provision Redis. Production must: a
+    // missing limiter on a public mutation endpoint is an abuse bypass, not
+    // a harmless degraded mode.
+    if (process.env.NODE_ENV === "production") {
+      return { success: false, limit: 0, remaining: 0, reset: Date.now() + 60_000 };
+    }
     return { success: true, limit: Infinity, remaining: Infinity, reset: 0 };
   }
   const result = await limiter.limit(identifier);
