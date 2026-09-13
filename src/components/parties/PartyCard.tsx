@@ -2,9 +2,10 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Lock, X } from "lucide-react";
-import { formatRelativeTime } from "@/lib/utils";
+import { formatRelativeTime, cn } from "@/lib/utils";
 import { deleteParty, type WatchParty } from "@/lib/watch-parties";
 import { useCurrentUserStore } from "@/store/current-user-store";
+import { CHROME_GLASS_CLASS, CHROME_TAP_SCALE_CLASS } from "@/lib/chrome";
 
 // "Repeats weekly" alone doesn't need the exact date; a one-off schedule
 // does. Deliberately no year — these are always near-future.
@@ -42,14 +43,24 @@ export function PartyCard({ party, onDeleted }: { party: WatchParty; onDeleted?:
   return (
     <Link
       href={`/watch-together/${party.id}${party.video ? `?v=${party.video.id}` : ""}`}
-      className="relative block h-40 rounded-2xl overflow-hidden bg-card"
+      className="group relative block h-44 rounded-2xl overflow-hidden bg-card"
     >
       {party.video?.posterUrl && (
-        <Image src={party.video.posterUrl} alt="" fill className="object-cover" />
+        <Image
+          src={party.video.posterUrl}
+          alt=""
+          fill
+          className="object-cover transition-transform duration-300 group-hover:scale-105"
+        />
       )}
-      <div className="absolute inset-0 bg-gradient-to-t from-bg/90 via-bg/20 to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-t from-bg/90 via-bg/25 to-transparent" />
       {party.visibility === "private" && (
-        <span className="absolute top-2 left-2 flex items-center gap-1 bg-bg/70 backdrop-blur-md rounded-full px-2 py-1 text-[11px] font-medium">
+        <span
+          className={cn(
+            CHROME_GLASS_CLASS,
+            "absolute top-3 left-3 flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium"
+          )}
+        >
           <Lock size={10} />
           Private
         </span>
@@ -60,7 +71,11 @@ export function PartyCard({ party, onDeleted }: { party: WatchParty; onDeleted?:
           onClick={handleEnd}
           disabled={deleting}
           aria-label="End party"
-          className="absolute top-2 right-2 w-8 h-8 rounded-full bg-bg/70 backdrop-blur-md flex items-center justify-center disabled:opacity-50"
+          className={cn(
+            CHROME_GLASS_CLASS,
+            CHROME_TAP_SCALE_CLASS,
+            "absolute top-3 right-3 w-8 h-8 flex items-center justify-center disabled:opacity-50"
+          )}
         >
           <X size={14} />
         </button>
@@ -70,7 +85,7 @@ export function PartyCard({ party, onDeleted }: { party: WatchParty; onDeleted?:
         <p className="text-sm text-text-secondary truncate">
           Host: {party.host.displayName} · {formatRelativeTime(party.createdAt)}
         </p>
-        {schedule && <p className="text-xs text-primary truncate mt-0.5">{schedule}</p>}
+        {schedule && <p className="text-xs text-primary font-medium truncate mt-0.5">{schedule}</p>}
       </div>
     </Link>
   );
