@@ -72,17 +72,15 @@ export async function checkRateLimit(
   identifier: string
 ): Promise<RateLimitResult> {
   if (!limiter) {
-    // TEMPORARY — reverted to permissive-when-unconfigured on 2026-09-14
-    // because Upstash was never actually provisioned in Vercel's production
-    // env (only the env var *names* existed), and failing closed there was
-    // locking every real user out at the invite gate — a worse outcome than
-    // the abuse window this create. Restore the fail-closed branch below
-    // the moment real UPSTASH_REDIS_REST_URL/TOKEN values are added to
-    // Vercel's production environment — do not leave this permissive.
-    //
-    // if (process.env.NODE_ENV === "production") {
-    //   return { success: false, limit: 0, remaining: 0, reset: Date.now() + 60_000 };
-    // }
+    // Local development and CI do not provision Redis. Production must: a
+    // missing limiter on a public mutation endpoint is an abuse bypass, not
+    // a harmless degraded mode. (Briefly reverted to permissive on
+    // 2026-09-14 because Upstash had never actually been provisioned in
+    // Vercel's production env — real credentials are now set there, so
+    // this fails closed for real, not just in theory.)
+    if (process.env.NODE_ENV === "production") {
+      return { success: false, limit: 0, remaining: 0, reset: Date.now() + 60_000 };
+    }
     return { success: true, limit: Infinity, remaining: Infinity, reset: 0 };
   }
   const result = await limiter.limit(identifier);
