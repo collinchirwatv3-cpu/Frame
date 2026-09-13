@@ -202,10 +202,9 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
         />
       </div>
 
-      {/* On phones, the Frame owns the entire viewport rather than sitting in a
-          letterboxed canvas. Desktop retains composition-preserving containment,
-          where there is enough room for cinematic aspect ratios without making
-          the player feel inset. */}
+      {/* centered video at its native aspect ratio, with a gentle focus-pull as it
+          becomes the active scene — object-contain means this works unmodified for
+          16:9, 21:9, or 16:10; never cropped, never stretched */}
       <motion.div
         className="absolute inset-0 flex items-center justify-center cursor-pointer"
         onClick={handleTap}
@@ -220,7 +219,7 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
           ref={videoRef}
           src={video.playbackUrl}
           poster={video.posterUrl}
-          className="w-full h-full object-cover md:object-contain"
+          className="w-full h-full object-contain"
           muted={muted}
           loop
           playsInline

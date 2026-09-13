@@ -29,10 +29,12 @@ const RENDER_WINDOW = 1;
 // across every video-watching surface in the app.
 const AUTO_DIRECTOR_MODE_DELAY_MS = 2500;
 
-// One full-viewport Frame at a time, snap-scrolled. On phones, media fills
-// the viewport; desktop retains composition-preserving containment. Was a
-// small aspect-video card cascade before (multiple tiles visible at once,
-// peeking above/below); this matches the main feed's full-screen pattern.
+// One full-viewport video at a time, snap-scrolled — same "no black bars,
+// never cropped" tile as SwipeFeed's VideoCard: a blurred backdrop fills
+// any letterbox space around the video rather than cropping it or leaving
+// black bars. Was a small aspect-video card cascade before (multiple tiles
+// visible at once, peeking above/below); this matches the main feed's own
+// full-screen-per-tile pattern instead.
 
 /** `initialId` lets a caller open this feed scoped to an arbitrary list
  * (search results, a creator's profile) starting at one specific short —
@@ -210,8 +212,10 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
             // speed, so one swipe always moves exactly one short.
             className="relative h-dvh w-full snap-start snap-always overflow-hidden bg-bg"
           >
-            {/* Mobile Frames fill the viewport. Wider displays preserve their
-                native composition instead of cropping cinematic footage. */}
+            {/* Plain black letterboxing above/below the video (bg-bg on
+                the section itself) — no blurred backdrop here, unlike
+                VideoCard.tsx's main feed. The video itself is still never
+                cropped or stretched (object-contain below). */}
             <motion.div
               className="absolute inset-0 flex items-center justify-center"
               animate={{
@@ -228,13 +232,13 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
                   }}
                   src={short.playbackUrl}
                   poster={short.posterUrl}
-                  className="w-full h-full object-cover md:object-contain"
+                  className="w-full h-full object-contain"
                   muted
                   loop
                   playsInline
                 />
               ) : (
-                <Image src={short.posterUrl} alt="" fill className="object-cover md:object-contain" />
+                <Image src={short.posterUrl} alt="" fill className="object-contain" />
               )}
             </motion.div>
 
@@ -308,14 +312,19 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
         );
       })}
 
-      {/* Fixed to the viewport, not nested in the active tile. On mobile the
-          Frame is cover-sized, so the action rail uses the full viewport;
-          desktop keeps its aspect-ratio-aligned placement. */}
+      {/* Fixed to the viewport, not nested in the active tile — doesn't
+          need to migrate tile-to-tile as activeIndex changes, it just
+          points at whichever short is active. An invisible box with the
+          exact same w-full + aspect-ratio + vertical-centering as the real
+          video (see the tile above) lines this up with the video's own
+          visible bounds without measuring anything — same trick as
+          Shelf.tsx sizing cards off video.width/height, just for layout
+          math instead of a fixed aspect box. */}
       {shorts[activeIndex] && (
         <>
           <div className="fixed inset-0 h-dvh w-full flex items-center justify-center pointer-events-none z-30">
             <div
-              className="relative w-full h-full md:h-auto"
+              className="relative w-full"
               style={{ aspectRatio: `${shorts[activeIndex].width} / ${shorts[activeIndex].height}` }}
             >
               <AnimatePresence>

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { VideoCard, type VideoCardHandle } from "./VideoCard";
 import { VideoPlaceholder } from "./VideoPlaceholder";
+import { RotateDevicePrompt } from "./RotateDevicePrompt";
 import { CHROME_FADE_TRANSITION } from "@/lib/motion";
 
 // How many cards stay fully mounted on either side of the active one. Real
@@ -181,6 +182,8 @@ export function SwipeFeed({
 
   return (
     <div className="relative h-dvh w-full">
+      <RotateDevicePrompt />
+
       {/* One-time, non-repeating first-use hint — see the timeout in the
           auto-engage effect above for when this actually fires. Purely
           informational (pointer-events-none): it must never be the thing
