@@ -5,6 +5,8 @@ import { useSearchParams } from "next/navigation";
 import { SwipeFeed, EmptyState } from "@/components/feed/SwipeFeed";
 import { Shelf, type ShelfKind } from "@/components/feed/Shelf";
 import { CollectionsShelf } from "@/components/feed/CollectionsShelf";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { ErrorState } from "@/components/ui/ErrorState";
 import {
   fetchPublicVideos,
   fetchFollowingVideos,
@@ -49,6 +51,32 @@ function isShelfKind(value: string | null): value is ShelfKind {
   );
 }
 
+/** Mirrors Shelf.tsx's own layout (a heading + a horizontal row of h-28/h-32
+ * cards) so the transition from loading to real content doesn't reflow the
+ * page — same reasoning as every other skeleton in this pass. */
+function DiscoverSkeleton() {
+  return (
+    <div className="pt-8 pb-24">
+      <div className="px-6 mb-2 flex flex-col gap-2">
+        <Skeleton className="h-7 w-28" />
+        <Skeleton className="h-4 w-40" />
+      </div>
+      {[0, 1, 2].map((row) => (
+        <section key={row} className="py-3">
+          <div className="px-6 mb-2.5">
+            <Skeleton className="h-4 w-24" />
+          </div>
+          <div className="flex gap-3 overflow-x-hidden px-6 pb-1">
+            {[0, 1, 2, 3].map((card) => (
+              <Skeleton key={card} className="flex-shrink-0 h-28 md:h-32 w-44 md:w-52" />
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 /**
  * Discover: Home's old shelf feed (For You / Following / Saved / History /
  * Collections) merged with Discover's own former identity — a full-screen
@@ -74,20 +102,50 @@ export default function DiscoverPage() {
   const userId = useEngagementStore((s) => s.userId);
   const hydrated = useEngagementStore((s) => s.hydrated);
   const [shelves, setShelves] = useState<Shelves>(EMPTY_SHELVES);
+  const [status, setStatus] = useState<"loading" | "error" | "ready">("loading");
+  const [retryCount, setRetryCount] = useState(0);
 
+  // No synchronous setStatus("loading") here on purpose (React Compiler
+  // flags setState called directly in an effect body) — status already
+  // starts "loading" on mount, and a retry explicitly resets it from its
+  // own click handler below, which is a real event handler, not an effect.
   useEffect(() => {
     if (!hydrated) return;
     let cancelled = false;
-    fetchShelves(userId).then((result) => {
-      if (!cancelled) setShelves(result);
-    });
+    fetchShelves(userId)
+      .then((result) => {
+        if (cancelled) return;
+        setShelves(result);
+        setStatus("ready");
+      })
+      .catch(() => {
+        if (!cancelled) setStatus("error");
+      });
     return () => {
       cancelled = true;
     };
-  }, [hydrated, userId]);
+  }, [hydrated, userId, retryCount]);
 
   if (selectedVideoId) {
     return <SwipeFeed videos={shelves[activeShelf]} showSearchButton={false} />;
+  }
+
+  if (status === "loading") {
+    return <DiscoverSkeleton />;
+  }
+
+  if (status === "error") {
+    return (
+      <div className="h-dvh w-full flex flex-col items-center justify-center px-6">
+        <ErrorState
+          onRetry={() => {
+            setStatus("loading");
+            setRetryCount((n) => n + 1);
+          }}
+          heading="Couldn't load Discover"
+        />
+      </div>
+    );
   }
 
   if (shelves.forYou.length === 0) {
@@ -102,7 +160,7 @@ export default function DiscoverPage() {
     <div className="pt-8 pb-24">
       <div className="px-6 mb-2">
         <h1 className="font-serif text-2xl font-semibold mb-1">Discover</h1>
-        <p className="text-text-secondary text-sm">Tap a film to watch.</p>
+        <p className="text-text-secondary text-sm">Tap a Frame to watch.</p>
       </div>
 
       <Shelf kind="forYou" title="For You" videos={shelves.forYou} />
@@ -112,19 +170,19 @@ export default function DiscoverPage() {
             kind="following"
             title="Following"
             videos={shelves.following}
-            emptyMessage="Follow creators to see their films here."
+            emptyMessage="Follow creators to see their Frames here."
           />
           <Shelf
             kind="saved"
             title="Saved"
             videos={shelves.saved}
-            emptyMessage="Save a film from the feed and it'll show up here."
+            emptyMessage="Save a Frame from the feed and it'll show up here."
           />
           <Shelf
             kind="history"
             title="History"
             videos={shelves.history}
-            emptyMessage="Films you watch will show up here."
+            emptyMessage="Frames you watch will show up here."
           />
         </>
       )}
