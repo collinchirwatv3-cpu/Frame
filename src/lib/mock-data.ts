@@ -22,7 +22,7 @@ const banner = (seed: string) => `https://picsum.photos/seed/${seed}-banner/1600
 const poster = (seed: string) => `https://picsum.photos/seed/${seed}/1600/900`;
 const sampleMp4 = () => `https://placeholdervideo.dev/1280x720`;
 
-export const creators: Creator[] = [
+const creators: Creator[] = [
   {
     id: "1901feaf-349b-435c-847a-b801b6a707ab",
     username: "milo_aerial",

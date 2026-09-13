@@ -66,7 +66,7 @@ export default function SettingsPage() {
 
       <SettingsSection title="Interests">
         <p className="text-sm text-text-secondary mb-3">
-          Shapes what shows up in Discover — change these anytime.
+          Tell us what you&apos;re into — change these anytime.
         </p>
         <div className="flex flex-wrap gap-2">
           {categories.map((c) => {

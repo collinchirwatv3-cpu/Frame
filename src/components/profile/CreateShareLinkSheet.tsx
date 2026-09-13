@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { SHEET_SPRING } from "@/lib/motion";
 import { Check, Copy, Eye, Link2, X } from "lucide-react";
 import { cn, shareContent } from "@/lib/utils";
 import { formatRelativeExpiry, getShareLinkStatus, TTL_LABEL } from "@/lib/share-links";
@@ -76,7 +77,7 @@ export function CreateShareLinkSheet({
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
-            transition={{ type: "spring", stiffness: 320, damping: 34 }}
+            transition={SHEET_SPRING}
             className="fixed inset-x-0 bottom-0 z-[61] max-h-[80vh] flex flex-col bg-card border-t border-border rounded-t-2xl md:max-w-md md:left-auto md:right-6 md:bottom-6 md:rounded-2xl md:border overflow-y-auto"
             style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 1rem)" }}
           >

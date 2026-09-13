@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
+import { SHEET_SPRING } from "@/lib/motion";
 import { Check, EyeOff, Flag, Users } from "lucide-react";
 import { useEscapeToClose } from "@/lib/use-escape-to-close";
 import type { Video } from "@/lib/types";
@@ -79,7 +80,7 @@ export function VideoOptionsSheet({
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
-            transition={{ type: "spring", stiffness: 320, damping: 34 }}
+            transition={SHEET_SPRING}
             className="fixed inset-x-0 bottom-0 z-[61] flex flex-col bg-card border-t border-border rounded-t-2xl md:max-w-xs md:left-auto md:right-6 md:bottom-6 md:rounded-2xl md:border"
             style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 1rem)" }}
           >

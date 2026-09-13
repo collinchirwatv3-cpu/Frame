@@ -4,12 +4,9 @@ import type { Collection } from "@/lib/types";
 
 /**
  * Collections, styled to match Shelf.tsx exactly (same heading size, same
- * fixed card height) rather than reusing CollectionsRail's own look
- * (bigger heading, wider fixed-width cards with a separate text block below
- * the image instead of overlaid on it) — that component stays as-is for
- * where it already lives (Profile's Saved Collections); this is a
- * Home-specific sibling so fixing Home's consistency doesn't change how
- * Collections looks anywhere else.
+ * fixed card height) — Home's shelf-consistent presentation of the
+ * mock-data collections list, distinct from FeaturedCollections (Search's
+ * larger editorial cards, backed by the real collections table).
  */
 export function CollectionsShelf({ collections }: { collections: Collection[] }) {
   if (collections.length === 0) return null;

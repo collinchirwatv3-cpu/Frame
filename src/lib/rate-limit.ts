@@ -3,16 +3,15 @@ import { Redis } from "@upstash/redis";
 import { NextResponse } from "next/server";
 
 /**
- * Rate limiting for every future mutating Route Handler/Server Action —
- * there are no real endpoints to attach this to yet (see MIGRATION_PLAN.md),
- * but the limiter classes and the "no Redis configured" fallback are the
- * pattern to build against once there are.
+ * Rate limiting for mutating Route Handlers — in real use by ads/serve,
+ * uploads, uploads/thumbnail, watch-sessions/start, watch-sessions/
+ * heartbeat, engagement/[kind], invite/validate, invite/redeem, account,
+ * reports, and moderation/reports/[reportId].
  *
- * Degrades gracefully with no Upstash credentials set (local dev, CI, and
- * this early stage of the project) — every check succeeds instead of
- * throwing, so nothing breaks before Redis is provisioned. This must never
- * silently stay in that state in real production; `MIGRATION_PLAN.md` calls
- * out enabling real credentials as a Critical item.
+ * Degrades gracefully with no Upstash credentials set (local dev and CI
+ * never provision Redis) — every check succeeds instead of throwing.
+ * Production fails closed instead when unconfigured (see checkRateLimit
+ * below); real Upstash credentials are set in Vercel's production env.
  */
 const redis =
   process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN

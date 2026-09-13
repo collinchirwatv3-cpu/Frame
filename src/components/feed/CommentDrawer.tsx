@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { SHEET_SPRING } from "@/lib/motion";
 import { CornerDownRight, Send, X } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { useCommentsStore, type Comment } from "@/store/comments-store";
@@ -77,7 +78,7 @@ export function CommentDrawer({
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
-            transition={{ type: "spring", stiffness: 320, damping: 34 }}
+            transition={SHEET_SPRING}
             className="fixed inset-x-0 bottom-0 z-[61] max-h-[75vh] flex flex-col bg-card border-t border-border rounded-t-2xl md:max-w-md md:left-auto md:right-6 md:bottom-6 md:rounded-2xl md:border"
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">

@@ -4,9 +4,9 @@ import type { Collection } from "@/lib/types";
 
 /** Search's editorial section — the first live consumer of the real
  * collections/collection_videos tables (fetchFeaturedCollections). Larger
- * cards than CollectionsRail's shelf style, with the curator line the
- * reference design calls for; CollectionsRail/CollectionsShelf stay on
- * mock data and untouched by this component. */
+ * cards than CollectionsShelf's shelf style, with the curator line the
+ * reference design calls for; CollectionsShelf stays on mock data and
+ * untouched by this component. */
 export function FeaturedCollections({ collections }: { collections: Collection[] }) {
   if (collections.length === 0) return null;
 

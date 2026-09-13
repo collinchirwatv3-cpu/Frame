@@ -8,7 +8,7 @@ type Row = {
   title: string;
   description: string;
   category: Video["category"];
-  content_type: "film" | "short";
+  content_type: "film" | "short" | "longform";
   sound_name: string | null;
   duration_seconds: number;
   width: number;
@@ -89,16 +89,16 @@ export async function fetchVideoById(id: string): Promise<Video | null> {
   return toVideo(data as unknown as Row);
 }
 
-/** Recent public films (content_type = 'film') — the cinematic library,
- * excludes shorts. Client-side query-filtered against `matchesVideoQuery`
- * by callers (Explore, watch-together's queue picker) rather than a new
- * server-side search feature. */
+/** Recent public films and longform videos — the cinematic library, excludes
+ * shorts. Client-side query-filtered against `matchesVideoQuery` by callers
+ * (Explore, watch-together's queue picker) rather than a new server-side
+ * search feature. */
 export async function fetchPublicVideos(limit = 30): Promise<Video[]> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("videos")
     .select(SELECT)
-    .eq("content_type", "film")
+    .in("content_type", ["film", "longform"])
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error || !data) return [];
@@ -120,17 +120,17 @@ export async function fetchShorts(limit = 30): Promise<Video[]> {
 
 type EmbeddedVideoRow = { videos: Row | null };
 
-/** This user's saved films, most recently saved first — one of Home's
- * shelves. `videos!inner` (not a plain embed) so .eq("videos.content_type",
- * …) actually filters which saves rows come back, not just nulls out the
- * embed on non-matching ones. */
+/** This user's saved films and longform videos, most recently saved first —
+ * one of Home's shelves. `videos!inner` (not a plain embed) so
+ * .in("videos.content_type", …) actually filters which saves rows come
+ * back, not just nulls out the embed on non-matching ones. */
 export async function fetchSavedVideos(userId: string, limit = 20): Promise<Video[]> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("saves")
     .select(`videos!inner ( ${SELECT} )`)
     .eq("user_id", userId)
-    .eq("videos.content_type", "film")
+    .in("videos.content_type", ["film", "longform"])
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error || !data) return [];
@@ -148,7 +148,7 @@ export async function fetchHistoryVideos(userId: string, limit = 20): Promise<Vi
     .from("watch_progress")
     .select(`videos!inner ( ${SELECT} )`)
     .eq("user_id", userId)
-    .eq("videos.content_type", "film")
+    .in("videos.content_type", ["film", "longform"])
     .order("updated_at", { ascending: false })
     .limit(limit);
   if (error || !data) return [];
@@ -175,7 +175,7 @@ export async function fetchFollowingVideos(userId: string, limit = 20): Promise<
   const { data, error } = await supabase
     .from("videos")
     .select(SELECT)
-    .eq("content_type", "film")
+    .in("content_type", ["film", "longform"])
     .in("creator_id", followeeIds)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -204,7 +204,7 @@ export async function fetchDiscoverVideos(userId: string | null, limit = 50): Pr
   let query = supabase
     .from("videos")
     .select(SELECT)
-    .eq("content_type", "film")
+    .in("content_type", ["film", "longform"])
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -297,10 +297,10 @@ type CollectionRow = {
 };
 
 /** The first real read of collections/collection_videos anywhere in this
- * app — every other collections surface (CollectionsRail, CollectionsShelf,
- * /collections/[id]) still reads mock-data.ts. collections has no client
- * write grant at all (platform-curated, is_featured/curator_id set only via
- * direct SQL/service-role, same precedent as invite codes). */
+ * app — every other collections surface (CollectionsShelf, /collections/[id])
+ * still reads mock-data.ts. collections has no client write grant
+ * (platform-curated, is_featured/curator_id set only via direct SQL/
+ * service-role, same precedent as invite codes). */
 export async function fetchFeaturedCollections(limit = 10): Promise<Collection[]> {
   const supabase = createClient();
   const { data, error } = await supabase
