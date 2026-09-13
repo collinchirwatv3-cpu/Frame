@@ -6,7 +6,28 @@ import { fetchParties, fetchMyParties, fetchFollowedParties, type WatchParty } f
 import { PartyCard } from "@/components/parties/PartyCard";
 import { CreatePartySheet } from "@/components/parties/CreatePartySheet";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { ErrorState } from "@/components/ui/ErrorState";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { useCurrentUserStore } from "@/store/current-user-store";
+
+/** Mirrors PartySection's own layout (an uppercase label + a grid of
+ * cards) so loading doesn't reflow into the eventual content. */
+function PartiesSkeleton() {
+  return (
+    <div className="flex flex-col gap-8">
+      {[0, 1].map((section) => (
+        <div key={section} className="flex flex-col gap-3">
+          <Skeleton className="h-3 w-32" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[0, 1, 2].map((card) => (
+              <Skeleton key={card} className="h-40" />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function PartySection({
   title,
@@ -35,28 +56,43 @@ export default function PartiesPage() {
   const [myParties, setMyParties] = useState<WatchParty[]>([]);
   const [followedParties, setFollowedParties] = useState<WatchParty[]>([]);
   const [publicParties, setPublicParties] = useState<WatchParty[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState<"loading" | "error" | "ready">("loading");
   const [creating, setCreating] = useState(false);
 
-  function refresh() {
+  // Split so the effect below never calls setState synchronously in its own
+  // body (React Compiler flags that): load() just fetches and reports the
+  // outcome from its .then/.catch callbacks, which is fine. refresh() adds
+  // the synchronous reset to "loading" on top, for the real event handlers
+  // (a party being deleted, the create sheet closing) where showing that
+  // reset immediately is good feedback — status already starts "loading" on
+  // mount, so the effect's first run doesn't need it anyway.
+  function load() {
     Promise.all([
       userId ? fetchMyParties(userId) : Promise.resolve([]),
       userId ? fetchFollowedParties(userId) : Promise.resolve([]),
       fetchParties(),
-    ]).then(([mine, followed, everyone]) => {
-      setMyParties(mine);
-      setFollowedParties(followed);
-      setPublicParties(everyone);
-      setLoading(false);
-    });
+    ])
+      .then(([mine, followed, everyone]) => {
+        setMyParties(mine);
+        setFollowedParties(followed);
+        setPublicParties(everyone);
+        setStatus("ready");
+      })
+      .catch(() => setStatus("error"));
+  }
+
+  function refresh() {
+    setStatus("loading");
+    load();
   }
 
   useEffect(() => {
-    refresh();
-    // refresh is a plain function recreated every render (not memoized) —
-    // re-running this effect only on userId change (once AuthListener
-    // resolves the signed-in profile) is the actual intent, matching this
-    // page's original single-fetch shape before the per-user sections existed.
+    load();
+    // load (and refresh) are plain functions recreated every render (not
+    // memoized) — re-running this effect only on userId change (once
+    // AuthListener resolves the signed-in profile) is the actual intent,
+    // matching this page's original single-fetch shape before the per-user
+    // sections existed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
@@ -83,12 +119,18 @@ export default function PartiesPage() {
         </button>
       </div>
 
-      {!loading && isEmpty ? (
+      {status === "loading" ? (
+        <PartiesSkeleton />
+      ) : status === "error" ? (
+        <div className="flex flex-col items-center justify-center pt-12 pb-[calc(env(safe-area-inset-bottom)+6rem)]">
+          <ErrorState onRetry={refresh} heading="Couldn't load Parties" />
+        </div>
+      ) : isEmpty ? (
         <div className="flex flex-col items-center justify-center pt-12 pb-[calc(env(safe-area-inset-bottom)+6rem)]">
           <EmptyState
             icon={Users}
             heading="No parties yet"
-            subtext="Start one and watch a film together, in perfect sync."
+            subtext="Start one and watch a Frame together, in perfect sync."
           />
         </div>
       ) : (
