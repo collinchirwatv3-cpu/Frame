@@ -84,6 +84,23 @@ describe("usePartyPresenceCount", () => {
     expect(result.current).toBe(2);
   });
 
+  it("stays at 0 and doesn't throw when the realtime subscribe reports an error status", () => {
+    fakeChannel.subscribe = (cb?: (status: string, err?: unknown) => void) => {
+      cb?.("CHANNEL_ERROR", new Error("socket dropped"));
+      return fakeChannel;
+    };
+    const { result } = renderHook(() => usePartyPresenceCount("party-1", true));
+    expect(result.current).toBe(0);
+  });
+
+  it("stays at 0 and doesn't throw when opening the channel itself throws", () => {
+    channelSpy.mockImplementationOnce(() => {
+      throw new Error("no network");
+    });
+    const { result } = renderHook(() => usePartyPresenceCount("party-1", true));
+    expect(result.current).toBe(0);
+  });
+
   it("removes the channel and resets to 0 when disabled again (scrolled out of view)", () => {
     const { result, rerender } = renderHook(({ enabled }) => usePartyPresenceCount("party-1", enabled), {
       initialProps: { enabled: true },

@@ -25,19 +25,46 @@ export function usePartyPresenceCount(partyId: string, enabled: boolean): number
 
   useEffect(() => {
     if (!enabled) return;
-    const supabase = createClient();
-    const channel = supabase.channel(`watch-room:${partyId}`, {
-      config: { presence: { key: crypto.randomUUID() }, private: true },
-    });
 
-    channel.on("presence", { event: "sync" }, () => {
-      setCount(Object.keys(channel.presenceState()).length);
-    });
+    // A list of these mounts per visible card, on whatever connection the
+    // viewer has — a dropped/slow mobile socket should read as "0 watching"
+    // like a private party this viewer can't reach does, never crash the
+    // whole list. subscribe()'s status callback + this try/catch are
+    // belt-and-suspenders around the same "never surface an error here"
+    // intent the module comment already states.
+    let channel: ReturnType<ReturnType<typeof createClient>["channel"]> | null = null;
+    try {
+      const supabase = createClient();
+      channel = supabase.channel(`watch-room:${partyId}`, {
+        config: { presence: { key: crypto.randomUUID() }, private: true },
+      });
 
-    channel.subscribe();
+      channel.on("presence", { event: "sync" }, () => {
+        try {
+          setCount(Object.keys(channel!.presenceState()).length);
+        } catch {
+          // Stale/torn-down channel racing this callback — leave the count
+          // as-is rather than let it throw during a React state update.
+        }
+      });
+
+      channel.subscribe((status, err) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn("Party presence count: realtime subscribe failed, staying at 0.", err);
+        }
+      });
+    } catch (err) {
+      console.warn("Party presence count: could not open a realtime channel, staying at 0.", err);
+      return;
+    }
 
     return () => {
-      supabase.removeChannel(channel);
+      try {
+        const supabase = createClient();
+        supabase.removeChannel(channel!).catch(() => {});
+      } catch {
+        // Already torn down or never fully subscribed — nothing to clean up.
+      }
       setCount(0);
     };
   }, [partyId, enabled]);
