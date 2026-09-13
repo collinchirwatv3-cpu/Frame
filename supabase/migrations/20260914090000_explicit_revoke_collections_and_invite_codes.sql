@@ -1,0 +1,19 @@
+-- FRAME — MEDIUM/LOW belt-and-braces fix, not currently exploitable.
+--
+-- collections/collection_videos: 20260914010000's own comment claims
+-- "no client insert/update/delete grant at all," but that's not accurate —
+-- both tables were created in 20260101000000_init.sql with Supabase's
+-- default blanket grants, which were never explicitly revoked. Only
+-- RLS-default-deny (no insert/update/delete policies exist for either
+-- table) currently blocks writes. Worth closing explicitly now that
+-- is_featured is a real ranking-relevant column, rather than relying solely
+-- on "nobody wrote a policy for this."
+--
+-- invite_codes: the single most sensitive table in the app (redeeming one
+-- is the entire access-control boundary for the invite-gated alpha).
+-- Already fully protected by RLS-default-deny (no insert/update/delete
+-- policy exists for authenticated/anon), but the audit singled this table
+-- out by name for an explicit revoke anyway, given the blast radius if any
+-- future migration ever accidentally adds a policy without also checking
+-- the table-level grant.
+revoke insert, update, delete on table collections, collection_videos, invite_codes from authenticated, anon, public;

@@ -1,0 +1,11 @@
+-- FRAME — MEDIUM fix, but a live functional break, not just a security
+-- nicety. 20260806110000_creator_profile_fields.sql grants
+-- update (statement, equipment, available_for_hire) on profiles, but
+-- filename-sorts BEFORE 20260808000000_profile_self_edit.sql, which runs
+-- `revoke update on table profiles from authenticated` and only grants back
+-- (username, display_name, bio, website, avatar_url, banner_url) — silently
+-- wiping the earlier grant. In the real deployed database today, statement/
+-- equipment/available_for_hire are unwritable: EditProfileModal's
+-- creator-portfolio fields 403 on save. Re-granting here since the earlier
+-- migrations can't be reordered after the fact.
+grant update (statement, equipment, available_for_hire) on profiles to authenticated;
