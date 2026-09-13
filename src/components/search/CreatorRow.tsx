@@ -12,7 +12,7 @@ export function CreatorRow({ creators }: { creators: Creator[] }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <span className="text-xs font-semibold uppercase tracking-wide text-text-secondary px-6">Creators</span>
+      <span className="text-xs font-semibold uppercase tracking-wide text-text-secondary px-6">Frame Creators</span>
       <div className="flex gap-4 overflow-x-auto px-6 pb-1 no-scrollbar">
         {creators.map((creator) => (
           <Link

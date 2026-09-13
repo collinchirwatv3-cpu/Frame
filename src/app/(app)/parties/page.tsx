@@ -108,7 +108,7 @@ export default function PartiesPage() {
       <div className="flex items-start justify-between mb-6">
         <div>
           <h1 className="font-serif text-2xl font-semibold">Frame Parties</h1>
-          <p className="text-text-secondary text-sm mt-1">Watch together, in perfect sync.</p>
+          <p className="text-text-secondary text-sm mt-1">Watch a Frame together, in perfect sync.</p>
         </div>
         <button
           onClick={() => setCreating(true)}

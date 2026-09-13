@@ -13,7 +13,7 @@ export function FeaturedCollections({ collections }: { collections: Collection[]
   return (
     <div className="flex flex-col gap-3">
       <span className="text-xs font-semibold uppercase tracking-wide text-text-secondary px-6">
-        Featured Collections
+        Featured Frame Collections
       </span>
       <div className="flex gap-4 overflow-x-auto px-6 pb-1 no-scrollbar">
         {collections.map((collection) => (

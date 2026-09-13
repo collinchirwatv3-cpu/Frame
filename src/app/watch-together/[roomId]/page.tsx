@@ -37,7 +37,7 @@ export default function WatchTogetherPage() {
   if (state === "not-found" || !video) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 h-dvh bg-bg text-center px-6">
-        <p className="text-sm font-medium">This watch party isn&apos;t available</p>
+        <p className="text-sm font-medium">This Frame Party isn&apos;t available</p>
         <p className="text-xs text-text-secondary max-w-sm">
           The video might have been removed, or the link is missing its video.
         </p>

@@ -37,7 +37,7 @@ export function PartyCard({ party, onDeleted }: { party: WatchParty; onDeleted?:
   async function handleEnd(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
-    if (deleting || !window.confirm("End this watch party? It'll be removed from the list.")) return;
+    if (deleting || !window.confirm("End this Frame Party? It'll be removed from the list.")) return;
     setDeleting(true);
     const ok = await deleteParty(party.id);
     if (ok) onDeleted?.();
