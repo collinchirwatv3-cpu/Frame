@@ -3,9 +3,11 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { AnimatePresence, motion } from "framer-motion";
 import { VideoCard, type VideoCardHandle } from "./VideoCard";
 import { VideoPlaceholder } from "./VideoPlaceholder";
 import { RotateDevicePrompt } from "./RotateDevicePrompt";
+import { CHROME_FADE_TRANSITION } from "@/lib/motion";
 
 // How many cards stay fully mounted on either side of the active one. Real
 // <video> elements, Framer Motion instances, and sheet components are not
@@ -17,8 +19,34 @@ const RENDER_WINDOW = 2;
 // Director Mode auto-engages — long enough to read the title/creator, short
 // enough that the feed reads as cinematic rather than app-chrome-heavy.
 const AUTO_DIRECTOR_MODE_DELAY_MS = 2500;
+// How long the one-time "tap to show controls" hint stays visible once
+// Director Mode first engages, before fading itself out.
+const DIRECTOR_MODE_HINT_DURATION_MS = 2200;
 import { usePlayerStore } from "@/store/player-store";
 import type { Video } from "@/lib/types";
+
+const DIRECTOR_MODE_HINT_STORAGE_KEY = "frame-director-mode-hint-seen";
+
+/** Real errors here (storage disabled, private browsing) mean "assume
+ * already seen" — the hint is a nicety, never worth a crash or a console
+ * error over, and defaulting to "seen" is the safe direction (skipping a
+ * hint is harmless; showing it every single time would be the annoying
+ * failure mode). */
+function hasSeenDirectorModeHint(): boolean {
+  try {
+    return window.localStorage.getItem(DIRECTOR_MODE_HINT_STORAGE_KEY) === "1";
+  } catch {
+    return true;
+  }
+}
+
+function markDirectorModeHintSeen() {
+  try {
+    window.localStorage.setItem(DIRECTOR_MODE_HINT_STORAGE_KEY, "1");
+  } catch {
+    // ignore — see hasSeenDirectorModeHint's reasoning
+  }
+}
 
 /** e2e/feed-engagement.spec.ts asserts this exact string — exported so
  * FeedRoot can reuse the identical copy for its own page-level empty state
@@ -26,7 +54,7 @@ import type { Video } from "@/lib/types";
 export function EmptyState() {
   return (
     <>
-      <p className="text-lg font-semibold">No videos yet</p>
+      <p className="text-lg font-semibold">No Frames yet</p>
       <p className="text-sm text-text-secondary max-w-xs">
         FRAMES is just getting started — be the first to upload something worth watching.
       </p>
@@ -34,7 +62,7 @@ export function EmptyState() {
         href="/upload"
         className="mt-2 px-5 py-2.5 rounded-full bg-primary text-bg text-sm font-semibold"
       >
-        Upload a video
+        Upload a Frame
       </Link>
     </>
   );
@@ -59,6 +87,8 @@ export function SwipeFeed({
   const isScrubbing = usePlayerStore((s) => s.isScrubbing);
   const enterDirectorMode = usePlayerStore((s) => s.enterDirectorMode);
   const exitDirectorMode = usePlayerStore((s) => s.exitDirectorMode);
+  const showDirectorModeHint = usePlayerStore((s) => s.showDirectorModeHint);
+  const setShowDirectorModeHint = usePlayerStore((s) => s.setShowDirectorModeHint);
 
   // Director Mode is a feed-only experience — never let it leak into other routes.
   useEffect(() => {
@@ -112,9 +142,20 @@ export function SwipeFeed({
   // hiding the nav over an empty state.
   useEffect(() => {
     if (directorMode || isScrubbing || videos.length === 0) return;
-    const timer = window.setTimeout(enterDirectorMode, AUTO_DIRECTOR_MODE_DELAY_MS);
+    const timer = window.setTimeout(() => {
+      enterDirectorMode();
+      // First time ever chrome auto-hides in this browser: a brief,
+      // non-repeating hint that a tap brings it back. Never shown again
+      // after this, on this device — recovery is the same single tap every
+      // time, this just makes sure it's discovered once.
+      if (!hasSeenDirectorModeHint()) {
+        markDirectorModeHintSeen();
+        setShowDirectorModeHint(true);
+        window.setTimeout(() => setShowDirectorModeHint(false), DIRECTOR_MODE_HINT_DURATION_MS);
+      }
+    }, AUTO_DIRECTOR_MODE_DELAY_MS);
     return () => window.clearTimeout(timer);
-  }, [activeIndex, directorMode, isScrubbing, videos.length, enterDirectorMode]);
+  }, [activeIndex, directorMode, isScrubbing, videos.length, enterDirectorMode, setShowDirectorModeHint]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -142,6 +183,27 @@ export function SwipeFeed({
   return (
     <div className="relative h-dvh w-full">
       <RotateDevicePrompt />
+
+      {/* One-time, non-repeating first-use hint — see the timeout in the
+          auto-engage effect above for when this actually fires. Purely
+          informational (pointer-events-none): it must never be the thing
+          standing between a user and the content, since a tap anywhere on
+          the video already does the job this describes. */}
+      <AnimatePresence>
+        {showDirectorModeHint && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={CHROME_FADE_TRANSITION}
+            className="fixed inset-x-0 top-1/2 -translate-y-1/2 z-40 flex justify-center pointer-events-none px-6"
+          >
+            <span className="px-4 py-2 rounded-full bg-bg/70 backdrop-blur-md border border-white/10 text-xs font-medium">
+              Tap to show controls
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {videos.length === 0 ? (
         <div className="h-dvh w-full flex flex-col items-center justify-center gap-3 text-center px-6">
