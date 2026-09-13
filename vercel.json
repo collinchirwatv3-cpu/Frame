@@ -1,8 +1,0 @@
-{
-  "crons": [
-    {
-      "path": "/api/internal/parties/notify-scheduled",
-      "schedule": "*/5 * * * *"
-    }
-  ]
-}

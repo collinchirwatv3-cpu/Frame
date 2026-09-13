@@ -7,6 +7,15 @@ import { createClient } from "@supabase/supabase-js";
 // `Authorization: Bearer <CRON_SECRET>` on requests it makes to the paths
 // listed in vercel.json's `crons` array — no custom header wiring needed
 // on the platform side, just checking for it here.
+//
+// NOT CURRENTLY WIRED UP: vercel.json's crons entry for this route was
+// removed because the project is on Vercel's Hobby plan, which only allows
+// once-daily cron jobs — the */5 * * * * cadence this was built for needs
+// either a Pro plan, a once-daily cadence (real, disclosed limitation:
+// "starts now" reminders could then land hours late), or an external
+// pinger (e.g. a free cron service hitting this URL with the header). This
+// route and its logic are otherwise complete and tested — nothing calls it
+// automatically until one of those is decided and vercel.json is restored.
 function isAuthorized(request: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
   if (!secret) return false; // fail closed — unconfigured must never mean "no check"
