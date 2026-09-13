@@ -1,5 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useCurrentUserStore } from "@/store/current-user-store";
 
 // No existing test anywhere in this repo touches Realtime/Presence, and the
 // established Supabase mock pattern (comments-store.test.ts,
@@ -20,7 +21,14 @@ function createFakeChannel(status: "SUBSCRIBED" | "CHANNEL_ERROR" = "SUBSCRIBED"
   const handlers = new Map<string, Handler>();
   const sent: { event: string; payload: unknown }[] = [];
   const tracked: unknown[] = [];
-  let presence: Record<string, { joinedAt: number }[]> = {};
+  type PresenceFixture = {
+    joinedAt: number;
+    profileId?: string | null;
+    username?: string;
+    displayName?: string;
+    avatarUrl?: string;
+  };
+  let presence: Record<string, PresenceFixture[]> = {};
 
   const channel = {
     on(type: string, filter: { event: string }, cb: Handler) {
@@ -43,7 +51,7 @@ function createFakeChannel(status: "SUBSCRIBED" | "CHANNEL_ERROR" = "SUBSCRIBED"
     _fire(type: string, event: string, arg: unknown) {
       handlers.get(`${type}:${event}`)?.(arg);
     },
-    _setPresence(next: Record<string, { joinedAt: number }[]>) {
+    _setPresence(next: Record<string, PresenceFixture[]>) {
       presence = next;
     },
     _sent: sent,
@@ -84,6 +92,9 @@ beforeEach(() => {
   // real implementation has no way to observe it from outside, so tests
   // that need to know "which presence entry is me" pin it to a fixed value.
   vi.spyOn(crypto, "randomUUID").mockReturnValue("self-id" as `${string}-${string}-${string}-${string}-${string}`);
+  // No signed-in profile by default — most tests exercise the ad-hoc/guest
+  // path; the round-trip test below explicitly seeds a real profile instead.
+  useCurrentUserStore.setState({ profile: null });
 });
 
 describe("useWatchRoom — host election", () => {
@@ -97,7 +108,65 @@ describe("useWatchRoom — host election", () => {
     });
 
     expect(result.current.isHost).toBe(true);
-    expect(result.current.participants).toEqual([{ id: "self-id", joinedAt: 100 }]);
+    // No profile signed in — falls back to a Guest identity rather than
+    // blocking room join (matches can_access_watch_room's permissive
+    // fallback for ad-hoc rooms with no watch_parties row at all).
+    expect(result.current.participants).toEqual([
+      { id: "self-id", joinedAt: 100, profileId: null, username: "guest", displayName: "Guest", avatarUrl: "" },
+    ]);
+  });
+
+  it("carries a signed-in user's real identity through to participants and to what it tracks", () => {
+    useCurrentUserStore.setState({
+      profile: {
+        id: "profile-1",
+        username: "reddrift",
+        displayName: "Red Drift",
+        avatarUrl: "https://example.com/a.jpg",
+        bannerUrl: "",
+        bio: "",
+        followers: 0,
+        following: 0,
+        totalViews: 0,
+      },
+    });
+    const videoRef = { current: createFakeVideo() };
+    const { result } = renderHook(() => useWatchRoom("room-1", "v1", videoRef));
+
+    act(() => {
+      fakeChannel._setPresence({
+        "self-id": [
+          {
+            joinedAt: 100,
+            profileId: "profile-1",
+            username: "reddrift",
+            displayName: "Red Drift",
+            avatarUrl: "https://example.com/a.jpg",
+          },
+        ],
+      });
+      fakeChannel._fire("presence", "sync", undefined);
+    });
+
+    expect(result.current.participants).toEqual([
+      {
+        id: "self-id",
+        joinedAt: 100,
+        profileId: "profile-1",
+        username: "reddrift",
+        displayName: "Red Drift",
+        avatarUrl: "https://example.com/a.jpg",
+      },
+    ]);
+    // What this client tracks about itself matches what it reads back —
+    // the round trip through presence isn't just coincidentally matching.
+    expect(fakeChannel._tracked.at(-1)).toEqual({
+      joinedAt: expect.any(Number),
+      profileId: "profile-1",
+      username: "reddrift",
+      displayName: "Red Drift",
+      avatarUrl: "https://example.com/a.jpg",
+    });
   });
 
   it("does not become host when someone else joined earlier", () => {

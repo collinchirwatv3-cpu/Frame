@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useCurrentUserStore } from "@/store/current-user-store";
 
 type SyncPayload = {
   time: number;
@@ -10,11 +11,27 @@ type SyncPayload = {
   at: number; // Date.now() when sent — extrapolated forward to cover network latency.
 };
 
-type PresenceMeta = { joinedAt: number };
+// Real identity, not just a presence key — needed for ParticipantsPanel and
+// for voice chat (use-watch-room-voice.ts) to show/target a specific person
+// rather than an anonymous UUID. profileId is null for the ad-hoc-room,
+// unauthenticated-caller case can_access_watch_room already permits
+// (20260808050000_watch_room_realtime_rls.sql) — identity degrades to a
+// "Guest" fallback rather than ever blocking room join.
+type Identity = { profileId: string | null; username: string; displayName: string; avatarUrl: string };
+type PresenceMeta = Identity & { joinedAt: number };
 
-export type Participant = { id: string; joinedAt: number };
+export type Participant = Identity & { id: string; joinedAt: number };
+
+const GUEST_IDENTITY: Identity = { profileId: null, username: "guest", displayName: "Guest", avatarUrl: "" };
 
 export type QueueItem = { id: string; title: string; posterUrl: string; creatorUsername: string };
+
+// Exported so use-watch-room-voice.ts can type the same channel instance
+// it's handed — this file never imports Supabase's RealtimeChannel type by
+// name and treats the channel structurally (see the module doc comment),
+// so this alias is derived from createClient's own return type instead of
+// naming a type this file doesn't otherwise reference.
+export type RoomChannel = ReturnType<ReturnType<typeof createClient>["channel"]>;
 
 // Corrections smaller than this are invisible as a stutter; anything bigger
 // gets a hard seek rather than trying to smoothly catch up. Exported only
@@ -88,10 +105,30 @@ export function useWatchRoom(
   // not merely "not yet subscribed". Only meaningful for listed parties
   // (see the module doc comment); ad-hoc rooms should never hit this.
   const [denied, setDenied] = useState(false);
-  const channelRef = useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null);
+  const channelRef = useRef<RoomChannel | null>(null);
+  // Mirrors channelRef in real state — use-watch-room-voice.ts needs a
+  // reactive value to attach its own listeners to once the channel exists,
+  // and mutating a ref doesn't itself trigger the re-render that would
+  // propagate it. Internal callbacks below keep reading channelRef directly
+  // (imperative access, not a render dependency), same as before.
+  const [channel, setChannel] = useState<RoomChannel | null>(null);
   const queueRef = useRef<QueueItem[]>([]);
   const selfId = useMemo(() => crypto.randomUUID(), []);
   const [joinedAt] = useState(() => Date.now());
+  const profile = useCurrentUserStore((s) => s.profile);
+  const identity: Identity = profile
+    ? { profileId: profile.id, username: profile.username, displayName: profile.displayName, avatarUrl: profile.avatarUrl }
+    : GUEST_IDENTITY;
+  // Read via a ref (written in its own effect, not render — this repo's
+  // lint config rejects ref writes during render) so the presence effect
+  // below (which only re-runs on roomId change, matching every other
+  // subscription lifecycle in this file) always tracks the latest identity
+  // without needing to tear down and reopen the channel whenever the
+  // profile loads/changes.
+  const identityRef = useRef(identity);
+  useEffect(() => {
+    identityRef.current = identity;
+  });
 
   const broadcastSync = useCallback(() => {
     const video = videoRef.current;
@@ -163,7 +200,17 @@ export function useWatchRoom(
     channel.on("presence", { event: "sync" }, () => {
       const state = channel.presenceState<PresenceMeta>();
       const entries = Object.entries(state)
-        .map(([id, presences]) => ({ id, joinedAt: presences[0]?.joinedAt ?? Date.now() }))
+        .map(([id, presences]) => {
+          const meta = presences[0];
+          return {
+            id,
+            joinedAt: meta?.joinedAt ?? Date.now(),
+            profileId: meta?.profileId ?? null,
+            username: meta?.username ?? GUEST_IDENTITY.username,
+            displayName: meta?.displayName ?? GUEST_IDENTITY.displayName,
+            avatarUrl: meta?.avatarUrl ?? GUEST_IDENTITY.avatarUrl,
+          };
+        })
         .sort((a, b) => a.joinedAt - b.joinedAt);
       setParticipants(entries);
       const nowHost = entries[0]?.id === selfId;
@@ -192,7 +239,7 @@ export function useWatchRoom(
 
     channel.subscribe((status) => {
       if (status === "SUBSCRIBED") {
-        channel.track({ joinedAt } satisfies PresenceMeta);
+        channel.track({ joinedAt, ...identityRef.current } satisfies PresenceMeta);
       } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
         // RLS on realtime.messages rejected this connection (not an
         // invited member, for a listed party — see the module doc
@@ -203,9 +250,11 @@ export function useWatchRoom(
     });
 
     channelRef.current = channel;
+    setChannel(channel);
     return () => {
       supabase.removeChannel(channel);
       channelRef.current = null;
+      setChannel(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId]);
@@ -220,6 +269,8 @@ export function useWatchRoom(
   }, [isHost, broadcastSync, videoRef]);
 
   return {
+    selfId,
+    channel,
     participants,
     isHost,
     broadcastSync,
