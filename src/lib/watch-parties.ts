@@ -162,11 +162,15 @@ export async function createParty(params: {
   return fetchPartyById(id);
 }
 
-/** No host_id check needed client-side — watch_parties_delete_own's
- * `using (auth.uid() = host_id)` already means this silently affects zero
- * rows for anyone but the host, same reasoning as createParty above. */
+/** watch_parties_delete_own's `using (auth.uid() = host_id)` means a
+ * non-host's delete matches zero rows rather than erroring — Postgres RLS
+ * silently filters, it doesn't reject. A bare `!error` check can't tell
+ * "actually deleted" apart from "matched nothing," which previously let a
+ * caller who isn't really the host believe End Party worked (navigate away)
+ * while the row was untouched. `.select("id")` forces the delete to report
+ * which rows it actually touched, so this can tell the difference for real. */
 export async function deleteParty(id: string): Promise<boolean> {
   const supabase = createClient();
-  const { error } = await supabase.from("watch_parties").delete().eq("id", id);
-  return !error;
+  const { data, error } = await supabase.from("watch_parties").delete().eq("id", id).select("id");
+  return !error && (data?.length ?? 0) > 0;
 }

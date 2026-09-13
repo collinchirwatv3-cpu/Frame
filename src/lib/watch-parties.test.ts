@@ -33,13 +33,14 @@ vi.mock("@/lib/supabase/client", () => ({
       builder.in = record("in");
       builder.order = record("order");
       builder.limit = record("limit");
+      builder.delete = record("delete");
       builder.then = (resolve: (v: unknown) => unknown) => Promise.resolve(response).then(resolve);
       return builder;
     },
   }),
 }));
 
-const { fetchParties, fetchMyParties, fetchFollowedParties } = await import("./watch-parties");
+const { fetchParties, fetchMyParties, fetchFollowedParties, deleteParty } = await import("./watch-parties");
 
 beforeEach(() => {
   calls = [];
@@ -113,5 +114,30 @@ describe("fetchFollowedParties", () => {
       args: ["visibility", "public"],
     });
     expect(result).toHaveLength(1);
+  });
+});
+
+// Regression coverage: watch_parties_delete_own's RLS silently matches zero
+// rows for a non-host caller rather than erroring — a bare `!error` check
+// can't tell "actually deleted" apart from "matched nothing," which
+// previously let deleteParty report success (and the caller navigate away)
+// even when nothing was actually deleted.
+describe("deleteParty", () => {
+  it("reports success only when a row was actually deleted", async () => {
+    mockResponses.watch_parties = { data: [{ id: "party-1" }], error: null };
+    const result = await deleteParty("party-1");
+    expect(result).toBe(true);
+  });
+
+  it("reports failure when RLS silently matches zero rows (caller isn't really the host)", async () => {
+    mockResponses.watch_parties = { data: [], error: null };
+    const result = await deleteParty("party-1");
+    expect(result).toBe(false);
+  });
+
+  it("reports failure on a real error", async () => {
+    mockResponses.watch_parties = { data: null, error: { message: "network error" } };
+    const result = await deleteParty("party-1");
+    expect(result).toBe(false);
   });
 });

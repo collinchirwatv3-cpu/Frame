@@ -14,6 +14,7 @@ import type { Participant } from "@/lib/use-watch-room";
 export function ParticipantsPanel({
   participants,
   selfId,
+  realHostId,
   isHost,
   voiceConnectedIds,
   mutedParticipants,
@@ -23,6 +24,18 @@ export function ParticipantsPanel({
 }: {
   participants: Participant[];
   selfId: string;
+  /** watch_parties.host_id — the party's real, database host — used only
+   * for the crown badge below. Null for an ad-hoc "Watch together" room
+   * (no watch_parties row exists to have a host_id at all), in which case
+   * no one is shown wearing the crown, honestly reflecting that there is
+   * no real host concept there. Deliberately NOT the same value as `isHost`
+   * below. */
+  realHostId: string | null;
+  /** Sync-authority role (whoever's presence has been tracked longest) —
+   * intentionally unrelated to realHostId. Still exactly what gates
+   * mute-all/individual-mute privilege here; that's a real, confirmed
+   * product decision (see use-watch-room-voice.ts's own doc comment), not
+   * something this prop rename touches. */
   isHost: boolean;
   voiceConnectedIds: Set<string>;
   mutedParticipants: Set<string>;
@@ -30,9 +43,6 @@ export function ParticipantsPanel({
   onRequestMute: (participantId: string) => void;
   onRequestMuteAll: () => void;
 }) {
-  // participants is already sorted earliest-first by useWatchRoom — the
-  // same ordering that determines isHost there.
-  const hostId = participants[0]?.id;
   const otherVoiceCount = [...voiceConnectedIds].filter(
     (id) => id !== selfId && !mutedParticipants.has(id)
   ).length;
@@ -56,7 +66,11 @@ export function ParticipantsPanel({
       <div className="flex flex-col gap-1">
         {participants.map((participant) => {
           const isSelf = participant.id === selfId;
-          const isParticipantHost = participant.id === hostId;
+          // profileId, not participant.id — id is the ephemeral per-
+          // connection presence key (a fresh crypto.randomUUID() every
+          // join), while realHostId is a real, stable profiles.id.
+          // Comparing against id would just never match.
+          const isParticipantHost = !!realHostId && participant.profileId === realHostId;
           const onVoice = voiceConnectedIds.has(participant.id);
           const isMuted = mutedParticipants.has(participant.id);
           const isSpeaking = onVoice && !isMuted && speakingIds.has(participant.id);

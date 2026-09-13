@@ -3,11 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import NextLink from "next/link";
-import { Check, Link2, LogOut, Mic, MicOff, Trash2, Volume2, VolumeX } from "lucide-react";
+import { Check, Crown, Link2, LogOut, Mic, MicOff, Trash2, Users, Volume2, VolumeX } from "lucide-react";
 import { useWatchRoom } from "@/lib/use-watch-room";
 import { useWatchRoomVoice } from "@/lib/use-watch-room-voice";
 import { fetchVideoById } from "@/lib/watch-together";
-import { fetchPartyById, deleteParty } from "@/lib/watch-parties";
+import { fetchPartyById, deleteParty, type WatchParty } from "@/lib/watch-parties";
+import { useCurrentUserStore } from "@/store/current-user-store";
 import { AddToQueueSheet } from "./AddToQueueSheet";
 import { ParticipantsPanel } from "./ParticipantsPanel";
 import { QueuePanel } from "./QueuePanel";
@@ -43,8 +44,13 @@ export function WatchTogetherPlayer({
   const [copied, setCopied] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [video, setVideo] = useState(initialVideo);
-  const [partyTitle, setPartyTitle] = useState<string | null>(null);
+  // Full party row, not just its title — needed for the REAL host_id below.
+  // Ad-hoc rooms (the "Watch together" button on a video) have no
+  // watch_parties row at all, so this stays null for them either way
+  // (missing vs. ad-hoc collapse into the same fallback state).
+  const [party, setParty] = useState<WatchParty | null>(null);
   const [ending, setEnding] = useState(false);
+  const ownProfile = useCurrentUserStore((s) => s.profile);
   const {
     selfId,
     channel,
@@ -60,17 +66,30 @@ export function WatchTogetherPlayer({
     denied,
   } = useWatchRoom(roomId, initialVideo.id, videoRef);
 
+  // Deliberately NOT the same thing as useWatchRoom's `isHost` above —
+  // that's a sync-authority role (whoever's presence has been tracked
+  // longest), used for playback-sync broadcasting and voice-mute privilege
+  // by design (see use-watch-room.ts/use-watch-room-voice.ts's own doc
+  // comments — real, confirmed product decisions, not bugs). It is NOT the
+  // same person as watch_parties.host_id, which is what
+  // watch_parties_delete_own's RLS actually checks. Before this fix, End
+  // Party's visibility was tied to sync-authority `isHost` — meaning
+  // whoever happened to have been present longest could see and tap "End
+  // Party" even if they weren't the real host, and deleteParty would
+  // silently affect zero rows (RLS filters rather than errors), while the
+  // real host might not see the button at all after a reconnect changed
+  // who counts as longest-present. This uses the exact same
+  // `ownProfile.id === party.host.id` check PartyCard.tsx already uses
+  // correctly on the parties list.
+  const isRealHost = !!party && !!ownProfile && ownProfile.id === party.host.id;
+
   const voice = useWatchRoomVoice(channel, selfId, participants, isHost);
   const voiceConnectedIds = new Set(
     voice.phase === "live" ? [...voice.remoteStreams.keys(), selfId] : [...voice.remoteStreams.keys()]
   );
 
-  // Resolves a real party's title for the header. Ad-hoc rooms (the "Watch
-  // together" button on a video) have no watch_parties row at all —
-  // fetchPartyById returns null either way, and the header falls back to
-  // the video's own title, same case either way (missing vs. ad-hoc).
   useEffect(() => {
-    fetchPartyById(roomId).then((party) => setPartyTitle(party?.title ?? null));
+    fetchPartyById(roomId).then(setParty);
   }, [roomId]);
 
   // currentVideoId only ever changes via the room's "advance" broadcast
@@ -90,7 +109,7 @@ export function WatchTogetherPlayer({
   }
 
   async function handleEnd() {
-    if (ending || !window.confirm("End this watch party for everyone?")) return;
+    if (ending || !window.confirm("End this Frame Party for everyone?")) return;
     setEnding(true);
     const ok = await deleteParty(roomId);
     if (ok) router.push("/parties");
@@ -108,7 +127,7 @@ export function WatchTogetherPlayer({
   if (denied) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 h-dvh bg-bg text-center px-6">
-        <p className="text-sm font-medium">You don&apos;t have access to this watch party</p>
+        <p className="text-sm font-medium">You don&apos;t have access to this Frame Party</p>
         <p className="text-xs text-text-secondary max-w-sm">
           This party is invite-only — you&apos;ll need a FRAMES invite to join.
         </p>
@@ -122,13 +141,23 @@ export function WatchTogetherPlayer({
   return (
     <div className="min-h-dvh bg-bg pb-24 md:pb-8">
       <div className="max-w-2xl mx-auto px-4 md:px-6 pt-6 flex flex-col gap-5">
-        {/* Header */}
+        {/* Header — title, host, participant count (in that order, ahead of
+            the player) per the Frame Party hierarchy. */}
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-xs font-medium text-primary">
-              {isHost ? "You're hosting" : "Watching in sync"}
-            </p>
-            <h1 className="text-lg font-semibold truncate">{partyTitle ?? video.title}</h1>
+            <h1 className="text-lg font-semibold truncate">{party?.title ?? video.title}</h1>
+            <div className="flex items-center gap-2.5 mt-0.5 text-xs text-text-secondary">
+              {party && (
+                <span className="flex items-center gap-1">
+                  <Crown size={11} className="text-primary shrink-0" />
+                  {isRealHost ? "You're hosting" : `Hosted by ${party.host.displayName}`}
+                </span>
+              )}
+              <span className="flex items-center gap-1">
+                <Users size={11} />
+                {participants.length} watching
+              </span>
+            </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
@@ -205,14 +234,32 @@ export function WatchTogetherPlayer({
           <RemoteVoiceAudio key={participantId} stream={stream} />
         ))}
 
-        {/* Following the host's feed / creator line */}
-        <p className="text-sm text-text-secondary -mt-2">Hosted by @{video.creator.username}</p>
+        {/* Real attribution for the video currently playing — this is the
+            CLIP's creator, not necessarily the party's host (a host can
+            queue anyone's public Frame). Was "Hosted by @creator" before,
+            which conflated the two and was simply wrong whenever the
+            playing Frame wasn't made by the host. */}
+        <p className="text-sm text-text-secondary -mt-2">By @{video.creator.username}</p>
+
+        <div className="h-px bg-border" />
+
+        {/* Queue ahead of Participants — "up next" is the more actionable,
+            more frequently-referenced section of the two while a party is
+            actually running. */}
+        <QueuePanel
+          nowPlaying={video}
+          queue={queue}
+          onMove={moveQueueItem}
+          onRemove={removeFromQueue}
+          onAdd={() => setAddOpen(true)}
+        />
 
         <div className="h-px bg-border" />
 
         <ParticipantsPanel
           participants={participants}
           selfId={selfId}
+          realHostId={party?.host.id ?? null}
           isHost={isHost}
           voiceConnectedIds={voiceConnectedIds}
           mutedParticipants={voice.mutedParticipants}
@@ -223,32 +270,27 @@ export function WatchTogetherPlayer({
 
         <div className="h-px bg-border" />
 
-        <QueuePanel
-          nowPlayingTitle={video.title}
-          queue={queue}
-          onMove={moveQueueItem}
-          onRemove={removeFromQueue}
-          onAdd={() => setAddOpen(true)}
-        />
-
-        <div className="h-px bg-border" />
-
         <div className="flex items-center gap-3 pb-4">
           <button
             onClick={handleLeave}
             className={cn(CHROME_GLASS_CLASS, CHROME_TAP_SCALE_CLASS, "flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium")}
           >
             <LogOut size={14} />
-            Leave party
+            Leave Party
           </button>
-          {isHost && (
+          {/* Real host only (watch_parties.host_id), never the sync-authority
+              isHost — see this component's own doc comment on isRealHost
+              above for why that distinction matters here specifically. Also
+              requires a real party (ad-hoc "Watch together" rooms have no
+              watch_parties row to end at all). */}
+          {isRealHost && (
             <button
               onClick={handleEnd}
               disabled={ending}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-full bg-red-500/90 text-white text-sm font-semibold disabled:opacity-50 transition-opacity"
             >
               <Trash2 size={14} />
-              {ending ? "Ending…" : "End party"}
+              {ending ? "Ending…" : "End Party"}
             </button>
           )}
         </div>
