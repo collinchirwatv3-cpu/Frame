@@ -191,13 +191,16 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
       data-index={index}
       className="relative h-dvh w-full snap-start snap-always overflow-hidden bg-bg"
     >
-      {/* blurred cinematic backdrop fills any letterbox space — no black bars */}
+      {/* Cinematic backdrop fills any letterbox space — no black bars. Lighter
+          blur + higher opacity than the original (blur-3xl/opacity-40) so it
+          reads as the frame's own ambient light bleeding to the edges, not a
+          visibly separate hazy image behind a sharp video. */}
       <div className="absolute inset-0">
         <Image
           src={video.posterUrl}
           alt=""
           fill
-          className="object-cover scale-125 blur-3xl opacity-40"
+          className="object-cover scale-110 blur-xl opacity-70"
           priority={active}
         />
       </div>
