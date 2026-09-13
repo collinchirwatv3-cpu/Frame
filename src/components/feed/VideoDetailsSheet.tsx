@@ -7,7 +7,17 @@ import { SHEET_SPRING } from "@/lib/motion";
 import { useEscapeToClose } from "@/lib/use-escape-to-close";
 import { formatRelativeTime, formatTimestamp } from "@/lib/utils";
 import { useClipsStore } from "@/store/clips-store";
-import type { Video } from "@/lib/types";
+import type { Clip, Video } from "@/lib/types";
+
+// A stable module-level reference, not an inline `?? []` in the selector
+// below — a fresh array literal there is a NEW reference every call, which
+// breaks useSyncExternalStore's equality check and causes an infinite
+// render loop the moment a video has no clips yet (any video with none:
+// "Maximum update depth exceeded", crashing to the app's error boundary
+// every time this sheet mounts for such a video). Same class of bug
+// documented in MIGRATION_PLAN.md's zustand-selector note — fix pattern is
+// a stable fallback reference, not deriving one inline per call.
+const EMPTY_CLIPS: Clip[] = [];
 
 function Row({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
   return (
@@ -38,7 +48,7 @@ export function VideoDetailsSheet({
 }) {
   const d = video.details;
   const fetchClips = useClipsStore((s) => s.fetchClips);
-  const clips = useClipsStore((s) => s.byVideoId[video.id] ?? []);
+  const clips = useClipsStore((s) => s.byVideoId[video.id] ?? EMPTY_CLIPS);
 
   useEscapeToClose(open, onClose);
 
