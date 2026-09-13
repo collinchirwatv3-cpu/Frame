@@ -93,8 +93,8 @@ export function AddToQueueSheet({
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search videos"
-                  aria-label="Search videos to add"
+                  placeholder="Search Frames"
+                  aria-label="Search Frames to add"
                   className="flex-1 bg-transparent text-sm outline-none"
                 />
               </div>
@@ -106,7 +106,7 @@ export function AddToQueueSheet({
                   <Loader2 size={22} className="animate-spin text-text-secondary" />
                 </div>
               ) : shown.length === 0 ? (
-                <p className="text-center text-text-secondary text-sm py-10">No videos found.</p>
+                <p className="text-center text-text-secondary text-sm py-10">No Frames found.</p>
               ) : (
                 shown.map((video) => {
                   const queued = queuedIds.includes(video.id) || justAdded === video.id;

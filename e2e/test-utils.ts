@@ -28,7 +28,7 @@ export async function skipOnboarding(page: Page) {
   // after a post-navigation effect runs — race the two possible landing
   // states instead of trusting page.url() immediately after goto().
   const continueButton = page.getByRole("button", { name: "Continue" });
-  const emptyStateHeading = page.getByText("No videos yet");
+  const emptyStateHeading = page.getByText("No Frames yet");
   await continueButton.or(emptyStateHeading).waitFor();
 
   if (await continueButton.isVisible()) {

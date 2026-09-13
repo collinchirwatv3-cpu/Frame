@@ -190,7 +190,7 @@ export function WatchTogetherPlayer({
           />
           <button
             onClick={() => setMuted((m) => !m)}
-            aria-label={muted ? "Unmute video" : "Mute video"}
+            aria-label={muted ? "Unmute Frame" : "Mute Frame"}
             className={cn(
               CHROME_GLASS_CLASS,
               CHROME_TAP_SCALE_CLASS,

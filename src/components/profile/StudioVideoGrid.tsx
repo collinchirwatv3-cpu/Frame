@@ -110,14 +110,14 @@ export function StudioVideoGrid({ videos, creator }: { videos: OwnVideo[]; creat
         </span>
         <p className="text-sm font-medium">Nothing uploaded yet</p>
         <p className="text-xs text-text-secondary max-w-[220px]">
-          Your public films will show up here once you publish your first one.
+          Your public Frames will show up here once you publish your first one.
         </p>
         <Link
           href="/upload"
           className="mt-1 flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-bg text-xs font-semibold"
         >
           <UploadCloud size={13} />
-          Upload a film
+          Upload a Frame
         </Link>
       </div>
     );

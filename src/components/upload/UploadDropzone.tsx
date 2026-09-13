@@ -235,7 +235,7 @@ export function UploadDropzone() {
         setStatus("thumbnail");
       } else if (data.processing_status === "failed") {
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-        setErrorMessage("Cloudflare Stream couldn't encode this video.");
+        setErrorMessage("Cloudflare Stream couldn't encode this Frame.");
         setStatus("failed");
       }
     }, POLL_INTERVAL_MS);
@@ -402,7 +402,7 @@ export function UploadDropzone() {
     return (
       <div className="flex flex-col items-center justify-center gap-4 h-[60vh] text-center px-6">
         <Loader2 size={40} className="animate-spin text-primary" />
-        <h2 className="text-lg font-semibold">Encoding your video</h2>
+        <h2 className="text-lg font-semibold">Encoding your Frame</h2>
         <p className="text-text-secondary text-sm max-w-sm">
           {fileName} finished uploading and is being transcoded to adaptive HLS. This usually
           takes a few minutes.
@@ -506,7 +506,7 @@ export function UploadDropzone() {
           {appliedFix && (
             <p className="text-xs text-primary mt-2">
               {appliedFix.type === "rotate"
-                ? "This video will be rotated 90° during processing."
+                ? "This Frame will be rotated 90° during processing."
                 : `This video will be cropped to ${appliedFix.target.label} during processing.`}
             </p>
           )}
@@ -551,7 +551,7 @@ export function UploadDropzone() {
               required
               value={draftTitle}
               onChange={(e) => setDraftTitle(e.target.value)}
-              placeholder="Give your video a title"
+              placeholder="Give your Frame a title"
               className="w-full bg-card border border-border rounded-xl px-4 py-2.5 text-sm outline-none focus:border-primary transition-colors"
             />
           </div>
@@ -655,7 +655,7 @@ export function UploadDropzone() {
                   type="button"
                   onClick={() => monetizationEligible && setPublishMode("monetise")}
                   disabled={!monetizationEligible}
-                  title={monetizationEligible ? undefined : "You're not eligible to monetise videos yet"}
+                  title={monetizationEligible ? undefined : "You're not eligible to monetise Frames yet"}
                   className={cn(
                     "px-4 py-1.5 rounded-full text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
                     publishMode === "monetise"
@@ -700,7 +700,7 @@ export function UploadDropzone() {
   return (
     <div className="max-w-2xl mx-auto px-6 py-12">
       <p className="text-primary text-xs font-semibold tracking-wide uppercase mb-1.5">Creator Studio</p>
-      <h1 className="text-2xl font-bold mb-1">Upload a new film</h1>
+      <h1 className="text-2xl font-bold mb-1">Upload a new Frame</h1>
       <p className="text-text-secondary text-sm mb-6">
         Landscape only. FRAMES supports 16:9, 21:9 Cinema, and 16:10 — no exceptions, no black
         bars.
@@ -737,7 +737,7 @@ export function UploadDropzone() {
         <div
           role="button"
           tabIndex={0}
-          aria-label="Choose a video file to upload"
+          aria-label="Choose a Frame file to upload"
           onDragOver={(e) => {
             e.preventDefault();
             setDragOver(true);
@@ -769,7 +769,7 @@ export function UploadDropzone() {
           />
 
           <UploadCloud size={32} className="text-text-secondary" />
-          <p className="text-sm font-medium">Drag & drop your video, or click to browse</p>
+          <p className="text-sm font-medium">Drag & drop your Frame, or click to browse</p>
           <p className="text-xs text-text-secondary">
             MP4, MOV, MKV, WebM, and most camera formats · up to 4K · 60fps
           </p>

@@ -128,8 +128,8 @@ export function CreatePartySheet({ open, onClose }: { open: boolean; onClose: ()
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Pick a film to start with"
-                  aria-label="Search films to start the party with"
+                  placeholder="Pick a Frame to start with"
+                  aria-label="Search Frames to start the party with"
                   className="flex-1 bg-transparent text-sm outline-none"
                 />
               </div>
@@ -141,7 +141,7 @@ export function CreatePartySheet({ open, onClose }: { open: boolean; onClose: ()
                   <Loader2 size={22} className="animate-spin text-text-secondary" />
                 </div>
               ) : shown.length === 0 ? (
-                <p className="text-center text-text-secondary text-sm py-10">No films found.</p>
+                <p className="text-center text-text-secondary text-sm py-10">No Frames found.</p>
               ) : (
                 shown.map((video) => {
                   const selected = selectedId === video.id;

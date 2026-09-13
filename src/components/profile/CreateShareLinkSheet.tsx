@@ -122,7 +122,7 @@ export function CreateShareLinkSheet({
 
               {links.length > 0 && (
                 <div className="pt-2 border-t border-border flex flex-col gap-2.5">
-                  <p className="text-xs font-medium text-text-secondary">Links for this video</p>
+                  <p className="text-xs font-medium text-text-secondary">Links for this Frame</p>
                   {links.map((link) => {
                     const status = getShareLinkStatus(link);
                     return (

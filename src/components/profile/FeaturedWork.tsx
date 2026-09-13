@@ -54,7 +54,7 @@ export function FeaturedWork({
     <div className="px-6 mt-6 flex flex-col md:flex-row gap-3">
       {featuredVideo && (
         <FeaturedCard
-          label="Featured film"
+          label="Featured Frame"
           // /watch/[id], not /?v= — same reasoning as StudioVideoGrid: Home
           // is a curated feed, this video isn't guaranteed to be in it.
           href={`/watch/${featuredVideo.id}`}

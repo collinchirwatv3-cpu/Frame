@@ -15,11 +15,17 @@ import { skipOnboarding } from "./test-utils";
 test("Discover shows the honest empty state with an upload CTA", async ({ page }) => {
   await skipOnboarding(page);
 
-  await expect(page.getByText("No videos yet")).toBeVisible();
+  // Discover now genuinely waits for the fetch against placeholder.supabase.co
+  // to resolve before showing the empty state (previously this rendered off
+  // stale initial state regardless of whether the fetch had settled — the
+  // exact "empty" vs "still loading" vs "failed" ambiguity this pass fixed).
+  // That real round trip to an unrecognized project ref takes longer than
+  // the default 5s assertion timeout, so this one gets a longer budget.
+  await expect(page.getByText("No Frames yet")).toBeVisible({ timeout: 15000 });
   await expect(
     page.getByText("FRAMES is just getting started", { exact: false })
   ).toBeVisible();
-  await expect(page.getByRole("link", { name: "Upload a video" })).toHaveAttribute(
+  await expect(page.getByRole("link", { name: "Upload a Frame" })).toHaveAttribute(
     "href",
     "/upload"
   );

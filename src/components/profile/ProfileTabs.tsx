@@ -73,7 +73,7 @@ export function ProfileTabs({
             videos={saved}
             emptyIcon={Bookmark}
             emptyHeading="Nothing saved yet"
-            emptySubtext="Videos you save will show up here."
+            emptySubtext="Frames you save will show up here."
           />
         )}
         {tab === "history" && (
@@ -81,7 +81,7 @@ export function ProfileTabs({
             videos={history}
             emptyIcon={HistoryIcon}
             emptyHeading="No watch history yet"
-            emptySubtext="Films you watch will show up here."
+            emptySubtext="Frames you watch will show up here."
           />
         )}
         {tab === "private" && <PrivateVideoList videos={privateVideos} />}

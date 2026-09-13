@@ -33,9 +33,9 @@ const fraunces = Fraunces({
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "FRAMES — Cinematic Landscape Video",
+  title: "FRAMES — Cinematic Landscape Frames",
   description:
-    "FRAMES is the home for landscape creators. Every video full-screen and cinematic — 16:9, 21:9, and 16:10.",
+    "FRAMES is the home for landscape creators. Every Frame full-screen and cinematic — 16:9, 21:9, and 16:10.",
   icons: {
     icon: [
       { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },

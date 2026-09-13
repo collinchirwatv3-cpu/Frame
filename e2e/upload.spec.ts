@@ -10,7 +10,7 @@ test("upload page renders the landscape-only dropzone with a click-to-browse aff
   await expect(page.getByRole("heading", { name: "Upload" })).toBeVisible();
   await expect(page.getByText("Landscape only.", { exact: false })).toBeVisible();
   await expect(
-    page.getByText("Drag & drop your video, or click to browse")
+    page.getByText("Drag & drop your Frame, or click to browse")
   ).toBeVisible();
 
   // The dropzone's click affordance is a real file input, not just decorative copy.

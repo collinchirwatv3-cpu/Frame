@@ -19,8 +19,11 @@ test("first-time visitor completes onboarding and lands on the feed", async ({ p
   // No real content exists in this environment (see MIGRATION_PLAN.md — mock
   // data was deliberately removed) — the honest empty state is the real,
   // reachable proof that the feed itself rendered, not a stand-in for content.
-  await expect(page.getByText("No videos yet")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Upload a video" })).toBeVisible();
+  // Longer timeout: Discover now genuinely waits for the fetch against
+  // placeholder.supabase.co to resolve (rather than rendering off stale
+  // initial state), and that round trip runs longer than the 5s default.
+  await expect(page.getByText("No Frames yet")).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole("link", { name: "Upload a Frame" })).toBeVisible();
 
   // Onboarding is a one-time gate — reloading must not bounce back to it.
   await page.reload();

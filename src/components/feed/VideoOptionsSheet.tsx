@@ -36,7 +36,7 @@ export function VideoOptionsSheet({
   }
 
   function handleNotInterested() {
-    setFeedback("You'll see fewer videos like this");
+    setFeedback("You'll see fewer Frames like this");
     closeSoon();
   }
 
@@ -76,7 +76,7 @@ export function VideoOptionsSheet({
           <motion.div
             role="dialog"
             aria-modal="true"
-            aria-label="Video options"
+            aria-label="Frame options"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
@@ -111,7 +111,7 @@ export function VideoOptionsSheet({
                   className="flex items-center gap-3 px-5 py-3.5 text-sm font-medium hover:bg-bg transition-colors text-left text-primary disabled:opacity-50"
                 >
                   <Flag size={18} />
-                  Report video
+                  Report Frame
                 </button>
                 <div className="h-px bg-border my-1 mx-5" />
                 <button

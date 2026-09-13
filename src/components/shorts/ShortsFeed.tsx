@@ -177,7 +177,7 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
   if (shorts.length === 0) {
     return (
       <div className="relative flex flex-col items-center justify-center h-dvh text-center px-6 gap-2">
-        <p className="text-sm font-medium">No shorts yet</p>
+        <p className="text-sm font-medium">No Frames yet</p>
         <p className="text-xs text-text-secondary">Be the first to post one.</p>
       </div>
     );
@@ -187,7 +187,7 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
     <div
       ref={containerRef}
       role="region"
-      aria-label={`Shorts, ${activeIndex + 1} of ${shorts.length}`}
+      aria-label={`Frames, ${activeIndex + 1} of ${shorts.length}`}
       onClick={exitDirectorMode}
       className="relative h-dvh w-full overflow-y-scroll snap-y snap-mandatory no-scrollbar bg-bg"
     >
