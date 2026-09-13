@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Loader2, Mail } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/ui/Logo";
+
+type OAuthProvider = "google" | "apple";
 
 function GoogleGlyph() {
   return (
@@ -40,26 +42,44 @@ export default function LoginPage() {
   const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(
     null
   );
+  const [oauthUrls, setOauthUrls] = useState<Record<OAuthProvider, string | null>>({
+    google: null,
+    apple: null,
+  });
 
-  async function withOAuth(provider: "google" | "apple") {
-    setLoading(provider);
-    setMessage(null);
-    try {
-      const supabase = createClient();
-      const { error } = await supabase.auth.signInWithOAuth({
+  // Safari — especially iOS — can silently drop a same-tab redirect that's
+  // triggered from JS after any async work: signInWithOAuth's PKCE
+  // code-challenge generation is unavoidably async (crypto.subtle.digest +
+  // storing the verifier), so by the time it has a URL to navigate to, the
+  // tap that started it is no longer within the window Safari treats as
+  // user-initiated — it just does nothing, no error, no console message.
+  // A real <a href> click is never ambiguous this way in any browser, so
+  // both providers' URLs are pre-computed once on mount
+  // (skipBrowserRedirect: true — this only builds the URL and stores the
+  // PKCE verifier, it never navigates) and rendered as real links. There is
+  // no click-time async gap left to lose a gesture across.
+  useEffect(() => {
+    let cancelled = false;
+    const supabase = createClient();
+    (["google", "apple"] as const).forEach(async (provider) => {
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
-        options: { redirectTo: `${window.location.origin}/auth/callback` },
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          skipBrowserRedirect: true,
+        },
       });
-      if (error) throw error;
-    } catch (err) {
-      setMessage({
-        type: "error",
-        text: err instanceof Error ? err.message : "Something went wrong — try again.",
-      });
-    } finally {
-      setLoading(null);
-    }
-  }
+      if (cancelled) return;
+      if (error || !data?.url) {
+        setMessage({ type: "error", text: "Google/Apple sign-in isn't available right now — try email instead." });
+        return;
+      }
+      setOauthUrls((prev) => ({ ...prev, [provider]: data.url }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function withEmail(e: React.FormEvent) {
     e.preventDefault();
@@ -92,22 +112,28 @@ export default function LoginPage() {
         </div>
 
         <div className="flex flex-col gap-3">
-          <button
-            onClick={() => withOAuth("google")}
-            disabled={loading !== null}
-            className="flex items-center justify-center gap-3 py-3 rounded-full bg-card border border-border text-sm font-medium hover:bg-card/70 transition-colors disabled:opacity-60"
+          <a
+            href={oauthUrls.google ?? undefined}
+            aria-disabled={!oauthUrls.google || loading !== null}
+            tabIndex={oauthUrls.google ? 0 : -1}
+            className={`flex items-center justify-center gap-3 py-3 rounded-full bg-card border border-border text-sm font-medium hover:bg-card/70 transition-colors ${
+              !oauthUrls.google || loading !== null ? "pointer-events-none opacity-60" : ""
+            }`}
           >
-            {loading === "google" ? <Loader2 size={16} className="animate-spin" /> : <GoogleGlyph />}
+            {oauthUrls.google ? <GoogleGlyph /> : <Loader2 size={16} className="animate-spin" />}
             Continue with Google
-          </button>
-          <button
-            onClick={() => withOAuth("apple")}
-            disabled={loading !== null}
-            className="flex items-center justify-center gap-3 py-3 rounded-full bg-accent text-bg text-sm font-medium hover:bg-accent/90 transition-colors disabled:opacity-60"
+          </a>
+          <a
+            href={oauthUrls.apple ?? undefined}
+            aria-disabled={!oauthUrls.apple || loading !== null}
+            tabIndex={oauthUrls.apple ? 0 : -1}
+            className={`flex items-center justify-center gap-3 py-3 rounded-full bg-accent text-bg text-sm font-medium hover:bg-accent/90 transition-colors ${
+              !oauthUrls.apple || loading !== null ? "pointer-events-none opacity-60" : ""
+            }`}
           >
-            {loading === "apple" ? <Loader2 size={16} className="animate-spin" /> : <AppleGlyph />}
+            {oauthUrls.apple ? <AppleGlyph /> : <Loader2 size={16} className="animate-spin" />}
             Continue with Apple
-          </button>
+          </a>
         </div>
 
         <div className="flex items-center gap-3 my-6">
