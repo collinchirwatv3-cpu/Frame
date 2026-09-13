@@ -132,10 +132,13 @@ export async function fetchPartyById(id: string): Promise<WatchParty | null> {
   return toParty(data as unknown as Row);
 }
 
-/** host_id isn't passed in — watch_parties_insert_own's `with check
- * (auth.uid() = host_id)` means anything other than the caller's own id
- * would just fail the RLS check, so there's no reason to make the caller
- * supply (and risk getting wrong) a value the database already knows. */
+/** Creation goes through POST /api/parties, not a direct client insert —
+ * watch_parties' INSERT grant is revoked for authenticated/anon
+ * (supabase/migrations/20260914120000_lock_down_watch_party_creation.sql)
+ * specifically so every scheduled party (a future notification fan-out to
+ * the host's followers) passes through that route's rate limiting and
+ * per-host cap. host_id isn't passed in the request body — the route
+ * derives it from the verified session, never trusts the client for it. */
 export async function createParty(params: {
   title: string;
   videoId: string;
@@ -143,26 +146,20 @@ export async function createParty(params: {
   scheduledAt?: string | null;
   repeatRule?: PartyRepeatRule;
 }): Promise<WatchParty | null> {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
-
-  const { data, error } = await supabase
-    .from("watch_parties")
-    .insert({
+  const res = await fetch("/api/parties", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
       title: params.title,
-      video_id: params.videoId,
-      host_id: user.id,
+      videoId: params.videoId,
       visibility: params.visibility ?? "public",
-      scheduled_at: params.scheduledAt ?? null,
-      repeat_rule: params.repeatRule ?? "none",
-    })
-    .select(SELECT)
-    .single();
-  if (error || !data) return null;
-  return toParty(data as unknown as Row);
+      scheduledAt: params.scheduledAt ?? null,
+      repeatRule: params.repeatRule ?? "none",
+    }),
+  });
+  if (!res.ok) return null;
+  const { id } = (await res.json()) as { id: string };
+  return fetchPartyById(id);
 }
 
 /** No host_id check needed client-side — watch_parties_delete_own's

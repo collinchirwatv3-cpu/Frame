@@ -1,0 +1,28 @@
+-- FRAME — release-blocker fix. Party CREATION moves behind a validated,
+-- rate-limited server route (POST /api/parties, using the service-role
+-- client after its own checks) — the same "insert via service-role route
+-- only" pattern already used for watch_sessions/ad_impressions/campaigns,
+-- applied here because every scheduled party is a future notification
+-- fan-out to the host's followers (see notify-scheduled), making
+-- unrestricted client-side INSERT a direct spam vector: a scripted flood of
+-- immediately-due parties becomes a scripted flood of follower
+-- notifications the moment the cron runs.
+--
+-- watch_parties_insert_own is now unreachable (grants are checked before
+-- RLS ever runs) — dropped outright rather than left as dead-but-harmless,
+-- unlike this alpha's few pre-existing dead policies (videos_update_own,
+-- watch_sessions_insert), so this doesn't add a fresh instance of the same
+-- "misleading leftover policy" class of finding this same audit flagged
+-- elsewhere.
+--
+-- UPDATE/DELETE are deliberately left untouched (still direct client
+-- writes via watch_parties_update_own/_delete_own): re-scheduling an
+-- EXISTING party cannot retrigger a notification that already fired —
+-- isDue() (notify-scheduled/route.ts) keys off last_notified_at, not
+-- scheduled_at, so editing scheduled_at on an already-notified 'none'-repeat
+-- party is inert, and recurrence re-fire timing for daily/weekly is
+-- likewise governed entirely by last_notified_at. The abuse shape this
+-- migration closes is specifically unbounded CREATION of new,
+-- never-yet-notified rows.
+revoke insert on table watch_parties from authenticated, anon, public;
+drop policy watch_parties_insert_own on watch_parties;

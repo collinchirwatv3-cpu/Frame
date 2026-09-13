@@ -36,7 +36,11 @@ type DueCheckParty = {
 // Recurrence here means the REMINDER repeats, not the session — a
 // repeating party is one row whose scheduled_at never changes; this decides
 // whether it's time to re-fire the notification, not whether to create a
-// new occurrence. Exported for route.test.ts.
+// new occurrence. Exported for route.test.ts, and mirrored exactly in SQL
+// by claim_and_notify_due_parties() (20260914130000_atomic_party_notification_claim.sql)
+// — that DB function is the one actually making this decision at runtime;
+// this copy exists for the unit test coverage a plpgsql function can't get
+// from vitest.
 export function isDue(party: DueCheckParty, now = new Date()): boolean {
   if (!party.last_notified_at) return true;
   if (party.repeat_rule === "none") return false;
@@ -46,47 +50,38 @@ export function isDue(party: DueCheckParty, now = new Date()): boolean {
   return false;
 }
 
+type ClaimResult = { party_id: string; notified_count: number; outcome: string };
+
 // Vercel Cron Jobs invoke via GET, not POST — this must be a GET handler
 // or the scheduled trigger configured in vercel.json will never reach it.
+//
+// The entire claim -> due-check -> notify -> mark-notified sequence now
+// happens inside one atomic database call (claim_and_notify_due_parties)
+// rather than as separate round trips from here — see that function's own
+// migration for why: `for update skip locked` there means two overlapping
+// invocations of this route (a retry, a manual re-trigger while a real
+// cron fire is still in flight) can never both notify the same party, and
+// last_notified_at is only set after a party's notification insert
+// actually succeeds, so a transient failure gets retried instead of
+// silently marked done.
 export async function GET(request: NextRequest) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const supabase = serviceClient();
-  const now = new Date();
-
-  const { data: candidates, error } = await supabase
-    .from("watch_parties")
-    .select("id, host_id, repeat_rule, last_notified_at")
-    .not("scheduled_at", "is", null)
-    .lte("scheduled_at", now.toISOString());
+  const { data, error } = await supabase.rpc("claim_and_notify_due_parties");
 
   if (error) {
-    return NextResponse.json({ error: "Could not load scheduled parties" }, { status: 500 });
+    return NextResponse.json({ error: "Could not process scheduled parties" }, { status: 500 });
   }
 
-  let notified = 0;
-  for (const party of candidates ?? []) {
-    if (!isDue(party, now)) continue;
-
-    const { data: followers } = await supabase.from("follows").select("follower_id").eq("followee_id", party.host_id);
-    const recipientIds = (followers ?? []).map((row) => row.follower_id as string);
-
-    if (recipientIds.length > 0) {
-      await supabase.from("notifications").insert(
-        recipientIds.map((recipientId) => ({
-          recipient_id: recipientId,
-          actor_id: party.host_id,
-          type: "party_starting",
-          party_id: party.id,
-        }))
-      );
-    }
-
-    await supabase.from("watch_parties").update({ last_notified_at: now.toISOString() }).eq("id", party.id);
-    notified++;
+  const results = (data ?? []) as ClaimResult[];
+  const notified = results.filter((r) => r.outcome === "notified").length;
+  const failed = results.filter((r) => r.outcome !== "notified");
+  if (failed.length > 0) {
+    console.error("notify-scheduled: some parties failed to notify and will be retried:", failed);
   }
 
-  return NextResponse.json({ ok: true, notified });
+  return NextResponse.json({ ok: true, notified, failed: failed.length });
 }

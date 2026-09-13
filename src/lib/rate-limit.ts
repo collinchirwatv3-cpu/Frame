@@ -64,6 +64,20 @@ export const watchSessionHeartbeatRateLimiter = makeLimiter(120, "1 m", "watch-s
  * per feed position/video that could show one). */
 export const adServeRateLimiter = makeLimiter(60, "1 m", "ad-serve");
 
+/** Posting a comment — tighter than the generic engagement toggle limiter
+ * (likes/saves/follows) since a comment carries free-text content and is
+ * the one write in that family that never went through a rate-limited
+ * route until now (comments-store.ts wrote directly from the browser). */
+export const commentRateLimiter = makeLimiter(20, "1 m", "comment");
+
+/** Creating a scheduled watch party — tight relative to a real host's
+ * actual usage, since each scheduled party is a future notification fan-out
+ * to every follower: without a limit here, a scripted flood of creations
+ * (each immediately due) turns into a scripted flood of follower spam the
+ * moment the notify-scheduled cron runs. Generous enough that a real host
+ * planning a week of parties never hits it. */
+export const partyCreateRateLimiter = makeLimiter(10, "1 h", "party-create");
+
 export type RateLimitResult = { success: boolean; limit: number; remaining: number; reset: number };
 
 export async function checkRateLimit(
