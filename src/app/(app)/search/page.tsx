@@ -4,11 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Search as SearchIcon } from "lucide-react";
+import { ArrowLeft, Search as SearchIcon } from "lucide-react";
 import { SwipeFeed } from "@/components/feed/SwipeFeed";
 import { ShortsFeed } from "@/components/shorts/ShortsFeed";
 import { CreatorRow } from "@/components/search/CreatorRow";
 import { FeaturedCollections } from "@/components/search/FeaturedCollections";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { ErrorState } from "@/components/ui/ErrorState";
 import {
   fetchPublicVideos,
   fetchShorts,
@@ -17,6 +19,18 @@ import {
 } from "@/lib/video-fetch";
 import { matchesVideoQuery } from "@/lib/search";
 import type { Collection, Creator, Video } from "@/lib/types";
+
+/** Mirrors the real results grid (grid-cols-2 md:grid-cols-3, aspect-video
+ * cards) so loading doesn't reflow into the eventual layout. */
+function SearchResultsSkeleton() {
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 px-6">
+      {Array.from({ length: 9 }).map((_, i) => (
+        <Skeleton key={i} className="aspect-video" />
+      ))}
+    </div>
+  );
+}
 
 /**
  * The one search surface every page's search icon links to. Covers both
@@ -39,22 +53,35 @@ export default function SearchPage() {
   const searchParams = useSearchParams();
   const selectedId = searchParams.get("v");
 
-  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState<"loading" | "error" | "ready">("loading");
+  const [retryCount, setRetryCount] = useState(0);
   const [videos, setVideos] = useState<Video[]>([]);
   const [query, setQuery] = useState("");
   const [topCreators, setTopCreators] = useState<Creator[]>([]);
   const [featuredCollections, setFeaturedCollections] = useState<Collection[]>([]);
 
+  // No synchronous setStatus("loading") here — status already starts
+  // "loading" on mount; a retry resets it from its own click handler
+  // instead (a real event handler, not an effect body).
   useEffect(() => {
-    Promise.all([fetchPublicVideos(100), fetchShorts(50), fetchTopCreators(12), fetchFeaturedCollections(10)]).then(
-      ([films, shorts, creators, collections]) => {
+    let cancelled = false;
+    Promise.all([fetchPublicVideos(100), fetchShorts(50), fetchTopCreators(12), fetchFeaturedCollections(10)])
+      .then(([films, shorts, creators, collections]) => {
+        if (cancelled) return;
         setVideos([...films, ...shorts]);
         setTopCreators(creators);
         setFeaturedCollections(collections);
-        setLoading(false);
-      }
-    );
-  }, []);
+        setStatus("ready");
+      })
+      .catch(() => {
+        if (!cancelled) setStatus("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [retryCount]);
+
+  const loading = status === "loading";
 
   const results = useMemo(() => videos.filter((v) => matchesVideoQuery(v, query)), [videos, query]);
   const films = useMemo(() => results.filter((v) => v.contentType !== "short"), [results]);
@@ -84,7 +111,7 @@ export default function SearchPage() {
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search films, shorts, creators, tags"
+            placeholder="Search Frames, creators, tags"
             aria-label="Search"
             className="flex-1 bg-transparent text-sm outline-none"
           />
@@ -98,9 +125,17 @@ export default function SearchPage() {
         </div>
       )}
 
-      {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 size={24} className="animate-spin text-text-secondary" />
+      {status === "loading" ? (
+        <SearchResultsSkeleton />
+      ) : status === "error" ? (
+        <div className="flex flex-col items-center justify-center py-16">
+          <ErrorState
+            onRetry={() => {
+              setStatus("loading");
+              setRetryCount((n) => n + 1);
+            }}
+            heading="Couldn't load search"
+          />
         </div>
       ) : results.length === 0 ? (
         <p className="text-center text-text-secondary text-sm py-16 px-6">
