@@ -1,5 +1,23 @@
 # FRAME — Prototype-to-Production Migration Plan
 
+> **Status note (2026-09-14):** this document's original body (below) was
+> written when FRAME was mock-data-only with zero live backend — that
+> premise is now false, and most of the prose in this file describes a
+> state the app has since moved past. It has not been rewritten
+> line-by-line (a full pass is its own task), but the **Executive
+> summary checklist** immediately below has been corrected against the
+> app's actual current, live-verified state, and a new **iOS / App Store
+> readiness** section has been added at the end. Treat any checklist item
+> or claim in the body below the executive summary as unverified against
+> current reality unless it's been independently confirmed elsewhere
+> (e.g. this session's live RLS/audit verification). In particular: a
+> real Postgres schema with 35+ RLS-audited migrations, a real Cloudflare
+> Stream upload pipeline (code-complete; the actual Stream API token has
+> never been provisioned, so end-to-end transcoding has likely never run
+> against a real account), real Upstash-backed rate limiting, and a real
+> pushed git remote (91 commits, `origin` = a real GitHub repo) all exist
+> today — none of which the original text below reflects.
+
 Written from the position of: we expect **1M monthly active users within three
 years**, and today FRAME is a fully-designed, fully-tested Next.js frontend
 running against in-memory mock data with zero live backend, zero database,
@@ -34,17 +52,49 @@ this pass (with file paths), what's left, and which tier it falls in.
 - [x] CI gate on every PR (`.github/workflows/ci.yml`)
 - [x] Error tracking scaffold (`src/instrumentation.ts`, `src/instrumentation-client.ts`)
 - [x] `/api/health` endpoint for uptime checks
-- [ ] **Commit this repository to git and push to a real remote.** One commit
-      exists today (the `create-next-app` scaffold) — every feature built is
-      uncommitted working-tree state. This is the single highest-risk item in
-      this entire document and is a decision for you, not something to do
-      silently (see [Technical debt](#technical-debt--repo-hygiene)).
-- [ ] Provision real Supabase + Cloudflare Stream/R2 accounts, run the migration for real
-- [ ] Real auth wired end-to-end (code already calls real Supabase methods — needs real keys)
-- [ ] Replace `localStorage`-backed engagement/comments/share-link state with real DB reads/writes scoped to `auth.uid()`
-- [ ] Moderation: reports persist to the `reports` table (schema exists); a human reviews them somewhere (even a shared spreadsheet is fine at alpha scale — the requirement is "not silently discarded," not "full trust & safety tooling")
-- [ ] Backups: enable Supabase point-in-time recovery (PITR) the day the project is created
-- [ ] Terms of Service / Privacy Policy / DMCA process (legal, not engineering — see [roadmap.md Milestone 4](roadmap.md#milestone-4--legal-basics))
+- [x] **Commit this repository to git and push to a real remote.** Confirmed
+      2026-09-14: `origin` is a real GitHub repo
+      (`github.com/collinchirwatv3-cpu/Frame.git`), 91 commits deep, working
+      tree tracked branch `main` ahead/in-sync with `origin/main` in the
+      normal course of work — this is no longer a risk item.
+- [x] Real Supabase account provisioned, real migrations run against it — 35+
+      migrations, live-verified (not just "the migration ran") repeatedly
+      this project's history, most recently a full RLS/grant security audit
+      (2026-09-14) that found and fixed 2 critical, 2 high, and several
+      medium/low findings against the real live database.
+- [x] Real R2 account + bucket provisioned, credentials set in both local
+      `.env.local` and Vercel production.
+- [ ] **Cloudflare Stream is NOT actually provisioned** — `CLOUDFLARE_ACCOUNT_ID`
+      is set, but `CLOUDFLARE_STREAM_API_TOKEN`/`CLOUDFLARE_STREAM_WEBHOOK_SECRET`
+      have never had real values anywhere (local or production) as of
+      2026-09-14. The upload pipeline code
+      (`src/app/api/uploads/route.ts`, `src/lib/cloudflare-stream.ts`,
+      `src/app/api/webhooks/stream/route.ts`) is real and complete, but has
+      likely never actually run against a real Stream account — this needs
+      a real Cloudflare Stream API token before video transcoding can be
+      considered live, not just code-complete.
+- [x] Real auth wired end-to-end — magic-link/OAuth sessions, the invite
+      gate, and RLS enforcement have all been live-verified against the
+      real Supabase project repeatedly, including as recently as
+      2026-09-14's full functional-flow audit (29/29 checks passed).
+- [x] `localStorage`-backed engagement/comments/share-link state has been
+      replaced with real DB reads/writes scoped to `auth.uid()` for
+      engagement (likes/saves/follows/comments) — **except private share
+      links, which remain `localStorage`-backed** (`share-links-store.ts`),
+      genuinely unopenable from a different device/browser. Still an open
+      item, not done.
+- [x] Moderation: `reports` table is real, RLS-hardened (2026-09-14: closed
+      a self-dismissal hole), and a real moderation dashboard exists
+      (`src/app/moderation/page.tsx`) with working dismiss/remove-video/
+      ban-creator actions wired to `/api/moderation/reports/[reportId]`.
+- [ ] Backups: Supabase point-in-time recovery (PITR) status is unverified —
+      this requires checking the Supabase project's own dashboard settings,
+      which no code-level check can confirm.
+- [x] Terms of Service / Privacy Policy / Community Guidelines pages exist
+      with real content (no "coming soon" placeholders found as of
+      2026-09-14) — **but `src/app/contact/page.tsx`'s support email
+      addresses are still explicitly-disclosed placeholders** ("swap in
+      real inboxes before launch"), a real, already-flagged gap.
 
 **Important (before public beta)**
 - [x] Feed virtualization — bounded DOM/video-element count at real catalog scale (`src/components/feed/SwipeFeed.tsx`, `VideoPlaceholder.tsx`)
@@ -539,3 +589,45 @@ architecture discussion) or a direct consequence of a specific, cited risk
 recommendation is genuinely a judgment call rather than a requirement (the
 cost table's assumptions, the CSAM-scanning vendor choice, the exact PITR
 retention window), it's flagged as such rather than presented as settled.
+
+---
+
+## iOS / App Store readiness (added 2026-09-14)
+
+FRAME is not App Store-ready, and nothing in this repository should be read
+as implying otherwise. What exists today is a Progressive Web App (real
+manifest + icons, installable to a home screen) and a real push-notification
+backend serving web push — genuinely shipped, but distinct from a native
+iOS app or App Store submission in every way that matters below. None of
+the following exist in this codebase as of 2026-09-14:
+
+- **No Capacitor config or iOS project** — there is no `ios/` directory, no
+  `capacitor.config.ts`, nothing wrapping this Next.js app as a native
+  shell. The PWA manifest/icons are real but are not the same thing as a
+  native app bundle.
+- **No APNs dispatch worker** — the real push-notification backend that
+  exists sends web push, not Apple Push Notification service payloads;
+  nothing in this repo talks to APNs.
+- **No StoreKit/IAP integration** — Premium/monetization (Phase 2,
+  Stripe-gated per `20260808060000_monetization_enums_and_eligibility.sql`)
+  has no App Store in-app-purchase path designed or built at all; Stripe
+  and StoreKit are not interchangeable and neither is wired up yet.
+- **No code-signing or App Store Connect submission setup** — no
+  provisioning profile, no certificate, no App Store Connect listing, no
+  TestFlight build. This requires a Mac, Xcode, and a paid Apple Developer
+  Program account ($99/yr) — none of which this environment has access to;
+  this work cannot be done from here at all, only from your own machine.
+- **No real-device iOS verification** — everything tested this project's
+  history has been headless Chromium or the real (non-Apple) Supabase/
+  Vercel/Cloudflare backend; Safari-specific and real-hardware behavior
+  (autoplay policy, haptics, `navigator.share`) is explicitly called out as
+  unverified in `BETA_READINESS.md`'s Viewer Beta checklist.
+- **Private share links remain mock/local-only** — `share-links-store.ts`
+  is still `localStorage`-backed (see the executive summary checklist
+  above); a link genuinely cannot be opened on a different device or
+  browser today, native app or not.
+
+If/when native iOS submission becomes a real goal, treat it as its own
+milestone with its own external-dependency list (Mac + Xcode + Apple
+Developer account, at minimum) — not as an extension of the PWA work
+already shipped.

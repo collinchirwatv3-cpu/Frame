@@ -1,5 +1,21 @@
 # FRAME — Beta Readiness Report
 
+> **Status note (2026-09-14):** this report predates the real backend —
+> section 4/5's framing ("nothing above matters if the product never
+> leaves mock data") is now out of date: a real Postgres schema, real
+> Cloudflare Stream upload-pipeline code, and a real invite-gated auth
+> flow all exist and have been live-verified. **Cloudflare Stream's own
+> API token has still never been provisioned**, so video transcoding is
+> code-complete but likely never run end-to-end — see
+> [MIGRATION_PLAN.md's checklist](MIGRATION_PLAN.md#executive-summary--the-checklist)
+> for the current, item-by-item state. This report's UI/UX judgment calls
+> (sections 1–3) have not been re-reviewed and may still be accurate — only
+> the backend-readiness framing in sections 4/5 is known stale. FRAME is
+> **not App Store-ready**; see
+> [MIGRATION_PLAN.md § iOS / App Store readiness](MIGRATION_PLAN.md#ios--app-store-readiness-added-2026-09-14)
+> for the specific gaps (no Capacitor/iOS project, no APNs, no StoreKit/IAP,
+> no signing/submission setup, no real-device iOS verification).
+
 Version 3 shifted FRAME from feature development into Product Validation: "the
 objective is no longer adding features — it's making FRAME irresistible to its
 first 100 creators." This report is the audit that pass asked for, plus the two
@@ -100,22 +116,37 @@ brief's own test — and by what's still missing, not what's already shipped:
 
 ## 5. Creator Beta launch checklist
 
-- [ ] Real Supabase project + Cloudflare Stream wired (`roadmap.md` Milestone 1)
-- [ ] Real upload pipeline replaces the simulated `publish()` in `UploadDropzone`
+_Rechecked 2026-09-14 against the app's actual current state — see notes on
+each item._
+
+- [x] Real Supabase project wired and RLS-audited — confirmed live,
+      repeatedly, including a full security audit this same day.
+- [ ] **Cloudflare Stream is wired in code but never provisioned with real
+      credentials** — `CLOUDFLARE_STREAM_API_TOKEN` has no real value
+      anywhere. Video transcoding is code-complete, not confirmed working
+      end-to-end.
+- [x] Real upload pipeline replaces the simulated `publish()` in
+      `UploadDropzone` — confirmed, calls `/api/uploads` for real.
 - [ ] At least 15–30 real videos across a few categories seeded before any
       creator's first login — an empty Explore/Discover is the fastest way to
-      lose a beta creator in the first minute
-- [ ] Terms of Service, Privacy Policy, Content/DMCA policy — no longer
-      "coming soon" in Settings
-- [ ] Creator can actually delete their own account/content (doesn't exist yet
-      — worth confirming before inviting anyone's real work onto the platform)
+      lose a beta creator in the first minute. Not verified either way this
+      pass — check the real `videos` table's row count before inviting anyone.
+- [x] Terms of Service, Privacy Policy, Content/DMCA policy — confirmed no
+      longer "coming soon"; real content exists on all three pages. **Contact
+      page's support email addresses remain explicitly-disclosed
+      placeholders** — swap before real launch.
+- [x] Creator can actually delete their own account/content —
+      `DELETE /api/account` exists, deletes the Stream video, then the auth
+      user (cascading to every owned row via the schema's `on delete
+      cascade` FKs).
 - [ ] Verify the upload rejection flow (portrait/unsupported ratio) against a
       real phone-recorded clip, not just the synthetic test video used during
       development
 - [ ] Confirm `/watch/[id]` OG previews actually render correctly in iMessage,
       Slack, and Twitter/X — automated screenshot verification isn't the same
       as a real unfurl in each client
-- [ ] Sign-out (Settings) actually clears a real session once Supabase auth is live
+- [x] Sign-out (Settings) actually clears a real session — Supabase auth is
+      live and this has been exercised repeatedly against the real project.
 
 ## 6. Viewer Beta launch checklist
 

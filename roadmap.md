@@ -1,5 +1,19 @@
 # Path to Live
 
+> **Status note (2026-09-14):** this file has not been updated since
+> 2026-08-06 and its checkboxes no longer reflect reality — most of
+> Milestone 0 and Milestone 1 below are actually done (real Supabase
+> project, real Postgres migrations + RLS, real Cloudflare Stream upload
+> pipeline code, real auth). See
+> [MIGRATION_PLAN.md's executive summary](MIGRATION_PLAN.md#executive-summary--the-checklist)
+> for the current, verified state instead of trusting the checkboxes below.
+> One gap not tracked anywhere in this file at all: **native iOS/App Store
+> submission** is a separate, entirely unbuilt effort — see
+> [MIGRATION_PLAN.md § iOS / App Store readiness](MIGRATION_PLAN.md#ios--app-store-readiness-added-2026-09-14).
+> This file's own checkboxes were not individually corrected in this pass —
+> that would mean re-verifying every remaining item line by line, which is
+> its own task, not a side effect of a security/functionality audit.
+
 This is the checklist to get FRAME from "runs on my laptop against mock data" to
 "real people can visit a real URL and use it." It's distinct from the Phase 1–5
 feature roadmap in [README.md](README.md#roadmap), which covers product evolution

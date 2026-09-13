@@ -388,28 +388,42 @@ derive, don't duplicate, so nothing can claim a ratio the pixels don't back up.
 
 ## What's stubbed, not built
 
-- **Upload → Cloudflare Stream**: `publish()` in `UploadDropzone.tsx` simulates a
-  publish instead of calling Stream's direct-upload API. Real version: a route
-  handler mints a one-time upload URL via Stream's API, the client PUTs the file
-  directly to Cloudflare (never through our server), then we poll/webhook for
-  `ready` status before the video appears in feeds — that webhook is also where
-  a confirmed Rotate/Crop decision from the upload flow gets applied for real.
-- **Crop confirmation**: `UploadRejection`'s crop preview is a real, accurate
-  centered-crop preview, but "Continue cropped" doesn't cut pixels client-side —
-  no canvas/WebCodecs re-encode exists yet. It stages the decision and shows it
-  back to the uploader; the real crop happens server-side alongside transcoding.
-- **Auth**: `login/page.tsx` calls real Supabase methods (`signInWithOAuth`,
-  `signInWithOtp`) — they'll work the moment `.env.local` has real keys and the
-  providers are enabled in the Supabase dashboard. Passkeys are Phase 1.5.
-- **Likes/follows/comments/onboarding interests**: persisted to `localStorage` via
-  Zustand (`engagement-store.ts`, `comments-store.ts`, `onboarding-store.ts`) so
-  state survives reloads today, but it's per-browser, not per-account — needs the
-  `likes`/`follows`/`comments` tables above once Supabase is wired.
-- **Share links**: same `localStorage` limitation, more consequential here — a
-  link literally cannot be opened on a different device until it's backed by the
-  real `share_links` table + Stream signed URLs (see [above](#private-videos--expiring-share-links)).
-  The whole point of this feature is cross-device sharing, so this is the first
-  thing to move off `localStorage` once real backend work starts.
+> **Updated 2026-09-14** — most of this section described a mock-data-only
+> phase of the project that has since ended. Corrected below; only
+> **share links** and **crop confirmation** are still genuinely stubbed.
+
+- **Upload → Cloudflare Stream**: real, not stubbed. `/api/uploads/route.ts`
+  mints a real Cloudflare Stream direct-upload (TUS) session, the client PUTs
+  the file straight to Cloudflare, and `/api/webhooks/stream/route.ts`
+  updates the video to `ready` once Stream confirms the encode (also where
+  the actual short/monetise-eligibility reclassification happens against
+  Stream's authoritative duration, closing a forged-client-duration bypass
+  fixed 2026-09-14). **Caveat**: `CLOUDFLARE_STREAM_API_TOKEN` has never
+  actually been provisioned with a real value — the code is complete but has
+  likely never run end-to-end against a real Stream account.
+- **Crop confirmation**: still stubbed as originally described.
+  `UploadRejection`'s crop preview is a real, accurate centered-crop preview,
+  but "Continue cropped" doesn't cut pixels client-side — no canvas/WebCodecs
+  re-encode exists yet. It stages the decision and shows it back to the
+  uploader; the real crop is meant to happen server-side alongside
+  transcoding but does not yet.
+- **Auth**: real, not stubbed. Magic-link/OAuth sign-in, the invite gate, and
+  RLS enforcement all run against a real, provisioned Supabase project and
+  have been live-verified repeatedly. Passkeys are still Phase 1.5, not built.
+- **Likes/follows/comments/onboarding interests**: real, not stubbed, for
+  likes/follows/comments — all persisted to Postgres with RLS (most recently
+  hardened 2026-09-14 to require the target video be public and ready).
+  Comments now post through a rate-limited server route
+  (`/api/comments/route.ts`), not a direct client insert. Onboarding
+  interests are still `localStorage`-only (`onboarding-store.ts`) and, as of
+  2026-09-14, are also not read by any feed-ranking code — the Settings copy
+  describing them as shaping Discover was corrected to stop claiming that.
+- **Share links**: still stubbed as originally described — this is the one
+  item in this list that hasn't changed. `share-links-store.ts` remains
+  `localStorage`-backed; a link literally cannot be opened on a different
+  device until it's backed by the real `share_links` table + Stream signed
+  URLs (see [above](#private-videos--expiring-share-links)). Still the
+  highest-priority remaining item in this section.
 
 ## Roadmap
 
