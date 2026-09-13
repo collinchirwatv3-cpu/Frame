@@ -5,10 +5,10 @@ import type { MetadataRoute } from "next";
 // node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/01-metadata/manifest.md.
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "FRAMES — Cinematic Landscape Video",
+    name: "FRAMES — Cinematic Landscape Frames",
     short_name: "FRAMES",
     description:
-      "FRAMES is the home for landscape creators. Every video full-screen and cinematic — 16:9, 21:9, and 16:10.",
+      "FRAMES is the home for landscape creators. Every Frame full-screen and cinematic — 16:9, 21:9, and 16:10.",
     start_url: "/",
     display: "standalone",
     background_color: "#090909",

@@ -43,6 +43,19 @@ export const metadata: Metadata = {
     ],
     apple: "/apple-touch-icon.png",
   },
+  // Modern iOS mostly respects the Web Manifest's display: "standalone" on
+  // its own, but Apple's own proprietary meta tags are still the documented
+  // way to get consistent standalone behavior (status bar style, no Safari
+  // chrome) across iOS versions — this was missing entirely before. Not a
+  // fix for iOS's separate, well-documented storage-partitioning behavior
+  // for home-screen web apps (see the session-persistence investigation
+  // this was added alongside) — just closes a real, unrelated PWA
+  // completeness gap found while investigating that.
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "FRAMES",
+  },
 };
 
 // viewportFit: "cover" is what makes env(safe-area-inset-*) resolve to real
