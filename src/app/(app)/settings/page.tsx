@@ -11,6 +11,7 @@ import { usePlayerStore } from "@/store/player-store";
 import { createClient } from "@/lib/supabase/client";
 import { useIsModerator } from "@/lib/use-is-moderator";
 import { DeleteAccountDialog } from "@/components/settings/DeleteAccountDialog";
+import { Switch } from "@/components/ui/Switch";
 import type { Category } from "@/lib/types";
 
 function SettingsSection({ title, children }: { title: string; children: React.ReactNode }) {
@@ -91,16 +92,16 @@ export default function SettingsPage() {
       </SettingsSection>
 
       <SettingsSection title="Playback">
-        <button
-          onClick={toggleMuted}
-          className="w-full flex items-center justify-between py-1"
-        >
+        <div className="w-full flex items-center justify-between py-1">
           <span className="text-sm">Sound on by default</span>
-          <span className="flex items-center gap-2 text-xs text-text-secondary">
-            {muted ? <VolumeX size={15} /> : <Volume2 size={15} />}
-            {muted ? "Off" : "On"}
+          <span className="flex items-center gap-2">
+            <span className="flex items-center gap-1.5 text-xs text-text-secondary">
+              {muted ? <VolumeX size={15} /> : <Volume2 size={15} />}
+              {muted ? "Off" : "On"}
+            </span>
+            <Switch checked={!muted} onChange={toggleMuted} label="Sound on by default" />
           </span>
-        </button>
+        </div>
       </SettingsSection>
 
       <SettingsSection title="About">
@@ -161,7 +162,7 @@ export default function SettingsPage() {
 
       <SettingsSection title="Danger zone">
         <p className="text-sm text-text-secondary mb-3">
-          Permanently delete your account, videos, and all activity. This can&apos;t be undone.
+          Permanently delete your account, Frames, and all activity. This can&apos;t be undone.
         </p>
         <button
           onClick={() => setDeleteDialogOpen(true)}
