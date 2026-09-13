@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Loader2, Mail } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/ui/Logo";
+import { OAUTH_PROVIDERS_ENABLED } from "@/lib/auth-providers";
 
 type OAuthProvider = "google" | "apple";
 
@@ -61,21 +62,28 @@ export default function LoginPage() {
   useEffect(() => {
     let cancelled = false;
     const supabase = createClient();
-    (["google", "apple"] as const).forEach(async (provider) => {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-          skipBrowserRedirect: true,
-        },
+    // Only prefetch providers Supabase actually has enabled — calling
+    // signInWithOAuth for a disabled provider just returns a real 400
+    // ("provider is not enabled") for no reason, and would otherwise
+    // surface as a confusing error message despite the button correctly
+    // being hidden/disabled below.
+    (Object.keys(OAUTH_PROVIDERS_ENABLED) as OAuthProvider[])
+      .filter((provider) => OAUTH_PROVIDERS_ENABLED[provider])
+      .forEach(async (provider) => {
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider,
+          options: {
+            redirectTo: `${window.location.origin}/auth/callback`,
+            skipBrowserRedirect: true,
+          },
+        });
+        if (cancelled) return;
+        if (error || !data?.url) {
+          setMessage({ type: "error", text: "Google sign-in isn't available right now — try email instead." });
+          return;
+        }
+        setOauthUrls((prev) => ({ ...prev, [provider]: data.url }));
       });
-      if (cancelled) return;
-      if (error || !data?.url) {
-        setMessage({ type: "error", text: "Google/Apple sign-in isn't available right now — try email instead." });
-        return;
-      }
-      setOauthUrls((prev) => ({ ...prev, [provider]: data.url }));
-    });
     return () => {
       cancelled = true;
     };
@@ -123,17 +131,34 @@ export default function LoginPage() {
             {oauthUrls.google ? <GoogleGlyph /> : <Loader2 size={16} className="animate-spin" />}
             Continue with Google
           </a>
-          <a
-            href={oauthUrls.apple ?? undefined}
-            aria-disabled={!oauthUrls.apple || loading !== null}
-            tabIndex={oauthUrls.apple ? 0 : -1}
-            className={`flex items-center justify-center gap-3 py-3 rounded-full bg-accent text-bg text-sm font-medium hover:bg-accent/90 transition-colors ${
-              !oauthUrls.apple || loading !== null ? "pointer-events-none opacity-60" : ""
-            }`}
-          >
-            {oauthUrls.apple ? <AppleGlyph /> : <Loader2 size={16} className="animate-spin" />}
-            Continue with Apple
-          </a>
+          {OAUTH_PROVIDERS_ENABLED.apple ? (
+            <a
+              href={oauthUrls.apple ?? undefined}
+              aria-disabled={!oauthUrls.apple || loading !== null}
+              tabIndex={oauthUrls.apple ? 0 : -1}
+              className={`flex items-center justify-center gap-3 py-3 rounded-full bg-accent text-bg text-sm font-medium hover:bg-accent/90 transition-colors ${
+                !oauthUrls.apple || loading !== null ? "pointer-events-none opacity-60" : ""
+              }`}
+            >
+              {oauthUrls.apple ? <AppleGlyph /> : <Loader2 size={16} className="animate-spin" />}
+              Continue with Apple
+            </a>
+          ) : (
+            // Not a live control at all — no href, no onClick, nothing that
+            // could initiate an OAuth request that Supabase would just
+            // reject. role="button" + aria-disabled communicates "this is a
+            // button, currently unavailable" to assistive tech rather than
+            // "this is inert text."
+            <div
+              role="button"
+              aria-disabled="true"
+              title="Apple sign-in isn't set up yet"
+              className="flex items-center justify-center gap-3 py-3 rounded-full bg-card border border-border text-sm font-medium text-text-secondary opacity-60 cursor-not-allowed"
+            >
+              <AppleGlyph />
+              Apple — coming soon
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-3 my-6">
