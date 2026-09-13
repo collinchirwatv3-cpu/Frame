@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LogOut, ShieldAlert, ShieldOff, Trash2, Volume2, VolumeX } from "lucide-react";
@@ -10,9 +10,17 @@ import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePlayerStore } from "@/store/player-store";
 import { createClient } from "@/lib/supabase/client";
 import { useIsModerator } from "@/lib/use-is-moderator";
+import { useCurrentUserStore } from "@/store/current-user-store";
 import { DeleteAccountDialog } from "@/components/settings/DeleteAccountDialog";
 import { Switch } from "@/components/ui/Switch";
+import {
+  fetchNotificationPreferences,
+  saveNotificationPreferences,
+  type NotificationPreferences,
+} from "@/lib/notification-preferences";
 import type { Category } from "@/lib/types";
+
+const DEFAULT_PREFERENCES: NotificationPreferences = { partyStarting: true, comments: true, follows: true };
 
 function SettingsSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -28,12 +36,39 @@ function SettingsSection({ title, children }: { title: string; children: React.R
 export default function SettingsPage() {
   const router = useRouter();
   const moderatorStatus = useIsModerator();
+  const userId = useCurrentUserStore((s) => s.profile?.id ?? null);
   const interests = useOnboardingStore((s) => s.interests);
   const setInterests = useOnboardingStore((s) => s.complete);
   const muted = usePlayerStore((s) => s.muted);
   const toggleMuted = usePlayerStore((s) => s.toggleMuted);
   const [signingOut, setSigningOut] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>(DEFAULT_PREFERENCES);
+  const [prefsError, setPrefsError] = useState(false);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    fetchNotificationPreferences(userId).then((prefs) => {
+      if (!cancelled) setNotificationPrefs(prefs);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  async function updatePreference(key: keyof NotificationPreferences, value: boolean) {
+    if (!userId) return;
+    const previous = notificationPrefs;
+    const next = { ...previous, [key]: value };
+    setNotificationPrefs(next);
+    setPrefsError(false);
+    const ok = await saveNotificationPreferences(userId, next);
+    if (!ok) {
+      setNotificationPrefs(previous);
+      setPrefsError(true);
+    }
+  }
 
   function toggleInterest(category: Category) {
     setInterests(
@@ -101,6 +136,38 @@ export default function SettingsPage() {
             </span>
             <Switch checked={!muted} onChange={toggleMuted} label="Sound on by default" />
           </span>
+        </div>
+      </SettingsSection>
+
+      <SettingsSection title="Notifications">
+        <div className="flex flex-col gap-4">
+          <div className="w-full flex items-center justify-between">
+            <span className="text-sm">Frame Party starts</span>
+            <Switch
+              checked={notificationPrefs.partyStarting}
+              onChange={(v) => updatePreference("partyStarting", v)}
+              label="Frame Party starts"
+            />
+          </div>
+          <div className="w-full flex items-center justify-between">
+            <span className="text-sm">Comments on your Frames</span>
+            <Switch
+              checked={notificationPrefs.comments}
+              onChange={(v) => updatePreference("comments", v)}
+              label="Comments on your Frames"
+            />
+          </div>
+          <div className="w-full flex items-center justify-between">
+            <span className="text-sm">New followers</span>
+            <Switch
+              checked={notificationPrefs.follows}
+              onChange={(v) => updatePreference("follows", v)}
+              label="New followers"
+            />
+          </div>
+          {prefsError && (
+            <p className="text-xs text-primary">Couldn&apos;t save that — try again.</p>
+          )}
         </div>
       </SettingsSection>
 

@@ -19,6 +19,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { EditProfileModal } from "@/components/profile/EditProfileModal";
 import { formatCount, shareContent } from "@/lib/utils";
 import { useEngagementStore } from "@/store/engagement-store";
+import { useUnreadNotificationCount } from "@/lib/use-unread-notification-count";
 import type { Creator } from "@/lib/types";
 
 function Stat({ value, label, href }: { value: number; label: string; href?: string }) {
@@ -64,6 +65,7 @@ export function ProfileHeader({
   const blocked = useEngagementStore((s) => !!s.blockedUsers[creator.id]);
   const toggleFollow = useEngagementStore((s) => s.toggleFollow);
   const toggleBlock = useEngagementStore((s) => s.toggleBlock);
+  const unreadCount = useUnreadNotificationCount(own ? creator.id : null);
 
   async function handleBlock() {
     if (
@@ -111,10 +113,13 @@ export function ProfileHeader({
         {own && (
           <Link
             href="/inbox"
-            aria-label="Inbox"
-            className="absolute top-4 left-4 w-9 h-9 rounded-full bg-bg/70 backdrop-blur-md flex items-center justify-center"
+            aria-label={unreadCount > 0 ? `Inbox, ${unreadCount} unread` : "Inbox"}
+            className="absolute top-4 left-4 w-9 h-9 rounded-full bg-bg/70 backdrop-blur-md flex items-center justify-center relative"
           >
             <MessageCircle size={16} />
+            {unreadCount > 0 && (
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary ring-2 ring-bg" />
+            )}
           </Link>
         )}
         {own && (
