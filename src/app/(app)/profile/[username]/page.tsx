@@ -79,7 +79,7 @@ export default function PublicProfilePage() {
 
   return (
     <div className="pb-24 md:pb-8">
-      <ProfileHeader creator={creator} isCreator={false} own={false} />
+      <ProfileHeader creator={creator} isCreator={false} own={false} videoCount={videos.length} />
 
       <div className="mt-8">
         {videos.length === 0 ? (

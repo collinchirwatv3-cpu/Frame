@@ -36,7 +36,17 @@ function InProgressCard({ video }: { video: OwnVideo }) {
   );
 }
 
-function ReadyCard({ video }: { video: Video }) {
+const RECENT_UPLOAD_WINDOW_MS = 48 * 60 * 60 * 1000;
+
+// A named helper, not a bare Date.now() inline in the render body — this
+// repo's lint config (React Compiler's purity rule) flags a raw impure call
+// written directly in a component, same reason formatRelativeTime (lib/utils.ts)
+// wraps its own Date.now() the same way.
+function isRecentUpload(createdAt: string): boolean {
+  return Date.now() - new Date(createdAt).getTime() < RECENT_UPLOAD_WINDOW_MS;
+}
+
+function ReadyCard({ video, isRecentUpload }: { video: Video; isRecentUpload: boolean }) {
   return (
     <Link
       // /watch/[id], not /?v= — Home is a curated feed now, not "every
@@ -61,6 +71,11 @@ function ReadyCard({ video }: { video: Video }) {
         fill="currentColor"
       />
       <BadgeRow badges={computeBadges(video)} max={1} className="absolute top-2 left-2" />
+      {isRecentUpload && (
+        <span className="absolute top-2 right-2 text-[10px] font-bold tracking-wide bg-primary text-bg rounded-full px-2 py-0.5">
+          UPLOAD
+        </span>
+      )}
       <div className="absolute bottom-0 inset-x-0 p-2.5">
         <p className="text-xs font-semibold truncate">{video.title}</p>
         <div className="flex items-center gap-2.5 text-[11px] text-text-secondary mt-0.5">
@@ -112,11 +127,8 @@ export function StudioVideoGrid({ videos, creator }: { videos: OwnVideo[]; creat
     <div className="columns-2 md:columns-3 lg:columns-4 gap-3 px-6">
       {videos.map((video) => {
         const displayVideo = toDisplayVideo(video, creator);
-        return displayVideo ? (
-          <ReadyCard key={video.id} video={displayVideo} />
-        ) : (
-          <InProgressCard key={video.id} video={video} />
-        );
+        if (!displayVideo) return <InProgressCard key={video.id} video={video} />;
+        return <ReadyCard key={video.id} video={displayVideo} isRecentUpload={isRecentUpload(video.createdAt)} />;
       })}
     </div>
   );

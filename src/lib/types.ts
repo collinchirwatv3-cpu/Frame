@@ -6,10 +6,16 @@ export type Creator = {
   bannerUrl: string;
   bio: string;
   website?: string;
+  instagramHandle?: string;
   followers: number;
   following: number;
   totalViews: number;
   verified?: boolean;
+  /** profiles.premium_status — real, existing schema, but no real user can
+   * ever be "active" until a Stripe/StoreKit purchase flow ships. A profile
+   * showing the Premium badge is expected to be rare/nonexistent for now,
+   * not a bug. */
+  premiumStatus?: "inactive" | "pending_checkout" | "active" | "canceled";
   /** Portfolio framing — optional, shown when a creator has filled it in. */
   statement?: string;
   equipment?: string[];
@@ -101,6 +107,27 @@ export type Collection = {
   description: string;
   coverUrl: string;
   videoIds: string[];
+  /** Platform-curated, not creator-owned — collections table has no client
+   * insert/update/delete grant at all. isFeatured/curator are only ever set
+   * via direct SQL/service-role, same as invite codes. */
+  isFeatured?: boolean;
+  curatorId?: string;
+  curatorName?: string;
+};
+
+/** A viewer-created (start_seconds, end_seconds) pointer into an existing
+ * video's own playback asset — no new encoding, no new Stream asset.
+ * Deliberately has no revenue/attribution field: this is a pure engagement/
+ * discovery feature, not tied to any monetization machinery. */
+export type Clip = {
+  id: string;
+  videoId: string;
+  userId: string;
+  creatorDisplayName: string;
+  startSeconds: number;
+  endSeconds: number;
+  title?: string;
+  createdAt: string;
 };
 
 /**

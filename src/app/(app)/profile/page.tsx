@@ -55,9 +55,9 @@ export default function ProfilePage() {
 
   return (
     <div className="pb-24 md:pb-8">
-      <ProfileHeader creator={profile} isCreator={isCreator} />
+      <ProfileHeader creator={profile} isCreator={isCreator} videoCount={publicVideos.length} />
       <FeaturedWork featuredVideo={featuredVideo} featuredCollection={featuredCollection} />
-      <ProfileTabs videos={publicVideos} privateVideos={privateVideos} creator={profile} />
+      <ProfileTabs videos={publicVideos} privateVideos={privateVideos} userId={userId} creator={profile} />
     </div>
   );
 }

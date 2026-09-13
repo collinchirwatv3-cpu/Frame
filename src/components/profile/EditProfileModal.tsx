@@ -44,6 +44,7 @@ export function EditProfileModal({
   const [displayName, setDisplayName] = useState(profile?.displayName ?? "");
   const [bio, setBio] = useState(profile?.bio ?? "");
   const [website, setWebsite] = useState(profile?.website ?? "");
+  const [instagramHandle, setInstagramHandle] = useState(profile?.instagramHandle ?? "");
   const [statement, setStatement] = useState(profile?.statement ?? "");
   const [equipment, setEquipment] = useState((profile?.equipment ?? []).join(", "));
   const [availableForHire, setAvailableForHire] = useState(profile?.availableForHire ?? false);
@@ -71,6 +72,7 @@ export function EditProfileModal({
     setDisplayName(currentProfile.displayName);
     setBio(currentProfile.bio);
     setWebsite(currentProfile.website ?? "");
+    setInstagramHandle(currentProfile.instagramHandle ?? "");
     setStatement(currentProfile.statement ?? "");
     setEquipment((currentProfile.equipment ?? []).join(", "));
     setAvailableForHire(currentProfile.availableForHire ?? false);
@@ -113,6 +115,7 @@ export function EditProfileModal({
       displayName,
       bio,
       website,
+      instagramHandle,
       statement: isCreator ? statement : "",
       equipment: isCreator ? parsedEquipment : [],
       availableForHire: isCreator ? availableForHire : false,
@@ -135,6 +138,8 @@ export function EditProfileModal({
       if (parsed.data.bio !== currentProfile.bio) updates.bio = parsed.data.bio;
       if ((parsed.data.website ?? "") !== (currentProfile.website ?? ""))
         updates.website = parsed.data.website || null;
+      if ((parsed.data.instagramHandle ?? "") !== (currentProfile.instagramHandle ?? ""))
+        updates.instagram_handle = parsed.data.instagramHandle || null;
 
       if (isCreator) {
         if ((parsed.data.statement ?? "") !== (currentProfile.statement ?? ""))
@@ -178,6 +183,7 @@ export function EditProfileModal({
           displayName: data.display_name,
           bio: data.bio,
           website: data.website ?? undefined,
+          instagramHandle: data.instagram_handle ?? undefined,
           statement: data.statement ?? undefined,
           equipment: data.equipment ?? undefined,
           availableForHire: data.available_for_hire ?? undefined,
@@ -342,6 +348,18 @@ export function EditProfileModal({
                   disabled={saving}
                   maxLength={120}
                   placeholder="yourdomain.com"
+                  className="bg-bg border border-border rounded-xl px-4 py-2.5 text-sm outline-none focus:border-primary transition-colors disabled:opacity-50"
+                />
+              </label>
+
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs text-text-secondary">Instagram</span>
+                <input
+                  value={instagramHandle}
+                  onChange={(e) => setInstagramHandle(e.target.value.replace(/^@/, ""))}
+                  disabled={saving}
+                  maxLength={30}
+                  placeholder="yourhandle"
                   className="bg-bg border border-border rounded-xl px-4 py-2.5 text-sm outline-none focus:border-primary transition-colors disabled:opacity-50"
                 />
               </label>

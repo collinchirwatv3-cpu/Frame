@@ -15,7 +15,9 @@ type ProfileRow = {
   banner_url: string | null;
   bio: string;
   website: string | null;
+  instagram_handle: string | null;
   verified: boolean;
+  premium_status: Creator["premiumStatus"] | null;
   statement: string | null;
   equipment: string[] | null;
   available_for_hire: boolean;
@@ -35,10 +37,12 @@ function toCreator(row: ProfileRow): Creator {
     bannerUrl: row.banner_url ?? "",
     bio: row.bio,
     website: row.website ?? undefined,
+    instagramHandle: row.instagram_handle ?? undefined,
     followers: row.followers_count,
     following: row.following_count,
     totalViews: row.total_views,
     verified: row.verified,
+    premiumStatus: row.premium_status ?? undefined,
     statement: row.statement ?? undefined,
     equipment: row.equipment ?? undefined,
     availableForHire: row.available_for_hire,
