@@ -9,12 +9,14 @@ import { CHROME_FADE_TRANSITION } from "@/lib/motion";
 import { CHROME_GLASS_CLASS, CHROME_TAP_SCALE } from "@/lib/chrome";
 import { usePlayerStore } from "@/store/player-store";
 
-// Floating pill instead of the old edge-to-edge bar — icon-only, inset from
-// every edge rather than flush against the bottom, same glass treatment
-// (CHROME_GLASS_CLASS) as every other piece of chrome now uses. Labels
-// dropped: a floating pill reads as a compact, self-contained control, not
-// a full app-chrome bar, and the five icons are distinct enough on their
-// own (matches the reference this was modeled on).
+// Floating pill instead of the old edge-to-edge bar — icon-only for
+// inactive destinations, inset from every edge rather than flush against
+// the bottom, same glass treatment (CHROME_GLASS_CLASS) as every other
+// piece of chrome now uses. The active destination gets a visible text
+// label next to its icon (layout-animated in/out) rather than every item
+// carrying one — first-use clarity without turning this into a
+// conventional five-label tab bar, which the reference this was modeled on
+// deliberately avoids.
 export function BottomNav() {
   const pathname = usePathname();
   const directorMode = usePlayerStore((s) => s.directorMode);
@@ -23,6 +25,7 @@ export function BottomNav() {
     <motion.nav
       animate={{ opacity: directorMode ? 0 : 1 }}
       transition={CHROME_FADE_TRANSITION}
+      aria-label="Primary"
       className={cn(
         // landscape:max-md:hidden — a phone turned sideways gets
         // LandscapeSideRail on the right edge instead (see that
@@ -41,20 +44,26 @@ export function BottomNav() {
             <li key={href}>
               <Link href={href} aria-label={label} className="flex items-center justify-center p-1">
                 <motion.span
+                  layout
                   whileTap={{ scale: CHROME_TAP_SCALE }}
                   className={cn(
-                    "flex items-center justify-center w-10 h-10 rounded-full transition-colors",
-                    active && "bg-accent/10"
+                    "flex items-center justify-center h-10 rounded-full transition-colors gap-1.5",
+                    active ? "px-3.5 bg-accent/10" : "w-10"
                   )}
                 >
                   <Icon
                     size={22}
                     strokeWidth={active ? 2.5 : 1.75}
                     className={cn(
-                      "transition-colors",
+                      "transition-colors shrink-0",
                       active ? "text-accent" : "text-text-secondary"
                     )}
                   />
+                  {active && (
+                    <span className="text-xs font-semibold text-accent whitespace-nowrap">
+                      {label}
+                    </span>
+                  )}
                 </motion.span>
               </Link>
             </li>

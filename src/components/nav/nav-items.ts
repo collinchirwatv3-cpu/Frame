@@ -4,7 +4,7 @@ import { Clapperboard, Compass, Search, Users, User } from "lucide-react";
 // not as a standalone nav destination. Everything else (including Profile,
 // previously deliberately excluded) is a real primary destination now.
 export const navItems = [
-  { href: "/shorts", label: "Shorts", icon: Clapperboard },
+  { href: "/shorts", label: "Frames", icon: Clapperboard },
   { href: "/discover", label: "Discover", icon: Compass },
   { href: "/search", label: "Search", icon: Search },
   { href: "/parties", label: "Parties", icon: Users },
