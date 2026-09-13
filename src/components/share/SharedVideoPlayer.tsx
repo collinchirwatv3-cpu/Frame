@@ -27,7 +27,7 @@ export function SharedVideoPlayer({ video }: { video: Video }) {
           ref={videoRef}
           src={video.playbackUrl}
           poster={video.posterUrl}
-          className="w-full h-full object-contain"
+          className="w-full h-full object-cover md:object-contain"
           muted={muted}
           loop
           playsInline
