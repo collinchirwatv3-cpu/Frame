@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { verifyStreamWebhookSignature, getStreamVideoDetails } from "@/lib/cloudflare-stream";
+import { LONGFORM_MIN_DURATION_SECONDS } from "@/lib/validation/upload";
 
 // Cloudflare Stream calls this once a video finishes encoding (or fails).
 // No user session exists on a webhook request — this uses the service-role
@@ -44,17 +45,35 @@ export async function POST(request: NextRequest) {
   );
 
   if (details.readyToStream && details.playbackHlsUrl) {
-    const { error } = await supabase
-      .from("videos")
-      .update({
-        processing_status: "ready",
-        playback_url: details.playbackHlsUrl,
-        poster_url: details.thumbnailUrl,
-        width: details.width,
-        height: details.height,
-        duration_seconds: details.durationSeconds,
-      })
-      .eq("stream_uid", uid);
+    // /api/uploads/route.ts derives content_type/publish_mode from the
+    // CLIENT-PROBED duration at insert time — real for a genuine upload,
+    // but a hand-crafted request can claim any durationSeconds it likes
+    // (e.g. 200s, to pass the monetise-requires-long-form check) and then
+    // upload an actually-short file to the resulting Stream session.
+    // Cloudflare's own measured duration, delivered here, is the first
+    // point this can be caught: a video that's actually under the
+    // longform threshold is forced to short/post regardless of what it
+    // was inserted as, closing the monetised-short bypass. Only narrows
+    // (short+post are always safe to downgrade to); a genuinely long
+    // video's existing film/longform/monetise choice is left untouched —
+    // that distinction is a creator choice, not a security boundary.
+    const isActuallyShort =
+      details.durationSeconds !== null && details.durationSeconds < LONGFORM_MIN_DURATION_SECONDS;
+
+    const update: Record<string, unknown> = {
+      processing_status: "ready",
+      playback_url: details.playbackHlsUrl,
+      poster_url: details.thumbnailUrl,
+      width: details.width,
+      height: details.height,
+      duration_seconds: details.durationSeconds,
+    };
+    if (isActuallyShort) {
+      update.content_type = "short";
+      update.publish_mode = "post";
+    }
+
+    const { error } = await supabase.from("videos").update(update).eq("stream_uid", uid);
 
     if (error) {
       return NextResponse.json({ error: "Could not update video record" }, { status: 500 });
