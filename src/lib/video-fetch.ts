@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
-import type { Creator, Video } from "@/lib/types";
+import type { Collection, Creator, Video } from "@/lib/types";
 
 type Row = {
   id: string;
@@ -225,7 +225,9 @@ type ProfileRow = {
   banner_url: string | null;
   bio: string;
   website: string | null;
+  instagram_handle: string | null;
   verified: boolean;
+  premium_status: Creator["premiumStatus"] | null;
   statement: string | null;
   equipment: string[] | null;
   available_for_hire: boolean;
@@ -233,6 +235,9 @@ type ProfileRow = {
   following_count: number;
   total_views: number;
 };
+
+const PROFILE_SELECT =
+  "id, username, display_name, avatar_url, banner_url, bio, website, instagram_handle, verified, premium_status, statement, equipment, available_for_hire, followers_count, following_count, total_views";
 
 function toCreator(row: ProfileRow): Creator {
   return {
@@ -243,10 +248,12 @@ function toCreator(row: ProfileRow): Creator {
     bannerUrl: row.banner_url ?? "",
     bio: row.bio,
     website: row.website ?? undefined,
+    instagramHandle: row.instagram_handle ?? undefined,
     followers: row.followers_count,
     following: row.following_count,
     totalViews: row.total_views,
     verified: row.verified,
+    premiumStatus: row.premium_status ?? undefined,
     statement: row.statement ?? undefined,
     equipment: row.equipment ?? undefined,
     availableForHire: row.available_for_hire,
@@ -258,15 +265,63 @@ function toCreator(row: ProfileRow): Creator {
  * never the signed-in viewer's own row). */
 export async function fetchProfileByUsername(username: string): Promise<Creator | null> {
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from("profiles")
-    .select(
-      "id, username, display_name, avatar_url, banner_url, bio, website, verified, statement, equipment, available_for_hire, followers_count, following_count, total_views"
-    )
-    .eq("username", username)
-    .single();
+  const { data, error } = await supabase.from("profiles").select(PROFILE_SELECT).eq("username", username).single();
   if (error || !data) return null;
   return toCreator(data as ProfileRow);
+}
+
+/** Top creators by total_views, for Search's creator row. total_views is
+ * real schema but currently unwritten anywhere for real users (no
+ * trigger/route increments it) — this reads as populated for seed/mock
+ * data but stays static for real accounts until real view tracking exists.
+ * Known, accepted limitation — not something this function fixes. */
+export async function fetchTopCreators(limit = 20): Promise<Creator[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select(PROFILE_SELECT)
+    .order("total_views", { ascending: false })
+    .limit(limit);
+  if (error || !data) return [];
+  return (data as unknown as ProfileRow[]).map(toCreator);
+}
+
+type CollectionRow = {
+  id: string;
+  title: string;
+  description: string;
+  cover_url: string;
+  is_featured: boolean;
+  curator: { id: string; display_name: string } | null;
+  collection_videos: { video_id: string }[];
+};
+
+/** The first real read of collections/collection_videos anywhere in this
+ * app — every other collections surface (CollectionsRail, CollectionsShelf,
+ * /collections/[id]) still reads mock-data.ts. collections has no client
+ * write grant at all (platform-curated, is_featured/curator_id set only via
+ * direct SQL/service-role, same precedent as invite codes). */
+export async function fetchFeaturedCollections(limit = 10): Promise<Collection[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("collections")
+    .select(
+      "id, title, description, cover_url, is_featured, curator:profiles!collections_curator_id_fkey(id, display_name), collection_videos(video_id)"
+    )
+    .eq("is_featured", true)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error || !data) return [];
+  return (data as unknown as CollectionRow[]).map((row) => ({
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    coverUrl: row.cover_url,
+    videoIds: row.collection_videos.map((cv) => cv.video_id),
+    isFeatured: row.is_featured,
+    curatorId: row.curator?.id,
+    curatorName: row.curator?.display_name,
+  }));
 }
 
 /** A specific creator's public, ready videos (both films and shorts) for

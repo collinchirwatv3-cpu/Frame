@@ -7,17 +7,26 @@ import Link from "next/link";
 import { ArrowLeft, Loader2, Search as SearchIcon } from "lucide-react";
 import { SwipeFeed } from "@/components/feed/SwipeFeed";
 import { ShortsFeed } from "@/components/shorts/ShortsFeed";
-import { Avatar } from "@/components/ui/Avatar";
-import { fetchPublicVideos, fetchShorts } from "@/lib/video-fetch";
+import { CreatorRow } from "@/components/search/CreatorRow";
+import { FeaturedCollections } from "@/components/search/FeaturedCollections";
+import {
+  fetchPublicVideos,
+  fetchShorts,
+  fetchTopCreators,
+  fetchFeaturedCollections,
+} from "@/lib/video-fetch";
 import { matchesVideoQuery } from "@/lib/search";
-import type { Creator, Video } from "@/lib/types";
+import type { Collection, Creator, Video } from "@/lib/types";
 
 /**
  * The one search surface every page's search icon links to. Covers both
- * films and shorts (fetchPublicVideos + fetchShorts), plus an Accounts
- * section for creators whose username/display name match — same
- * client-side matchesVideoQuery filter Explore/Discover used to use before
- * becoming full-screen feeds, not a new server-side search feature.
+ * films and shorts (fetchPublicVideos + fetchShorts) via client-side
+ * matchesVideoQuery filtering, not a server-side search feature. Below the
+ * search bar, a Creators row and Featured Collections section are a real
+ * browse surface (not query-filtered) shown while the query is empty —
+ * replaces the old "Accounts" list, which only ever surfaced creators whose
+ * name happened to match the current text query rather than a real
+ * top-creators browse.
  *
  * Tapping a film/short result doesn't link to /?v=<id> or /shorts —
  * Home/Shorts are curated lists now, not "every video," so a searched item
@@ -33,34 +42,24 @@ export default function SearchPage() {
   const [loading, setLoading] = useState(true);
   const [videos, setVideos] = useState<Video[]>([]);
   const [query, setQuery] = useState("");
+  const [topCreators, setTopCreators] = useState<Creator[]>([]);
+  const [featuredCollections, setFeaturedCollections] = useState<Collection[]>([]);
 
   useEffect(() => {
-    Promise.all([fetchPublicVideos(100), fetchShorts(50)]).then(([films, shorts]) => {
-      setVideos([...films, ...shorts]);
-      setLoading(false);
-    });
+    Promise.all([fetchPublicVideos(100), fetchShorts(50), fetchTopCreators(12), fetchFeaturedCollections(10)]).then(
+      ([films, shorts, creators, collections]) => {
+        setVideos([...films, ...shorts]);
+        setTopCreators(creators);
+        setFeaturedCollections(collections);
+        setLoading(false);
+      }
+    );
   }, []);
 
   const results = useMemo(() => videos.filter((v) => matchesVideoQuery(v, query)), [videos, query]);
   const films = useMemo(() => results.filter((v) => v.contentType !== "short"), [results]);
   const shorts = useMemo(() => results.filter((v) => v.contentType === "short"), [results]);
-
-  const accounts = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return [];
-    const byId = new Map<string, Creator>();
-    for (const v of results) {
-      const { creator } = v;
-      if (
-        (creator.username.toLowerCase().includes(q) ||
-          creator.displayName.toLowerCase().includes(q)) &&
-        !byId.has(creator.id)
-      ) {
-        byId.set(creator.id, creator);
-      }
-    }
-    return [...byId.values()];
-  }, [results, query]);
+  const browsing = query.trim().length === 0;
 
   if (selectedId) {
     if (shorts.some((v) => v.id === selectedId)) {
@@ -92,6 +91,13 @@ export default function SearchPage() {
         </div>
       </div>
 
+      {browsing && !loading && (
+        <div className="flex flex-col gap-6 mb-6">
+          <CreatorRow creators={topCreators} />
+          <FeaturedCollections collections={featuredCollections} />
+        </div>
+      )}
+
       {loading ? (
         <div className="flex items-center justify-center py-16">
           <Loader2 size={24} className="animate-spin text-text-secondary" />
@@ -102,27 +108,6 @@ export default function SearchPage() {
         </p>
       ) : (
         <div className="flex flex-col gap-6">
-          {accounts.length > 0 && (
-            <div className="flex flex-col gap-1 px-6">
-              <span className="text-xs font-semibold uppercase tracking-wide text-text-secondary mb-1">
-                Accounts
-              </span>
-              {accounts.map((creator) => (
-                <Link
-                  key={creator.id}
-                  href={`/profile/${creator.username}`}
-                  className="flex items-center gap-3 py-2 rounded-xl hover:bg-card/60 transition-colors"
-                >
-                  <Avatar src={creator.avatarUrl} alt={creator.displayName} size={40} />
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold truncate">{creator.displayName}</p>
-                    <p className="text-xs text-text-secondary truncate">@{creator.username}</p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 px-6">
             {results.map((video) => (
               <Link
