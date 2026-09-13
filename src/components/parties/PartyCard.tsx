@@ -1,11 +1,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Lock, X } from "lucide-react";
+import { Lock, Users, X } from "lucide-react";
 import { formatRelativeTime, cn } from "@/lib/utils";
 import { deleteParty, type WatchParty } from "@/lib/watch-parties";
 import { useCurrentUserStore } from "@/store/current-user-store";
 import { CHROME_GLASS_CLASS, CHROME_TAP_SCALE_CLASS } from "@/lib/chrome";
+import { useInView } from "@/lib/use-in-view";
+import { usePartyPresenceCount } from "@/lib/use-party-presence-count";
 
 // "Repeats weekly" alone doesn't need the exact date; a one-off schedule
 // does. Deliberately no year — these are always near-future.
@@ -29,6 +31,8 @@ export function PartyCard({ party, onDeleted }: { party: WatchParty; onDeleted?:
   const isHost = ownProfile?.id === party.host.id;
   const [deleting, setDeleting] = useState(false);
   const schedule = formatSchedule(party);
+  const { ref, inView } = useInView<HTMLAnchorElement>();
+  const watching = usePartyPresenceCount(party.id, inView);
 
   async function handleEnd(e: React.MouseEvent) {
     e.preventDefault();
@@ -42,6 +46,7 @@ export function PartyCard({ party, onDeleted }: { party: WatchParty; onDeleted?:
 
   return (
     <Link
+      ref={ref}
       href={`/watch-together/${party.id}${party.video ? `?v=${party.video.id}` : ""}`}
       className="group relative block h-44 rounded-2xl overflow-hidden bg-card"
     >
@@ -65,21 +70,32 @@ export function PartyCard({ party, onDeleted }: { party: WatchParty; onDeleted?:
           Private
         </span>
       )}
-      {isHost && (
-        <button
-          type="button"
-          onClick={handleEnd}
-          disabled={deleting}
-          aria-label="End party"
-          className={cn(
-            CHROME_GLASS_CLASS,
-            CHROME_TAP_SCALE_CLASS,
-            "absolute top-3 right-3 w-8 h-8 flex items-center justify-center disabled:opacity-50"
-          )}
-        >
-          <X size={14} />
-        </button>
-      )}
+      <div className="absolute top-3 right-3 flex items-center gap-2">
+        {watching > 0 && (
+          <span
+            className={cn(CHROME_GLASS_CLASS, "flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium")}
+            aria-label={`${watching} watching`}
+          >
+            <Users size={10} />
+            {watching}
+          </span>
+        )}
+        {isHost && (
+          <button
+            type="button"
+            onClick={handleEnd}
+            disabled={deleting}
+            aria-label="End party"
+            className={cn(
+              CHROME_GLASS_CLASS,
+              CHROME_TAP_SCALE_CLASS,
+              "w-8 h-8 flex items-center justify-center disabled:opacity-50"
+            )}
+          >
+            <X size={14} />
+          </button>
+        )}
+      </div>
       <div className="absolute inset-x-0 bottom-0 p-4">
         <p className="font-semibold truncate">{party.title}</p>
         <p className="text-sm text-text-secondary truncate">
