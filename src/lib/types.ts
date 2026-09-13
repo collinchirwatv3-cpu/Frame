@@ -86,6 +86,14 @@ export type Video = {
   height: number;
   badges?: Badge[];
   details?: VideoDetails;
+  /** ISO timestamp — videos.created_at. Real "published time," unlike a
+   * view count: there is no views_count anywhere this app actually
+   * increments (videos.view_count exists in the schema but nothing writes
+   * to it), so this app never displays a views stat rather than showing an
+   * always-zero one. Optional, same as contentType/soundName/badges above —
+   * absent for mock-data/test fixtures and any Video built before this
+   * field existed, present for everything real video-fetch.ts returns. */
+  createdAt?: string;
 };
 
 export type ShareLinkTTL = "1h" | "24h" | "7d";

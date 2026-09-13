@@ -10,6 +10,7 @@ type Row = {
   category: Video["category"];
   content_type: "film" | "short" | "longform";
   sound_name: string | null;
+  created_at: string;
   duration_seconds: number;
   width: number;
   height: number;
@@ -38,7 +39,7 @@ type Row = {
 // can't infer which relationship is meant and a bare embed 400s with
 // PGRST201 ("more than one relationship was found"). Confirmed live.
 const SELECT = `
-  id, playback_url, poster_url, title, description, category, content_type, sound_name,
+  id, playback_url, poster_url, title, description, category, content_type, sound_name, created_at,
   duration_seconds, width, height, badges,
   likes_count, comments_count, shares_count, saves_count,
   profiles!videos_creator_id_fkey ( id, username, display_name, avatar_url, banner_url, bio, website, verified, followers_count, following_count, total_views )
@@ -69,6 +70,7 @@ function toVideo(row: Row): Video | null {
     category: row.category,
     contentType: row.content_type,
     soundName: row.sound_name ?? undefined,
+    createdAt: row.created_at,
     likes: row.likes_count,
     comments: row.comments_count,
     shares: row.shares_count,

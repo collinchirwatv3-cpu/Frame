@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Aperture, Clapperboard, Film, MapPin, Play, Scissors, Tag, X } from "lucide-react";
 import { SHEET_SPRING } from "@/lib/motion";
 import { useEscapeToClose } from "@/lib/use-escape-to-close";
-import { formatTimestamp } from "@/lib/utils";
+import { formatRelativeTime, formatTimestamp } from "@/lib/utils";
 import { useClipsStore } from "@/store/clips-store";
 import type { Video } from "@/lib/types";
 
@@ -80,6 +80,28 @@ export function VideoDetailsSheet({
             </div>
 
             <div className="px-5 py-4 flex flex-col gap-4">
+              {/* Concise metadata row — category always exists; duration
+                  and published time are real values (videos.created_at,
+                  duration_seconds), not decorative. No views count here:
+                  videos.view_count exists in the schema but nothing in
+                  this app ever increments it, so showing it would just be
+                  an always-zero stat — omitted rather than faked. */}
+              <div className="flex items-center gap-2 text-xs text-text-secondary flex-wrap">
+                <span>{video.category}</span>
+                {video.durationSeconds > 0 && (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span className="tabular-nums">{formatTimestamp(video.durationSeconds)}</span>
+                  </>
+                )}
+                {video.createdAt && (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span>{formatRelativeTime(video.createdAt)} ago</span>
+                  </>
+                )}
+              </div>
+
               <p className="text-sm text-accent/90">{video.description}</p>
 
               {!d && (
