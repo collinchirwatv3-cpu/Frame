@@ -1,20 +1,11 @@
-import { MessageCircle } from "lucide-react";
-
 // Direct messages have no backend at all yet (deferred out of the App Store
 // push-notifications milestone — see the plan file's "DMs stay deferred"
-// decision). This used to render mock thread data with dead, non-functional
-// tap targets; an honest "coming soon" state is correct until a real DM
-// table/thread UI exists, not a feature that only looks alive.
+// decision). Previously a full centered panel (icon + heading + subtext),
+// which made the real notification feed above it read as unfinished by
+// comparison — shrunk to a single small, non-interactive line per the
+// Notifications + Inbox brief, rather than removed outright, so it's still
+// honest about what's coming without competing with real content for
+// attention.
 export function DMThreadList() {
-  return (
-    <div className="flex flex-col items-center gap-3 text-center py-16 px-6">
-      <span className="w-12 h-12 rounded-full bg-card border border-border flex items-center justify-center">
-        <MessageCircle size={20} className="text-text-secondary" />
-      </span>
-      <p className="text-sm font-medium">Direct messages are coming soon</p>
-      <p className="text-xs text-text-secondary max-w-[220px]">
-        You&apos;ll be able to message creators and followers directly from here.
-      </p>
-    </div>
-  );
+  return <p className="text-center text-[11px] text-text-secondary py-4">Direct messages are coming soon.</p>;
 }
