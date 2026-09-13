@@ -71,18 +71,20 @@ export const useCommentsStore = create<CommentsState>()((set, get) => ({
       return;
     }
 
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("comments")
-      .insert({ video_id: videoId, user_id: userId, text, parent_id: parentId ?? null })
-      .select("id, text, created_at, parent_id, user:profiles(username, avatar_url)")
-      .single();
+    // Posted through /api/comments (rate-limited), not a direct client
+    // insert — see that route for why.
+    const res = await fetch("/api/comments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ videoId, text, parentId: parentId ?? null }),
+    });
+    if (!res.ok) return;
+    const data = (await res.json()) as CommentRow;
 
-    if (error || !data) return;
     set((s) => ({
       byVideoId: {
         ...s.byVideoId,
-        [videoId]: [...(s.byVideoId[videoId] ?? []), toComment(data as unknown as CommentRow)],
+        [videoId]: [...(s.byVideoId[videoId] ?? []), toComment(data)],
       },
     }));
   },
