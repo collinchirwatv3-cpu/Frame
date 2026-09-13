@@ -10,13 +10,22 @@ type EngagementState = {
   savedVideos: Record<string, boolean>;
   followedCreators: Record<string, boolean>;
   savedCollections: Record<string, boolean>;
+  blockedUsers: Record<string, boolean>;
   /** Called by AuthListener on sign-in/sign-out — (re)hydrates from the real
-   * likes/saves/follows/saved_collections tables scoped to the given user. */
+   * likes/saves/follows/saved_collections/blocks tables scoped to the given
+   * user. */
   setUser: (userId: string | null) => Promise<void>;
   toggleLike: (videoId: string) => Promise<void>;
   toggleSave: (videoId: string) => Promise<void>;
   toggleFollow: (creatorId: string) => Promise<void>;
   toggleSavedCollection: (collectionId: string) => Promise<void>;
+  /** Blocking goes through /api/block, not the generic toggle() helper —
+   * it has a real server-side side effect (force-unfollow both directions)
+   * that a thin insert/delete proxy can't express, so it isn't optimistic
+   * like the others: the dict only flips once the server confirms. Returns
+   * whether it succeeded, since callers (ProfileHeader) act on that (an
+   * error stays silent otherwise, unlike a failed like/save). */
+  toggleBlock: (targetId: string, block: boolean) => Promise<boolean>;
 };
 
 const EMPTY: Record<string, boolean> = {};
@@ -73,6 +82,7 @@ export const useEngagementStore = create<EngagementState>()((set, get) => ({
   savedVideos: EMPTY,
   followedCreators: EMPTY,
   savedCollections: EMPTY,
+  blockedUsers: EMPTY,
 
   setUser: async (userId) => {
     if (!userId) {
@@ -83,16 +93,18 @@ export const useEngagementStore = create<EngagementState>()((set, get) => ({
         savedVideos: EMPTY,
         followedCreators: EMPTY,
         savedCollections: EMPTY,
+        blockedUsers: EMPTY,
       });
       return;
     }
 
     const supabase = createClient();
-    const [likes, saves, follows, savedCollections] = await Promise.all([
+    const [likes, saves, follows, savedCollections, blocks] = await Promise.all([
       supabase.from("likes").select("video_id").eq("user_id", userId),
       supabase.from("saves").select("video_id").eq("user_id", userId),
       supabase.from("follows").select("followee_id").eq("follower_id", userId),
       supabase.from("saved_collections").select("collection_id").eq("user_id", userId),
+      supabase.from("blocks").select("blocked_id").eq("blocker_id", userId),
     ]);
 
     set({
@@ -102,6 +114,7 @@ export const useEngagementStore = create<EngagementState>()((set, get) => ({
       savedVideos: toDict(saves.data, "video_id"),
       followedCreators: toDict(follows.data, "followee_id"),
       savedCollections: toDict(savedCollections.data, "collection_id"),
+      blockedUsers: toDict(blocks.data, "blocked_id"),
     });
   },
 
@@ -122,4 +135,34 @@ export const useEngagementStore = create<EngagementState>()((set, get) => ({
       set,
       kind: "saved-collection",
     }),
+
+  toggleBlock: async (targetId, block) => {
+    const userId = get().userId;
+    if (!userId) {
+      window.location.assign("/login");
+      return false;
+    }
+
+    const res = await fetch("/api/block", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targetId, active: block }),
+    });
+    if (!res.ok) return false;
+
+    const current = get();
+    const nextBlocked = { ...current.blockedUsers };
+    if (block) {
+      nextBlocked[targetId] = true;
+      // The server force-unfollows both directions on block — mirror that
+      // locally so the UI doesn't wait for a full re-hydration to catch up.
+      const nextFollowed = { ...current.followedCreators };
+      delete nextFollowed[targetId];
+      set({ blockedUsers: nextBlocked, followedCreators: nextFollowed });
+    } else {
+      delete nextBlocked[targetId];
+      set({ blockedUsers: nextBlocked });
+    }
+    return true;
+  },
 }));

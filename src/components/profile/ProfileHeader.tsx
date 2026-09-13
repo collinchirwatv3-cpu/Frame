@@ -4,19 +4,37 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { AtSign, BadgeCheck, Check, Link as LinkIcon, MessageCircle, Settings, Sparkles, UploadCloud } from "lucide-react";
+import {
+  AtSign,
+  BadgeCheck,
+  Ban,
+  Check,
+  Link as LinkIcon,
+  MessageCircle,
+  Settings,
+  Sparkles,
+  UploadCloud,
+} from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { EditProfileModal } from "@/components/profile/EditProfileModal";
 import { formatCount, shareContent } from "@/lib/utils";
 import { useEngagementStore } from "@/store/engagement-store";
 import type { Creator } from "@/lib/types";
 
-function Stat({ value, label }: { value: number; label: string }) {
-  return (
-    <div className="flex flex-col items-center">
+function Stat({ value, label, href }: { value: number; label: string; href?: string }) {
+  const content = (
+    <>
       <span className="font-bold text-lg">{formatCount(value)}</span>
       <span className="text-xs text-text-secondary">{label}</span>
-    </div>
+    </>
+  );
+  if (!href) {
+    return <div className="flex flex-col items-center">{content}</div>;
+  }
+  return (
+    <Link href={href} className="flex flex-col items-center">
+      {content}
+    </Link>
   );
 }
 
@@ -41,8 +59,34 @@ export function ProfileHeader({
 }) {
   const [shared, setShared] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [blockError, setBlockError] = useState(false);
   const following = useEngagementStore((s) => !!s.followedCreators[creator.id]);
+  const blocked = useEngagementStore((s) => !!s.blockedUsers[creator.id]);
   const toggleFollow = useEngagementStore((s) => s.toggleFollow);
+  const toggleBlock = useEngagementStore((s) => s.toggleBlock);
+
+  async function handleBlock() {
+    if (
+      !window.confirm(
+        `Block @${creator.username}? They won't be able to follow you or see your Frames, and you won't see theirs.`
+      )
+    ) {
+      return;
+    }
+    const ok = await toggleBlock(creator.id, true);
+    if (!ok) {
+      setBlockError(true);
+      window.setTimeout(() => setBlockError(false), 2400);
+    }
+  }
+
+  async function handleUnblock() {
+    const ok = await toggleBlock(creator.id, false);
+    if (!ok) {
+      setBlockError(true);
+      window.setTimeout(() => setBlockError(false), 2400);
+    }
+  }
 
   async function handleShare() {
     const url = `${window.location.origin}/profile${own ? "" : `/${creator.username}`}`;
@@ -94,6 +138,17 @@ export function ProfileHeader({
             >
               <Settings size={16} />
             </Link>
+          </div>
+        )}
+        {!own && !blocked && (
+          <div className="absolute top-4 right-4">
+            <button
+              onClick={handleBlock}
+              aria-label={`Block @${creator.username}`}
+              className="w-9 h-9 rounded-full bg-bg/70 backdrop-blur-md flex items-center justify-center"
+            >
+              <Ban size={16} />
+            </button>
           </div>
         )}
       </div>
@@ -176,11 +231,11 @@ export function ProfileHeader({
 
         <div className="flex items-center gap-8 mt-5">
           <Stat value={videoCount} label="Frames" />
-          <Stat value={creator.followers} label="Followers" />
-          <Stat value={creator.following} label="Following" />
+          <Stat value={creator.followers} label="Followers" href={`/profile/${creator.username}/followers`} />
+          <Stat value={creator.following} label="Following" href={`/profile/${creator.username}/following`} />
         </div>
 
-        <div className="flex items-center gap-3 mt-5 w-full max-w-xs">
+        <div className="relative flex items-center gap-3 mt-5 w-full max-w-xs">
           {own ? (
             <button
               onClick={() => setEditing(true)}
@@ -188,39 +243,63 @@ export function ProfileHeader({
             >
               Edit Profile
             </button>
+          ) : blocked ? (
+            <div className="flex-1 flex items-center justify-center gap-3 py-2">
+              <span className="text-sm text-text-secondary">Blocked</span>
+              <button
+                onClick={handleUnblock}
+                className="px-4 py-1.5 rounded-full border border-border text-xs font-medium hover:bg-card transition-colors"
+              >
+                Unblock
+              </button>
+            </div>
           ) : (
-            <button
-              onClick={() => toggleFollow(creator.id)}
-              className={
-                following
-                  ? "flex-1 py-2 rounded-full border border-border text-sm font-medium hover:bg-card transition-colors"
-                  : "flex-1 py-2 rounded-full bg-primary text-bg text-sm font-semibold"
-              }
-            >
-              {following ? "Following" : "Follow"}
-            </button>
-          )}
-          <div className="relative flex-1">
-            <button
-              onClick={handleShare}
-              className="w-full py-2 rounded-full border border-border text-sm font-medium hover:bg-card transition-colors flex items-center justify-center gap-1.5"
-            >
-              {shared && <Check size={14} className="text-primary" />}
-              {shared ? "Copied" : "Share"}
-            </button>
-            <AnimatePresence>
-              {shared && (
-                <motion.span
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  className="absolute left-1/2 -translate-x-1/2 top-full mt-2 whitespace-nowrap text-xs font-medium bg-card px-2.5 py-1 rounded-full"
+            <>
+              <button
+                onClick={() => toggleFollow(creator.id)}
+                className={
+                  following
+                    ? "flex-1 py-2 rounded-full border border-border text-sm font-medium hover:bg-card transition-colors"
+                    : "flex-1 py-2 rounded-full bg-primary text-bg text-sm font-semibold"
+                }
+              >
+                {following ? "Following" : "Follow"}
+              </button>
+              <div className="relative flex-1">
+                <button
+                  onClick={handleShare}
+                  className="w-full py-2 rounded-full border border-border text-sm font-medium hover:bg-card transition-colors flex items-center justify-center gap-1.5"
                 >
-                  Profile link copied
-                </motion.span>
-              )}
-            </AnimatePresence>
-          </div>
+                  {shared && <Check size={14} className="text-primary" />}
+                  {shared ? "Copied" : "Share"}
+                </button>
+                <AnimatePresence>
+                  {shared && (
+                    <motion.span
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      className="absolute left-1/2 -translate-x-1/2 top-full mt-2 whitespace-nowrap text-xs font-medium bg-card px-2.5 py-1 rounded-full"
+                    >
+                      Profile link copied
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </div>
+            </>
+          )}
+          <AnimatePresence>
+            {blockError && (
+              <motion.span
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="absolute left-1/2 -translate-x-1/2 top-full mt-2 whitespace-nowrap text-xs font-medium text-primary bg-card px-2.5 py-1 rounded-full"
+              >
+                Couldn&apos;t update that — try again
+              </motion.span>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 

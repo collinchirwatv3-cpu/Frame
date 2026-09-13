@@ -41,6 +41,7 @@ beforeEach(() => {
     savedVideos: {},
     followedCreators: {},
     savedCollections: {},
+    blockedUsers: {},
   });
 });
 
@@ -107,11 +108,12 @@ describe("engagement store", () => {
     expect(useEngagementStore.getState().likedVideos.v1).toBeFalsy();
   });
 
-  it("hydrates liked/saved/followed/saved-collection state on setUser", async () => {
+  it("hydrates liked/saved/followed/saved-collection/blocked state on setUser", async () => {
     mockResponses.likes = { data: [{ video_id: "v1" }], error: null };
     mockResponses.saves = { data: [{ video_id: "v2" }], error: null };
     mockResponses.follows = { data: [{ followee_id: "c1" }], error: null };
     mockResponses.saved_collections = { data: [{ collection_id: "col-1" }], error: null };
+    mockResponses.blocks = { data: [{ blocked_id: "c2" }], error: null };
 
     await useEngagementStore.getState().setUser("u1");
     const state = useEngagementStore.getState();
@@ -119,6 +121,48 @@ describe("engagement store", () => {
     expect(state.savedVideos.v2).toBe(true);
     expect(state.followedCreators.c1).toBe(true);
     expect(state.savedCollections["col-1"]).toBe(true);
+    expect(state.blockedUsers.c2).toBe(true);
+  });
+
+  it("blocks a user via /api/block, marking them blocked and clearing any existing follow", async () => {
+    useEngagementStore.setState({ followedCreators: { c1: true } });
+    const ok = await useEngagementStore.getState().toggleBlock("c1", true);
+    expect(ok).toBe(true);
+    const state = useEngagementStore.getState();
+    expect(state.blockedUsers.c1).toBe(true);
+    expect(state.followedCreators.c1).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/block",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ targetId: "c1", active: true }),
+      })
+    );
+  });
+
+  it("unblocks a user via /api/block", async () => {
+    useEngagementStore.setState({ blockedUsers: { c1: true } });
+    const ok = await useEngagementStore.getState().toggleBlock("c1", false);
+    expect(ok).toBe(true);
+    expect(useEngagementStore.getState().blockedUsers.c1).toBeUndefined();
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/block",
+      expect.objectContaining({ body: JSON.stringify({ targetId: "c1", active: false }) })
+    );
+  });
+
+  it("leaves state untouched and reports failure when the block request fails", async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false });
+    const ok = await useEngagementStore.getState().toggleBlock("c1", true);
+    expect(ok).toBe(false);
+    expect(useEngagementStore.getState().blockedUsers.c1).toBeUndefined();
+  });
+
+  it("redirects to /login instead of blocking when logged out", async () => {
+    useEngagementStore.setState({ userId: null });
+    const ok = await useEngagementStore.getState().toggleBlock("c1", true);
+    expect(ok).toBe(false);
+    expect(window.location.assign).toHaveBeenCalledWith("/login");
   });
 
   it("clears state on sign-out", async () => {

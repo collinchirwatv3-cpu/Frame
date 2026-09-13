@@ -78,6 +78,10 @@ export const commentRateLimiter = makeLimiter(20, "1 m", "comment");
  * planning a week of parties never hits it. */
 export const partyCreateRateLimiter = makeLimiter(10, "1 h", "party-create");
 
+/** Blocking/unblocking — a rare, deliberate action (unlike the high-volume
+ * engagement toggles), tight enough to still bound a scripted mass-block. */
+export const blockRateLimiter = makeLimiter(30, "1 h", "block");
+
 export type RateLimitResult = { success: boolean; limit: number; remaining: number; reset: number };
 
 export async function checkRateLimit(

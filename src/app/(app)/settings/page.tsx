@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LogOut, ShieldAlert, Trash2, Volume2, VolumeX } from "lucide-react";
+import { LogOut, ShieldAlert, ShieldOff, Trash2, Volume2, VolumeX } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { categories } from "@/lib/mock-data";
 import { useOnboardingStore } from "@/store/onboarding-store";
@@ -102,6 +102,16 @@ export default function SettingsPage() {
             <Switch checked={!muted} onChange={toggleMuted} label="Sound on by default" />
           </span>
         </div>
+      </SettingsSection>
+
+      <SettingsSection title="Privacy">
+        <Link
+          href="/settings/blocked"
+          className="flex items-center gap-2 text-sm text-text-secondary hover:text-accent transition-colors"
+        >
+          <ShieldOff size={15} />
+          Blocked Accounts
+        </Link>
       </SettingsSection>
 
       <SettingsSection title="About">
