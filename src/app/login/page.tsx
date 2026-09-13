@@ -131,7 +131,11 @@ export default function LoginPage() {
             {oauthUrls.google ? <GoogleGlyph /> : <Loader2 size={16} className="animate-spin" />}
             Continue with Google
           </a>
-          {OAUTH_PROVIDERS_ENABLED.apple ? (
+          {/* Removed from the UI entirely (not just disabled) until Apple
+              Developer/Supabase credentials are sorted — flip
+              OAUTH_PROVIDERS_ENABLED.apple to true to bring the real button
+              back, no other change needed here. */}
+          {OAUTH_PROVIDERS_ENABLED.apple && (
             <a
               href={oauthUrls.apple ?? undefined}
               aria-disabled={!oauthUrls.apple || loading !== null}
@@ -143,21 +147,6 @@ export default function LoginPage() {
               {oauthUrls.apple ? <AppleGlyph /> : <Loader2 size={16} className="animate-spin" />}
               Continue with Apple
             </a>
-          ) : (
-            // Not a live control at all — no href, no onClick, nothing that
-            // could initiate an OAuth request that Supabase would just
-            // reject. role="button" + aria-disabled communicates "this is a
-            // button, currently unavailable" to assistive tech rather than
-            // "this is inert text."
-            <div
-              role="button"
-              aria-disabled="true"
-              title="Apple sign-in isn't set up yet"
-              className="flex items-center justify-center gap-3 py-3 rounded-full bg-card border border-border text-sm font-medium text-text-secondary opacity-60 cursor-not-allowed"
-            >
-              <AppleGlyph />
-              Apple — coming soon
-            </div>
           )}
         </div>
 

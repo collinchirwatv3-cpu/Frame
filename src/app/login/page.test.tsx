@@ -72,9 +72,11 @@ describe("LoginPage OAuth links", () => {
 
 // Apple OAuth isn't enabled in Supabase yet (OAUTH_PROVIDERS_ENABLED.apple
 // is false) — clicking the old "Continue with Apple" button returned a
-// real 400 "provider is not enabled". This must render as a state that
-// cannot initiate OAuth at all, not just a styled-differently button.
-describe("LoginPage Apple unavailable state", () => {
+// real 400 "provider is not enabled". Removed from the UI entirely (not
+// just disabled/greyed-out) until Apple Developer/Supabase credentials are
+// sorted — flipping the flag back to true is the only change needed to
+// bring the real button back.
+describe("LoginPage Apple removed", () => {
   it("never calls signInWithOAuth for apple", async () => {
     render(<LoginPage />);
     await waitFor(() => {
@@ -83,20 +85,10 @@ describe("LoginPage Apple unavailable state", () => {
     expect(signInWithOAuthSpy).not.toHaveBeenCalledWith(expect.objectContaining({ provider: "apple" }));
   });
 
-  it("renders Apple as a non-interactive, clearly-unavailable control — no link, no href, no button role that could be activated", () => {
+  it("renders nothing Apple-related at all — no link, no disabled placeholder, no leftover text", () => {
     render(<LoginPage />);
-    // Not a link at all (an <a> with no href isn't one), and not a real
-    // <button> either — role="button" here is on a plain <div> with
-    // aria-disabled, which no keyboard/pointer interaction can activate.
+    expect(screen.queryByText(/apple/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /apple/i })).not.toBeInTheDocument();
-    const appleControl = screen.getByText(/apple/i).closest('[role="button"]');
-    expect(appleControl).toHaveAttribute("aria-disabled", "true");
-    expect(appleControl?.tagName).toBe("DIV");
-    expect(appleControl).not.toHaveAttribute("href");
-  });
-
-  it("labels the Apple state as unavailable rather than looking like a normal working button", () => {
-    render(<LoginPage />);
-    expect(screen.getByText(/coming soon/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /apple/i })).not.toBeInTheDocument();
   });
 });
