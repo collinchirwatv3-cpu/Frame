@@ -2,31 +2,70 @@
 
 import { useEffect, useState } from "react";
 import { Plus, Users } from "lucide-react";
-import { fetchParties, type WatchParty } from "@/lib/watch-parties";
+import { fetchParties, fetchMyParties, fetchFollowedParties, type WatchParty } from "@/lib/watch-parties";
 import { PartyCard } from "@/components/parties/PartyCard";
 import { CreatePartySheet } from "@/components/parties/CreatePartySheet";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { useCurrentUserStore } from "@/store/current-user-store";
+
+function PartySection({
+  title,
+  parties,
+  onDeleted,
+}: {
+  title: string;
+  parties: WatchParty[];
+  onDeleted: () => void;
+}) {
+  if (parties.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-3">
+      <h2 className="text-xs font-semibold text-text-secondary uppercase tracking-wide">{title}</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {parties.map((party) => (
+          <PartyCard key={party.id} party={party} onDeleted={onDeleted} />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function PartiesPage() {
-  const [parties, setParties] = useState<WatchParty[]>([]);
+  const userId = useCurrentUserStore((s) => s.profile?.id ?? null);
+  const [myParties, setMyParties] = useState<WatchParty[]>([]);
+  const [followedParties, setFollowedParties] = useState<WatchParty[]>([]);
+  const [publicParties, setPublicParties] = useState<WatchParty[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
 
   function refresh() {
-    fetchParties().then((p) => {
-      setParties(p);
+    Promise.all([
+      userId ? fetchMyParties(userId) : Promise.resolve([]),
+      userId ? fetchFollowedParties(userId) : Promise.resolve([]),
+      fetchParties(),
+    ]).then(([mine, followed, everyone]) => {
+      setMyParties(mine);
+      setFollowedParties(followed);
+      setPublicParties(everyone);
       setLoading(false);
     });
   }
 
   useEffect(() => {
     refresh();
-  }, []);
+    // refresh is a plain function recreated every render (not memoized) —
+    // re-running this effect only on userId change (once AuthListener
+    // resolves the signed-in profile) is the actual intent, matching this
+    // page's original single-fetch shape before the per-user sections existed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
   function handleClose() {
     setCreating(false);
     refresh();
   }
+
+  const isEmpty = myParties.length === 0 && followedParties.length === 0 && publicParties.length === 0;
 
   return (
     <div className="pt-8 pb-24 px-6">
@@ -44,17 +83,7 @@ export default function PartiesPage() {
         </button>
       </div>
 
-      {!loading && parties.length === 0 ? (
-        // Explicit dock clearance on the bottom, not the symmetric py-20
-        // this used to have — that padding is generous enough on normal
-        // phone heights to keep this comfortably above the floating
-        // bottom-nav dock, but at a genuinely short viewport (a folded/
-        // cover-screen device, ~400px tall) this page's whole content is
-        // short enough that py-20's fixed 80px wasn't guaranteed to clear
-        // the dock's own ~86px footprint — confirmed live, the heading
-        // was rendering partially behind it. Same
-        // pb-[calc(env(safe-area-inset-bottom)+6rem)] clearance
-        // VideoCard.tsx/ShortsFeed.tsx use for exactly this.
+      {!loading && isEmpty ? (
         <div className="flex flex-col items-center justify-center pt-12 pb-[calc(env(safe-area-inset-bottom)+6rem)]">
           <EmptyState
             icon={Users}
@@ -63,10 +92,10 @@ export default function PartiesPage() {
           />
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {parties.map((party) => (
-            <PartyCard key={party.id} party={party} onDeleted={refresh} />
-          ))}
+        <div className="flex flex-col gap-8">
+          <PartySection title="Your parties" parties={myParties} onDeleted={refresh} />
+          <PartySection title="From people you follow" parties={followedParties} onDeleted={refresh} />
+          <PartySection title="All public parties" parties={publicParties} onDeleted={refresh} />
         </div>
       )}
 

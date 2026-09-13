@@ -1,15 +1,33 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { X } from "lucide-react";
+import { Lock, X } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
 import { deleteParty, type WatchParty } from "@/lib/watch-parties";
 import { useCurrentUserStore } from "@/store/current-user-store";
+
+// "Repeats weekly" alone doesn't need the exact date; a one-off schedule
+// does. Deliberately no year — these are always near-future.
+function formatSchedule(party: WatchParty): string | null {
+  if (party.repeatRule !== "none") {
+    return `Repeats ${party.repeatRule}`;
+  }
+  if (!party.scheduledAt) return null;
+  const formatted = new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(party.scheduledAt));
+  return `Starts ${formatted}`;
+}
 
 export function PartyCard({ party, onDeleted }: { party: WatchParty; onDeleted?: () => void }) {
   const ownProfile = useCurrentUserStore((s) => s.profile);
   const isHost = ownProfile?.id === party.host.id;
   const [deleting, setDeleting] = useState(false);
+  const schedule = formatSchedule(party);
 
   async function handleEnd(e: React.MouseEvent) {
     e.preventDefault();
@@ -30,6 +48,12 @@ export function PartyCard({ party, onDeleted }: { party: WatchParty; onDeleted?:
         <Image src={party.video.posterUrl} alt="" fill className="object-cover" />
       )}
       <div className="absolute inset-0 bg-gradient-to-t from-bg/90 via-bg/20 to-transparent" />
+      {party.visibility === "private" && (
+        <span className="absolute top-2 left-2 flex items-center gap-1 bg-bg/70 backdrop-blur-md rounded-full px-2 py-1 text-[11px] font-medium">
+          <Lock size={10} />
+          Private
+        </span>
+      )}
       {isHost && (
         <button
           type="button"
@@ -46,6 +70,7 @@ export function PartyCard({ party, onDeleted }: { party: WatchParty; onDeleted?:
         <p className="text-sm text-text-secondary truncate">
           Host: {party.host.displayName} · {formatRelativeTime(party.createdAt)}
         </p>
+        {schedule && <p className="text-xs text-primary truncate mt-0.5">{schedule}</p>}
       </div>
     </Link>
   );

@@ -1,20 +1,35 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Image from "next/image";
+import { useRouter } from "next/navigation";
 import NextLink from "next/link";
-import { Check, ChevronDown, ChevronUp, Link2, Plus, Users, Volume2, VolumeX, X } from "lucide-react";
-import { Logo } from "@/components/ui/Logo";
-import { Avatar } from "@/components/ui/Avatar";
+import { Check, Link2, LogOut, Mic, MicOff, Trash2, Volume2, VolumeX } from "lucide-react";
 import { useWatchRoom } from "@/lib/use-watch-room";
+import { useWatchRoomVoice } from "@/lib/use-watch-room-voice";
 import { fetchVideoById } from "@/lib/watch-together";
+import { fetchPartyById, deleteParty } from "@/lib/watch-parties";
 import { AddToQueueSheet } from "./AddToQueueSheet";
+import { ParticipantsPanel } from "./ParticipantsPanel";
+import { QueuePanel } from "./QueuePanel";
+import { CHROME_GLASS_CLASS, CHROME_TAP_SCALE_CLASS } from "@/lib/chrome";
+import { cn } from "@/lib/utils";
 import type { Video } from "@/lib/types";
 
-// The add-to-queue prompt only shows up this close to the end — no
-// standing button cluttering the view for the other 99% of a video.
-const SHOW_ADD_PROMPT_SECONDS_REMAINING = 10;
+// A MediaStream can't be set via <audio src> — it needs the srcObject
+// property, which only exists imperatively. Not visible: only the video's
+// own <video> element is ever seen; remote voice plays through these.
+function RemoteVoiceAudio({ stream }: { stream: MediaStream }) {
+  const ref = useRef<HTMLAudioElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.srcObject = stream;
+  }, [stream]);
+  return <audio ref={ref} autoPlay className="hidden" />;
+}
 
+/** In-party page — an inline "control panel" layout (video on top, then
+ * always-visible Participants/Queue sections below), not the full-screen
+ * cinematic overlay every other video screen in FRAME uses. A deliberate,
+ * confirmed visual departure for this one screen — see the plan file. */
 export function WatchTogetherPlayer({
   video: initialVideo,
   roomId,
@@ -22,13 +37,17 @@ export function WatchTogetherPlayer({
   video: Video;
   roomId: string;
 }) {
+  const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [muted, setMuted] = useState(true);
   const [copied, setCopied] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
-  const [nearEnd, setNearEnd] = useState(false);
   const [video, setVideo] = useState(initialVideo);
+  const [partyTitle, setPartyTitle] = useState<string | null>(null);
+  const [ending, setEnding] = useState(false);
   const {
+    selfId,
+    channel,
     participants,
     isHost,
     broadcastSync,
@@ -41,6 +60,19 @@ export function WatchTogetherPlayer({
     denied,
   } = useWatchRoom(roomId, initialVideo.id, videoRef);
 
+  const voice = useWatchRoomVoice(channel, selfId, participants, isHost);
+  const voiceConnectedIds = new Set(
+    voice.phase === "live" ? [...voice.remoteStreams.keys(), selfId] : [...voice.remoteStreams.keys()]
+  );
+
+  // Resolves a real party's title for the header. Ad-hoc rooms (the "Watch
+  // together" button on a video) have no watch_parties row at all —
+  // fetchPartyById returns null either way, and the header falls back to
+  // the video's own title, same case either way (missing vs. ad-hoc).
+  useEffect(() => {
+    fetchPartyById(roomId).then((party) => setPartyTitle(party?.title ?? null));
+  }, [roomId]);
+
   // currentVideoId only ever changes via the room's "advance" broadcast
   // (see use-watch-room.ts) — when it does, every client (not just the
   // authority who triggered it) swaps to the new video the same way.
@@ -51,28 +83,23 @@ export function WatchTogetherPlayer({
     });
   }, [currentVideoId, video.id]);
 
-  // "Adjust state when a prop changes" during render, not in an effect —
-  // resets the near-end prompt the instant the video swaps rather than one
-  // render later.
-  const [nearEndForVideoId, setNearEndForVideoId] = useState(video.id);
-  if (video.id !== nearEndForVideoId) {
-    setNearEndForVideoId(video.id);
-    setNearEnd(false);
-  }
-
-  function handleTimeUpdate() {
-    const el = videoRef.current;
-    if (!el || !Number.isFinite(el.duration)) return;
-    setNearEnd(el.duration - el.currentTime <= SHOW_ADD_PROMPT_SECONDS_REMAINING);
-  }
-
   async function copyInviteLink() {
     await navigator.clipboard.writeText(window.location.href);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1600);
   }
 
-  const showAddPrompt = nearEnd;
+  async function handleEnd() {
+    if (ending || !window.confirm("End this watch party for everyone?")) return;
+    setEnding(true);
+    const ok = await deleteParty(roomId);
+    if (ok) router.push("/parties");
+    else setEnding(false);
+  }
+
+  function handleLeave() {
+    router.push("/parties");
+  }
 
   // Realtime Authorization rejected this connection (not an invited
   // member, for a listed party) — same "not available" pattern as this
@@ -93,121 +120,138 @@ export function WatchTogetherPlayer({
   }
 
   return (
-    <div className="relative h-dvh w-full overflow-hidden bg-bg">
-      <div className="absolute inset-0">
-        <Image src={video.posterUrl} alt="" fill className="object-cover scale-125 blur-3xl opacity-40" />
-      </div>
-
-      <div className="absolute inset-0 flex items-center justify-center">
-        <video
-          ref={videoRef}
-          key={video.id}
-          src={video.playbackUrl}
-          poster={video.posterUrl}
-          className="w-full h-full object-contain"
-          muted={muted}
-          autoPlay
-          playsInline
-          controls={isHost}
-          onPlay={() => isHost && broadcastSync()}
-          onPause={() => isHost && broadcastSync()}
-          onSeeked={() => isHost && broadcastSync()}
-          onTimeUpdate={handleTimeUpdate}
-          onEnded={() => isHost && advanceQueue()}
-        />
-      </div>
-
-      <div className="absolute inset-x-0 bottom-0 h-64 bg-gradient-to-t from-bg/90 via-bg/30 to-transparent pointer-events-none" />
-
-      <div className="absolute top-4 left-4 md:top-6 md:left-6 flex items-center gap-2">
-        <Logo size={28} />
-        <span className="text-sm font-bold tracking-tight drop-shadow-sm">FRAMES</span>
-      </div>
-
-      <div className="absolute top-4 right-4 md:top-6 md:right-6 flex items-center gap-2">
-        <span className="flex items-center gap-1.5 bg-card/70 backdrop-blur-md rounded-full px-3 py-1.5 text-xs font-medium">
-          <Users size={13} />
-          {participants.length}
-        </span>
-        <button
-          onClick={copyInviteLink}
-          aria-label="Copy invite link"
-          className="w-9 h-9 rounded-full bg-card/70 backdrop-blur-md flex items-center justify-center"
-        >
-          {copied ? <Check size={16} className="text-primary" /> : <Link2 size={16} />}
-        </button>
-        <button
-          onClick={() => setMuted((m) => !m)}
-          aria-label={muted ? "Unmute" : "Mute"}
-          className="w-9 h-9 rounded-full bg-card/70 backdrop-blur-md flex items-center justify-center"
-        >
-          {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
-        </button>
-      </div>
-
-      {!isHost && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 md:top-[4.5rem] text-[11px] font-medium text-text-secondary bg-card/70 backdrop-blur-md rounded-full px-3 py-1.5">
-          Watching in sync — playback follows the host
-        </div>
-      )}
-
-      <div className="absolute inset-x-0 bottom-0 px-4 md:px-8 pb-6 md:pb-10 flex flex-col gap-3 max-w-lg">
-        <div className="flex items-center gap-2">
-          <Avatar src={video.creator.avatarUrl} alt={video.creator.displayName} size={32} />
-          <div>
-            <p className="text-sm font-semibold">@{video.creator.username}</p>
-            <p className="text-xs text-text-secondary">
-              {isHost ? "You're hosting this watch party" : "Watch party in progress"}
+    <div className="min-h-dvh bg-bg pb-24 md:pb-8">
+      <div className="max-w-2xl mx-auto px-4 md:px-6 pt-6 flex flex-col gap-5">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-primary">
+              {isHost ? "You're hosting" : "Watching in sync"}
             </p>
+            <h1 className="text-lg font-semibold truncate">{partyTitle ?? video.title}</h1>
           </div>
-        </div>
-        <p className="text-sm text-accent/90">{video.title}</p>
-
-        {(queue.length > 0 || showAddPrompt) && (
-          <div className="flex items-center gap-2 overflow-x-auto pb-1">
-            {queue.length > 0 && <span className="text-[11px] text-text-secondary shrink-0">Up next</span>}
-            {queue.map((item, index) => (
-              <span
-                key={item.id}
-                className="flex items-center gap-1 shrink-0 bg-card/70 backdrop-blur-md rounded-full pl-2.5 pr-1 py-1 text-[11px]"
-              >
-                <span className="truncate max-w-[100px]">{item.title}</span>
-                <button
-                  onClick={() => moveQueueItem(item.id, "up")}
-                  disabled={index === 0}
-                  aria-label={`Move ${item.title} up`}
-                  className="p-0.5 rounded-full hover:bg-bg transition-colors disabled:opacity-30"
-                >
-                  <ChevronUp size={11} />
-                </button>
-                <button
-                  onClick={() => moveQueueItem(item.id, "down")}
-                  disabled={index === queue.length - 1}
-                  aria-label={`Move ${item.title} down`}
-                  className="p-0.5 rounded-full hover:bg-bg transition-colors disabled:opacity-30"
-                >
-                  <ChevronDown size={11} />
-                </button>
-                <button
-                  onClick={() => removeFromQueue(item.id)}
-                  aria-label={`Remove ${item.title} from queue`}
-                  className="p-0.5 rounded-full hover:bg-bg transition-colors"
-                >
-                  <X size={11} />
-                </button>
-              </span>
-            ))}
-            {showAddPrompt && (
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={copyInviteLink}
+              aria-label="Copy invite link"
+              className={cn(CHROME_GLASS_CLASS, CHROME_TAP_SCALE_CLASS, "w-9 h-9 flex items-center justify-center")}
+            >
+              {copied ? <Check size={16} className="text-primary" /> : <Link2 size={16} />}
+            </button>
+            {voice.phase !== "unsupported" && (
               <button
-                onClick={() => setAddOpen(true)}
-                className="flex items-center gap-1 shrink-0 bg-primary text-bg rounded-full pl-2 pr-2.5 py-1 text-[11px] font-semibold"
+                onClick={() => (voice.phase === "live" ? voice.toggleSelfMute() : voice.join())}
+                disabled={voice.phase === "requesting" || voice.phase === "full"}
+                aria-label={
+                  voice.phase === "live"
+                    ? voice.localMuted
+                      ? "Unmute your microphone"
+                      : "Mute your microphone"
+                    : "Join voice chat"
+                }
+                title={voice.phase === "full" ? "Voice chat is full for this party" : undefined}
+                className={cn(
+                  CHROME_GLASS_CLASS,
+                  CHROME_TAP_SCALE_CLASS,
+                  "w-9 h-9 flex items-center justify-center",
+                  voice.phase === "full" && "opacity-50"
+                )}
               >
-                <Plus size={12} />
-                {queue.length === 0 ? "Add next video" : "Add"}
+                {voice.phase === "live" ? (
+                  voice.localMuted ? (
+                    <MicOff size={16} className="text-primary" />
+                  ) : (
+                    <Mic size={16} className="text-primary" />
+                  )
+                ) : (
+                  <Mic size={16} className={voice.phase === "requesting" ? "animate-pulse" : undefined} />
+                )}
               </button>
             )}
           </div>
-        )}
+        </div>
+
+        {/* Video */}
+        <div className="relative aspect-video rounded-2xl overflow-hidden bg-card">
+          <video
+            ref={videoRef}
+            key={video.id}
+            src={video.playbackUrl}
+            poster={video.posterUrl}
+            className="w-full h-full object-contain"
+            muted={muted}
+            autoPlay
+            playsInline
+            controls={isHost}
+            onPlay={() => isHost && broadcastSync()}
+            onPause={() => isHost && broadcastSync()}
+            onSeeked={() => isHost && broadcastSync()}
+            onEnded={() => isHost && advanceQueue()}
+          />
+          <button
+            onClick={() => setMuted((m) => !m)}
+            aria-label={muted ? "Unmute video" : "Mute video"}
+            className={cn(
+              CHROME_GLASS_CLASS,
+              CHROME_TAP_SCALE_CLASS,
+              "absolute bottom-3 left-3 w-9 h-9 flex items-center justify-center"
+            )}
+          >
+            {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+          </button>
+        </div>
+
+        {[...voice.remoteStreams.entries()].map(([participantId, stream]) => (
+          <RemoteVoiceAudio key={participantId} stream={stream} />
+        ))}
+
+        {/* Following the host's feed / creator line */}
+        <p className="text-sm text-text-secondary -mt-2">Hosted by @{video.creator.username}</p>
+
+        <div className="h-px bg-border" />
+
+        <ParticipantsPanel
+          participants={participants}
+          selfId={selfId}
+          isHost={isHost}
+          voiceConnectedIds={voiceConnectedIds}
+          mutedParticipants={voice.mutedParticipants}
+          speakingIds={voice.speakingIds}
+          onRequestMute={voice.requestMute}
+          onRequestMuteAll={voice.requestMuteAll}
+        />
+
+        <div className="h-px bg-border" />
+
+        <QueuePanel
+          nowPlayingTitle={video.title}
+          queue={queue}
+          onMove={moveQueueItem}
+          onRemove={removeFromQueue}
+          onAdd={() => setAddOpen(true)}
+        />
+
+        <div className="h-px bg-border" />
+
+        <div className="flex items-center gap-3 pb-4">
+          <button
+            onClick={handleLeave}
+            className={cn(CHROME_GLASS_CLASS, CHROME_TAP_SCALE_CLASS, "flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium")}
+          >
+            <LogOut size={14} />
+            Leave party
+          </button>
+          {isHost && (
+            <button
+              onClick={handleEnd}
+              disabled={ending}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-full bg-red-500/90 text-white text-sm font-semibold disabled:opacity-50 transition-opacity"
+            >
+              <Trash2 size={14} />
+              {ending ? "Ending…" : "End party"}
+            </button>
+          )}
+        </div>
       </div>
 
       <AddToQueueSheet

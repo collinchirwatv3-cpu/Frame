@@ -7,7 +7,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Check, Loader2, Search, X } from "lucide-react";
 import { fetchPublicVideos } from "@/lib/watch-together";
 import { matchesVideoQuery } from "@/lib/search";
-import { createParty } from "@/lib/watch-parties";
+import { createParty, type PartyRepeatRule, type PartyVisibility } from "@/lib/watch-parties";
 import { useEscapeToClose } from "@/lib/use-escape-to-close";
 import { cn } from "@/lib/utils";
 import type { Video } from "@/lib/types";
@@ -23,6 +23,9 @@ export function CreatePartySheet({ open, onClose }: { open: boolean; onClose: ()
   const [title, setTitle] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [scheduledAt, setScheduledAt] = useState("");
+  const [repeatRule, setRepeatRule] = useState<PartyRepeatRule>("none");
+  const [visibility, setVisibility] = useState<PartyVisibility>("public");
 
   useEscapeToClose(open, onClose);
 
@@ -46,6 +49,9 @@ export function CreatePartySheet({ open, onClose }: { open: boolean; onClose: ()
       setTitle("");
       setSelectedId(null);
       setQuery("");
+      setScheduledAt("");
+      setRepeatRule("none");
+      setVisibility("public");
     }
   }
 
@@ -55,7 +61,16 @@ export function CreatePartySheet({ open, onClose }: { open: boolean; onClose: ()
   async function handleCreate() {
     if (!canCreate || !selectedId) return;
     setCreating(true);
-    const party = await createParty({ title: title.trim(), videoId: selectedId });
+    const party = await createParty({
+      title: title.trim(),
+      videoId: selectedId,
+      visibility,
+      // datetime-local has no timezone — new Date(...) interprets it in the
+      // browser's local zone, which is what a "start this at 7pm" picker
+      // should mean anyway.
+      scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
+      repeatRule: scheduledAt ? repeatRule : "none",
+    });
     setCreating(false);
     if (!party) return;
     onClose();
@@ -155,6 +170,60 @@ export function CreatePartySheet({ open, onClose }: { open: boolean; onClose: ()
                   );
                 })
               )}
+            </div>
+
+            <div className="px-5 pb-3 flex flex-col gap-3">
+              <div>
+                <label className="text-xs text-text-secondary block mb-1.5">Schedule (optional)</label>
+                <input
+                  type="datetime-local"
+                  value={scheduledAt}
+                  onChange={(e) => setScheduledAt(e.target.value)}
+                  aria-label="Schedule this party"
+                  className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-primary transition-colors"
+                />
+              </div>
+
+              {scheduledAt && (
+                <div>
+                  <label className="text-xs text-text-secondary block mb-1.5">Repeats</label>
+                  <select
+                    value={repeatRule}
+                    onChange={(e) => setRepeatRule(e.target.value as PartyRepeatRule)}
+                    aria-label="Repeat this party"
+                    className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-primary transition-colors"
+                  >
+                    <option value="none">Does not repeat</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="text-xs text-text-secondary block mb-1.5">Privacy</label>
+                <div className="flex bg-bg border border-border rounded-full p-1">
+                  {(["public", "private"] as const).map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setVisibility(option)}
+                      aria-pressed={visibility === option}
+                      className={cn(
+                        "flex-1 py-1.5 rounded-full text-sm font-medium capitalize transition-colors",
+                        visibility === option ? "bg-primary text-bg" : "text-text-secondary"
+                      )}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+                {visibility === "private" && (
+                  <p className="text-xs text-text-secondary mt-1.5">
+                    Hidden from Parties browsing — anyone invited to FRAMES can still join with the link.
+                  </p>
+                )}
+              </div>
             </div>
 
             <div className="px-5 pt-2">

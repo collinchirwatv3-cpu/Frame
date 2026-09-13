@@ -7,6 +7,7 @@ import { Check, Loader2, Plus, Search, X } from "lucide-react";
 import { fetchPublicVideos } from "@/lib/watch-together";
 import { matchesVideoQuery } from "@/lib/search";
 import { useEscapeToClose } from "@/lib/use-escape-to-close";
+import { SHEET_SPRING } from "@/lib/motion";
 import type { QueueItem } from "@/lib/use-watch-room";
 import type { Video } from "@/lib/types";
 
@@ -70,7 +71,7 @@ export function AddToQueueSheet({
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
-            transition={{ type: "spring", stiffness: 320, damping: 34 }}
+            transition={SHEET_SPRING}
             className="fixed inset-x-0 bottom-0 z-[71] flex flex-col bg-card border-t border-border rounded-t-2xl max-h-[80vh] md:max-w-md md:left-1/2 md:-translate-x-1/2 md:bottom-6 md:rounded-2xl md:border"
             style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 1rem)" }}
           >

@@ -2,14 +2,14 @@
 
 import { useCallback, useState } from "react";
 import Link from "next/link";
-import { AtSign, Bell, Heart, MessageCircle, UserPlus } from "lucide-react";
+import { AtSign, Bell, Heart, MessageCircle, PartyPopper, UserPlus } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUserStore } from "@/store/current-user-store";
 import { useNotificationsRealtime } from "@/lib/use-notifications-realtime";
 import { cn, formatRelativeTime } from "@/lib/utils";
 
-type NotificationType = "like" | "comment" | "follow" | "mention" | "system";
+type NotificationType = "like" | "comment" | "follow" | "mention" | "system" | "party_starting";
 
 type NotificationRow = {
   id: string;
@@ -18,6 +18,7 @@ type NotificationRow = {
   created_at: string;
   video_id: string | null;
   actor: { username: string; display_name: string; avatar_url: string | null } | null;
+  party: { id: string; video_id: string | null } | null;
 };
 
 const ICONS: Record<NotificationType, typeof Heart> = {
@@ -26,6 +27,7 @@ const ICONS: Record<NotificationType, typeof Heart> = {
   follow: UserPlus,
   mention: AtSign,
   system: Bell,
+  party_starting: PartyPopper,
 };
 
 function describe(row: NotificationRow): string {
@@ -41,11 +43,16 @@ function describe(row: NotificationRow): string {
       return `${name} mentioned you`;
     case "system":
       return "News from FRAMES";
+    case "party_starting":
+      return `${name}'s party is starting`;
   }
 }
 
 function hrefFor(row: NotificationRow): string {
   if (row.type === "follow" && row.actor) return `/profile/${row.actor.username}`;
+  if (row.type === "party_starting" && row.party) {
+    return row.party.video_id ? `/watch-together/${row.party.id}?v=${row.party.video_id}` : `/watch-together/${row.party.id}`;
+  }
   if (row.video_id) return `/watch/${row.video_id}`;
   return "/inbox";
 }
@@ -67,7 +74,7 @@ export function NotificationList() {
     const { data } = await supabase
       .from("notifications")
       .select(
-        "id, type, read, created_at, video_id, actor:profiles!notifications_actor_id_fkey(username, display_name, avatar_url)"
+        "id, type, read, created_at, video_id, actor:profiles!notifications_actor_id_fkey(username, display_name, avatar_url), party:watch_parties!notifications_party_id_fkey(id, video_id)"
       )
       .order("created_at", { ascending: false })
       .limit(50);
