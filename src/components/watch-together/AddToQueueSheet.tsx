@@ -46,6 +46,7 @@ export function AddToQueueSheet({
       title: video.title,
       posterUrl: video.posterUrl,
       creatorUsername: video.creator.username,
+      durationSeconds: video.durationSeconds,
     });
     setJustAdded(video.id);
     window.setTimeout(() => setJustAdded(null), 1200);
@@ -76,7 +77,7 @@ export function AddToQueueSheet({
             style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 1rem)" }}
           >
             <div className="flex items-center justify-between px-5 pt-5 pb-3">
-              <h2 className="text-base font-semibold">Add to queue</h2>
+              <h2 className="text-base font-semibold">Add Frames</h2>
               <button
                 type="button"
                 onClick={onClose}

@@ -24,7 +24,17 @@ export type Participant = Identity & { id: string; joinedAt: number };
 
 const GUEST_IDENTITY: Identity = { profileId: null, username: "guest", displayName: "Guest", avatarUrl: "" };
 
-export type QueueItem = { id: string; title: string; posterUrl: string; creatorUsername: string };
+// durationSeconds is optional so an older queue-set broadcast from a
+// client that hasn't picked up this field yet still deserializes fine —
+// this whole shape travels over the wire as a realtime broadcast payload,
+// not just local state.
+export type QueueItem = {
+  id: string;
+  title: string;
+  posterUrl: string;
+  creatorUsername: string;
+  durationSeconds?: number;
+};
 
 // Exported so use-watch-room-voice.ts can type the same channel instance
 // it's handed — this file never imports Supabase's RealtimeChannel type by
