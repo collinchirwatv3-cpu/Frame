@@ -9,6 +9,7 @@ import { VideoOverlay } from "./VideoOverlay";
 import { CommentDrawer } from "./CommentDrawer";
 import { VideoOptionsSheet } from "./VideoOptionsSheet";
 import { VideoDetailsSheet } from "./VideoDetailsSheet";
+import { ClipCreateSheet } from "./ClipCreateSheet";
 import { SearchButton } from "@/components/ui/SearchButton";
 import { usePlayerStore } from "@/store/player-store";
 import { useCurrentUserStore } from "@/store/current-user-store";
@@ -50,6 +51,12 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [clipOpen, setClipOpen] = useState(false);
+  // Set only while playing back a tapped Community Clip — handleTimeUpdate
+  // pauses once currentTime reaches this, then clears it. A virtual clip:
+  // just bounded playback of this same <video>/playbackUrl, no separate
+  // asset or route.
+  const clipEndRef = useRef<number | null>(null);
   const muted = usePlayerStore((s) => s.muted);
   const toggleMuted = usePlayerStore((s) => s.toggleMuted);
   const directorMode = usePlayerStore((s) => s.directorMode);
@@ -110,6 +117,22 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
     const el = videoRef.current;
     if (!el || !el.duration) return;
     setProgress(el.currentTime / el.duration);
+
+    if (clipEndRef.current !== null && el.currentTime >= clipEndRef.current) {
+      el.pause();
+      clipEndRef.current = null;
+    }
+  }
+
+  /** Community Clips playback — a virtual clip is just this same video
+   * seeked to a start offset with a bounded end, no separate asset/route. */
+  function playClip(startSeconds: number, endSeconds: number) {
+    const el = videoRef.current;
+    if (!el) return;
+    el.currentTime = startSeconds;
+    clipEndRef.current = endSeconds;
+    el.play().catch(() => {});
+    setDetailsOpen(false);
   }
 
   // No separate "enter full screen" or mute buttons anymore — the video is
@@ -263,6 +286,7 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
                   video={video}
                   onOpenComments={() => setCommentsOpen(true)}
                   onOpenOptions={() => setOptionsOpen(true)}
+                  onOpenClip={() => setClipOpen(true)}
                 />
               </div>
 
@@ -307,7 +331,13 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
 
       <CommentDrawer video={video} open={commentsOpen} onClose={() => setCommentsOpen(false)} />
       <VideoOptionsSheet video={video} open={optionsOpen} onClose={() => setOptionsOpen(false)} />
-      <VideoDetailsSheet video={video} open={detailsOpen} onClose={() => setDetailsOpen(false)} />
+      <VideoDetailsSheet
+        video={video}
+        open={detailsOpen}
+        onClose={() => setDetailsOpen(false)}
+        onPlayClip={playClip}
+      />
+      <ClipCreateSheet video={video} open={clipOpen} onClose={() => setClipOpen(false)} />
     </section>
   );
 });

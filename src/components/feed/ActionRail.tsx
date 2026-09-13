@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bookmark, Check, Heart, Link2, MessageCircle, MoreHorizontal, Share2 } from "lucide-react";
+import { Bookmark, Check, Heart, Link2, MessageCircle, MoreHorizontal, Scissors, Share2 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { cn, formatCount, shareContent } from "@/lib/utils";
 import { DURATION } from "@/lib/motion";
@@ -77,6 +77,7 @@ export function ActionRail({
   video,
   onOpenComments,
   onOpenOptions,
+  onOpenClip,
   className,
   compact,
   showAvatar = true,
@@ -84,6 +85,9 @@ export function ActionRail({
   video: Video;
   onOpenComments: () => void;
   onOpenOptions: () => void;
+  /** Optional — Shorts (compact rail, already-short clips) doesn't wire
+   * this up at all, so the button simply doesn't render there. */
+  onOpenClip?: () => void;
   /** Overrides the root's flex direction/gap — Shorts uses this to lay the
    * rail out as a row instead of a column in landscape, the main feed
    * leaves it at the default column (its cinematic player keeps a vertical
@@ -193,6 +197,9 @@ export function ActionRail({
         onClick={() => toggleSave(video.id)}
         compact={compact}
       />
+      {onOpenClip && (
+        <RailButton icon={Scissors} label="Clip" srLabel="Create a clip" onClick={onOpenClip} compact={compact} />
+      )}
 
       <motion.button
         whileTap={{ scale: CHROME_TAP_SCALE }}

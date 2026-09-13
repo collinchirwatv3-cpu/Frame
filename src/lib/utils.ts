@@ -24,6 +24,17 @@ export function formatRelativeTime(date: string | Date): string {
   return `${days}d`;
 }
 
+/** m:ss (or h:mm:ss past an hour) — for clip ranges and the scrub bar's own
+ * future use; no timestamp formatter existed anywhere in this app before. */
+export function formatTimestamp(totalSeconds: number): string {
+  const seconds = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+
 export type ShareResult = "shared" | "copied" | "cancelled" | "unsupported";
 
 export async function shareContent(data: {

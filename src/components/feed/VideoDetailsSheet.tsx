@@ -1,9 +1,12 @@
 "use client";
 
+import { useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Aperture, Clapperboard, Film, MapPin, Tag, X } from "lucide-react";
+import { Aperture, Clapperboard, Film, MapPin, Play, Scissors, Tag, X } from "lucide-react";
 import { SHEET_SPRING } from "@/lib/motion";
 import { useEscapeToClose } from "@/lib/use-escape-to-close";
+import { formatTimestamp } from "@/lib/utils";
+import { useClipsStore } from "@/store/clips-store";
 import type { Video } from "@/lib/types";
 
 function Row({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
@@ -24,14 +27,24 @@ export function VideoDetailsSheet({
   video,
   open,
   onClose,
+  onPlayClip,
 }: {
   video: Video;
   open: boolean;
   onClose: () => void;
+  /** Plays a Community Clip inline on the same player — bounded playback
+   * of the same asset, not a new route/video. */
+  onPlayClip: (startSeconds: number, endSeconds: number) => void;
 }) {
   const d = video.details;
+  const fetchClips = useClipsStore((s) => s.fetchClips);
+  const clips = useClipsStore((s) => s.byVideoId[video.id] ?? []);
 
   useEscapeToClose(open, onClose);
+
+  useEffect(() => {
+    if (open) fetchClips(video.id);
+  }, [open, video.id, fetchClips]);
 
   return (
     <AnimatePresence>
@@ -120,6 +133,30 @@ export function VideoDetailsSheet({
                       <p className="text-sm text-accent/90">{d.behindTheScenes}</p>
                     </div>
                   )}
+                </div>
+              )}
+
+              {clips.length > 0 && (
+                <div className="pt-3 border-t border-border flex flex-col gap-1">
+                  <p className="text-[11px] text-text-secondary mb-1 flex items-center gap-1">
+                    <Scissors size={11} />
+                    Community Clips
+                  </p>
+                  {clips.map((clip) => (
+                    <button
+                      key={clip.id}
+                      onClick={() => onPlayClip(clip.startSeconds, clip.endSeconds)}
+                      className="flex items-center gap-2 py-2 rounded-lg hover:bg-bg transition-colors text-left"
+                    >
+                      <span className="w-7 h-7 rounded-full bg-bg flex items-center justify-center shrink-0">
+                        <Play size={11} className="text-primary" />
+                      </span>
+                      <span className="text-sm truncate">
+                        Clip · {clip.creatorDisplayName} · {formatTimestamp(clip.startSeconds)}–
+                        {formatTimestamp(clip.endSeconds)}
+                      </span>
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
