@@ -3,7 +3,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
-import { Volume2, VolumeX } from "lucide-react";
 import { ActionRail } from "./ActionRail";
 import { VideoOverlay } from "./VideoOverlay";
 import { CommentDrawer } from "./CommentDrawer";
@@ -19,10 +18,11 @@ import { FOCUS_PULL_TRANSITION, CHROME_FADE_TRANSITION } from "@/lib/motion";
 import type { Video } from "@/lib/types";
 
 export type VideoCardHandle = {
-  /** Tap-equivalent: reveals chrome if Director Mode is hiding it, otherwise
-   * toggles mute — renamed from the old togglePlay now that tapping the
-   * video no longer pauses it (there's no visible pause affordance left
-   * either; the video just always plays while active). */
+  /** Tap-equivalent: reveals chrome if Director Mode is hiding it. No other
+   * effect when chrome is already visible — tapping used to also toggle
+   * mute here, pulled out deliberately (sound is on by default now) to be
+   * rewired later. There's no visible pause affordance either; the video
+   * just always plays while active. */
   handleTap: () => void;
 };
 
@@ -47,7 +47,6 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
   const [progress, setProgress] = useState(0);
   const [seeking, setSeeking] = useState(false);
   const [scrubProgress, setScrubProgress] = useState(0);
-  const [showMuteGlyph, setShowMuteGlyph] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -58,7 +57,6 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
   // asset or route.
   const clipEndRef = useRef<number | null>(null);
   const muted = usePlayerStore((s) => s.muted);
-  const toggleMuted = usePlayerStore((s) => s.toggleMuted);
   const directorMode = usePlayerStore((s) => s.directorMode);
   const toggleDirectorMode = usePlayerStore((s) => s.toggleDirectorMode);
   const setScrubbing = usePlayerStore((s) => s.setScrubbing);
@@ -156,20 +154,16 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
     setDetailsOpen(false);
   }
 
-  // No separate "enter full screen" or mute buttons anymore — the video is
-  // always the full-bleed cinematic view, and every control lives in this
-  // one tap: first tap (while Director Mode is hiding chrome) reveals the
-  // overlay, same as before; once chrome is already visible, tapping again
-  // toggles mute instead of pausing — there's no pause affordance left at
-  // all, the video just always plays while it's the active one.
+  // No separate "enter full screen" button — the video is always the
+  // full-bleed cinematic view. Tapping while Director Mode is hiding
+  // chrome just reveals it; there's no pause affordance either, the video
+  // just always plays while it's the active one. Tap used to also toggle
+  // mute once chrome was already visible — pulled out deliberately, to be
+  // rewired later.
   function handleTap() {
     if (directorMode) {
       toggleDirectorMode();
-      return;
     }
-    toggleMuted();
-    setShowMuteGlyph(true);
-    window.setTimeout(() => setShowMuteGlyph(false), 500);
   }
 
   function seekFromPointer(clientX: number) {
@@ -250,24 +244,6 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
           preload={active ? "auto" : "none"}
           onTimeUpdate={handleTimeUpdate}
         />
-
-        <AnimatePresence>
-          {showMuteGlyph && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.6 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ type: "spring", stiffness: 300, damping: 20 }}
-              className="absolute w-16 h-16 rounded-full bg-bg/50 flex items-center justify-center pointer-events-none"
-            >
-              {muted ? (
-                <VolumeX size={28} className="text-accent" />
-              ) : (
-                <Volume2 size={28} className="text-accent" />
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
       </motion.div>
 
       <AnimatePresence>
@@ -288,8 +264,8 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
             <div className="absolute inset-0 max-w-[1920px] mx-auto pointer-events-none">
               {/* search only now — no manual "enter full screen" (Director
                   Mode is always the resting state, auto-engaged by the
-                  timer) or mute button (tap the video for that; see
-                  handleTap). Your own profile used to have an avatar link
+                  timer) or mute button (removed, see handleTap's doc
+                  comment). Your own profile used to have an avatar link
                   in this cluster too — now ProfileFloat, fixed a row below
                   this one, present on every page rather than just while a
                   video's on screen. */}

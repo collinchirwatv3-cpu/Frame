@@ -3,11 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LogOut, ShieldAlert, ShieldOff, Trash2, Volume2, VolumeX } from "lucide-react";
+import { LogOut, ShieldAlert, ShieldOff, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { categories } from "@/lib/categories";
 import { useOnboardingStore } from "@/store/onboarding-store";
-import { usePlayerStore } from "@/store/player-store";
 import { createClient } from "@/lib/supabase/client";
 import { useIsModerator } from "@/lib/use-is-moderator";
 import { useCurrentUserStore } from "@/store/current-user-store";
@@ -39,8 +38,6 @@ export default function SettingsPage() {
   const userId = useCurrentUserStore((s) => s.profile?.id ?? null);
   const interests = useOnboardingStore((s) => s.interests);
   const setInterests = useOnboardingStore((s) => s.complete);
-  const muted = usePlayerStore((s) => s.muted);
-  const toggleMuted = usePlayerStore((s) => s.toggleMuted);
   const [signingOut, setSigningOut] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>(DEFAULT_PREFERENCES);
@@ -123,19 +120,6 @@ export default function SettingsPage() {
               </button>
             );
           })}
-        </div>
-      </SettingsSection>
-
-      <SettingsSection title="Playback">
-        <div className="w-full flex items-center justify-between py-1">
-          <span className="text-sm">Sound on by default</span>
-          <span className="flex items-center gap-2">
-            <span className="flex items-center gap-1.5 text-xs text-text-secondary">
-              {muted ? <VolumeX size={15} /> : <Volume2 size={15} />}
-              {muted ? "Off" : "On"}
-            </span>
-            <Switch checked={!muted} onChange={toggleMuted} label="Sound on by default" />
-          </span>
         </div>
       </SettingsSection>
 

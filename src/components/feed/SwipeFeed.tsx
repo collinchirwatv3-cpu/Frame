@@ -82,7 +82,6 @@ export function SwipeFeed({
   const containerRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<(HTMLDivElement | null)[]>([]);
   const cardRefs = useRef<(VideoCardHandle | null)[]>([]);
-  const toggleMuted = usePlayerStore((s) => s.toggleMuted);
   const directorMode = usePlayerStore((s) => s.directorMode);
   const isScrubbing = usePlayerStore((s) => s.isScrubbing);
   const enterDirectorMode = usePlayerStore((s) => s.enterDirectorMode);
@@ -168,8 +167,6 @@ export function SwipeFeed({
       } else if (e.key === "ArrowUp" || e.key === "k") {
         e.preventDefault();
         container.scrollBy({ top: -container.clientHeight, behavior: "smooth" });
-      } else if (e.key === "m") {
-        toggleMuted();
       } else if (e.key === " ") {
         e.preventDefault();
         cardRefs.current[activeIndex]?.handleTap();
@@ -178,7 +175,7 @@ export function SwipeFeed({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [toggleMuted, activeIndex]);
+  }, [activeIndex]);
 
   return (
     <div className="relative h-dvh w-full">
