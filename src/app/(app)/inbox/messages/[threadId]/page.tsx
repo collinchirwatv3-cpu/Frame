@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { ArrowLeft, Send, X } from "lucide-react";
 import { DMMessageBubble } from "@/components/inbox/DMMessageBubble";
@@ -31,6 +32,14 @@ const MESSAGE_PAGE_SIZE = 100;
 // here regardless. Hitting the cap is handled the same way a genuine
 // fetch failure is: syncIncomplete, resumable, never silently dropped.
 const MAX_DRAIN_PAGES = 50;
+
+// Code-split and client-only: frimousse (and the emoji dataset it fetches)
+// must never be part of ordinary DM loading — this import only resolves
+// once a reader actually opens the full picker.
+const DMEmojiPickerSheet = dynamic(
+  () => import("@/components/inbox/DMEmojiPickerSheet").then((m) => m.DMEmojiPickerSheet),
+  { ssr: false }
+);
 
 function cursorOf(message: DMMessage): MessageCursor {
   return { createdAt: message.createdAt, id: message.id };
@@ -119,6 +128,22 @@ export default function DMThreadPage() {
     if (thread?.otherUserUnavailable || status !== "ready") return;
     setReplyTo(message);
     composerRef.current?.focus();
+  }
+  const [pickerMessage, setPickerMessage] = useState<DMMessage | null>(null);
+  // Captured at open time so closing (Escape, backdrop tap, a selection, or
+  // the Close button) can restore focus to whatever actually triggered the
+  // picker — the "+ More emojis" button inside that specific message's
+  // own actions menu, not a fixed element.
+  const pickerTriggerRef = useRef<HTMLElement | null>(null);
+  function openPicker(message: DMMessage) {
+    if (thread?.otherUserUnavailable) return;
+    pickerTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setPickerMessage(message);
+  }
+  function closePicker() {
+    setPickerMessage(null);
+    pickerTriggerRef.current?.focus();
+    pickerTriggerRef.current = null;
   }
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState(false);
@@ -292,6 +317,11 @@ export default function DMThreadPage() {
     setSyncRetrying(false);
     setDraft("");
     setReplyTo(null);
+    // A message-specific overlay (the emoji picker) belongs to a specific
+    // message in the OLD conversation — never carry it over. Its own ref
+    // (pickerTriggerRef) is reset in the layout effect below, alongside
+    // this file's other identity-keyed refs — refs can't be written here.
+    setPickerMessage(null);
   }
 
   // The two ref resets tied to the same identity change can't live in the
@@ -306,6 +336,7 @@ export default function DMThreadPage() {
   useLayoutEffect(() => {
     epochRef.current += 1;
     syncCursorRef.current = null;
+    pickerTriggerRef.current = null;
   }, [identityKey]);
 
   // Fires on mount and whenever threadId/userId change (refresh's own
@@ -437,7 +468,8 @@ export default function DMThreadPage() {
   const canMessage = !thread?.otherUserUnavailable;
 
   return (
-    <ConversationViewport>
+    <>
+      <ConversationViewport>
       <div className="flex items-center gap-3 px-4 pb-3 border-b border-border shrink-0" style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}>
         {/* A fixed destination, not router.back() — this conversation can
         be opened directly (a shared link, a push notification), with no
@@ -492,7 +524,8 @@ export default function DMThreadPage() {
             {messages.map((message) => (
               <DMMessageBubble key={`${threadId}:${userId}:${message.id}`} message={message} userId={userId ?? ""}
                 otherName={thread?.otherUser.displayName ?? "Unavailable"} disabled={!canMessage}
-                reactions={reactionsByMessage.get(message.id) ?? []} onReply={chooseReply} onReactionChange={reactionState.retry} />
+                reactions={reactionsByMessage.get(message.id) ?? []} onReply={chooseReply} onReactionChange={reactionState.retry}
+                onOpenPicker={openPicker} />
             ))}
             {reactionState.error && <button type="button" onClick={reactionState.retry} className="text-xs text-primary self-center">
               Couldn&apos;t load reactions — Retry
@@ -554,6 +587,15 @@ export default function DMThreadPage() {
           )}
         </form>
       )}
-    </ConversationViewport>
+      </ConversationViewport>
+      {pickerMessage && (
+        <DMEmojiPickerSheet
+          messageId={pickerMessage.id}
+          currentEmoji={reactionsByMessage.get(pickerMessage.id)?.find((r) => r.userId === userId)?.emoji ?? null}
+          onReacted={reactionState.retry}
+          onClose={closePicker}
+        />
+      )}
+    </>
   );
 }

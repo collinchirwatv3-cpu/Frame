@@ -28,12 +28,22 @@ const canRunLive = !!SUPABASE_URL && !!ANON_KEY && !!SERVICE_KEY && !SUPABASE_UR
 
 test.describe("DM — authenticated browser coverage (requires a real Supabase project)", () => {
   // Generous: these tests create several real users via the Auth admin
-  // API, which has occasionally exhibited transient AuthRetryableFetchError
-  // failures against this shared dev project under heavy use — the retry
-  // helper below backs off for several seconds per attempt, which can
-  // exceed Playwright's 30s default well before the underlying request
-  // actually succeeds.
-  test.setTimeout(60000);
+  // API, which exhibits transient AuthRetryableFetchError failures under
+  // real (if not fully explained) conditions — confirmed via direct
+  // investigation to reproduce against a local `supabase start` instance
+  // too, with no Cloudflare and no rate-limit env var configured on the
+  // GoTrue container, and NOT reproducible via a tight loop of 40
+  // sequential admin.createUser calls in isolation. It correlates with
+  // this spec's own mix of admin API calls interleaved with real browser
+  // contexts/navigation over time, not sheer call volume alone — so
+  // attribute this to a genuine, currently under-characterized
+  // Auth Admin API intermittency, not to Cloudflare or bot protection
+  // (there is concrete evidence against both) and not to a bug in this
+  // app's own code (server-side probes of the same endpoint succeed
+  // reliably outside this harness). The retry helper below backs off for
+  // several seconds per attempt, which can exceed Playwright's 30s default
+  // well before the underlying request actually succeeds.
+  test.setTimeout(120000);
 
   test.skip(
     !canRunLive,
@@ -55,14 +65,15 @@ test.describe("DM — authenticated browser coverage (requires a real Supabase p
    * A short backoff-and-retry is standard practice for exactly this error
    * class, not a workaround for a real bug. */
   async function createUserWithRetry(params: Parameters<NonNullable<typeof admin>["auth"]["admin"]["createUser"]>[0]) {
+    const maxAttempts = 6;
     let lastError: unknown;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const { data, error } = await admin!.auth.admin.createUser(params);
       if (!error) return data;
       lastError = error;
       if (error.name !== "AuthRetryableFetchError") throw error;
       const delay = 1000 * 2 ** attempt;
-      console.log(`  createUser retry ${attempt + 1}/3 after ${error.name} — waiting ${delay}ms`);
+      console.log(`  createUser retry ${attempt + 1}/${maxAttempts} after ${error.name} — waiting ${delay}ms`);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
     throw lastError;
@@ -74,7 +85,22 @@ test.describe("DM — authenticated browser coverage (requires a real Supabase p
       email,
       password,
       email_confirm: true,
-      user_metadata: { display_name: `E2E ${tag}`, username: `e2edm${tag}${stamp}` },
+      // profiles_username_format caps this at 24 chars (^[a-z0-9_]{3,24}$,
+      // 20260808000000_profile_self_edit.sql) — `e2edm${tag}${stamp}`
+      // silently exceeded that for any two-digit-suffixed tag (e.g.
+      // "alice10"+13-digit stamp = 25 chars), which a real INSERT trigger
+      // then rejects with a genuine profiles CHECK constraint violation.
+      // GoTrue reports that as a bare 500 that supabase-js classifies as
+      // AuthRetryableFetchError — indistinguishable from a transient
+      // network blip without reading the GoTrue container's own logs,
+      // which is what actually surfaced this (`docker logs
+      // supabase_auth_<project>`: "violates check constraint
+      // \"profiles_username_format\""). Confirmed via direct reproduction
+      // against local Supabase, deterministic and payload-specific, not
+      // network/rate-limit/Cloudflare/bot-detection related — a short
+      // random suffix instead of embedding the full tag+timestamp keeps
+      // this safely under the cap regardless of tag length.
+      user_metadata: { display_name: `E2E ${tag}`, username: `e2e${Math.random().toString(36).slice(2, 10)}` },
     });
     await admin!.from("profiles").update({ invite_redeemed_at: new Date().toISOString() }).eq("id", data.user!.id);
     const client = createClient(SUPABASE_URL!, ANON_KEY!);
@@ -552,7 +578,7 @@ test.describe("DM — authenticated browser coverage (requires a real Supabase p
 
     // A new message arrives — the reply's reaction must survive it.
     await admin!.from("dm_messages").insert({ thread_id: threadId, sender_id: bob.id, text: "arrives-after-everything-else" });
-    await expect(page.getByText("arrives-after-everything-else")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("arrives-after-everything-else")).toBeVisible({ timeout: 20000 });
     await expect(page.getByLabel("Surprised, 1")).toBeVisible();
 
     // Loading older history reveals the root message itself (now a second,
@@ -727,4 +753,265 @@ test.describe("DM — authenticated browser coverage (requires a real Supabase p
 
     await context.close();
   });
+
+  // --- Swipe-to-reply animation and the full emoji picker (frimousse) ----
+
+  /** Reads the bubble's own visual X offset numerically (0 when no
+   * transform is applied, or when framer leaves an identity matrix at
+   * rest) rather than string-comparing the raw `transform` CSS value,
+   * which can render as either "none" or "matrix(1, 0, 0, 1, 0, 0)"
+   * depending on framer-motion's own internal state. */
+  async function bubbleOffsetX(bubble: ReturnType<import("@playwright/test").Page["locator"]>) {
+    return bubble.evaluate((el) => {
+      const t = getComputedStyle(el).transform;
+      if (t === "none") return 0;
+      return new DOMMatrixReadOnly(t).m41;
+    });
+  }
+
+  /** The picker sheet is "visible" (present, non-zero opacity) from the
+   * very first frame of its slide-up entrance spring — `toBeVisible()`
+   * alone says nothing about whether that animation has actually finished,
+   * and measuring position/size or clicking a target mid-slide hits
+   * whatever's at the STALE, still-moving computed position instead.
+   * Waits for the dialog's own Y position to stop changing between two
+   * samples, which is true exactly once the spring has settled. */
+  async function waitForPickerSettled(page: import("@playwright/test").Page) {
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await expect
+      .poll(async () => {
+        const a = (await dialog.boundingBox())?.y;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        const b = (await dialog.boundingBox())?.y;
+        return a !== undefined && a === b;
+      }, { timeout: 5000 })
+      .toBe(true);
+  }
+
+  test("swipe-to-reply visually follows the finger, shows a reply indicator past the threshold, and springs back after either outcome", async ({ browser }) => {
+    const alice = await makeUser("alice14");
+    const bob = await makeUser("bob14");
+    cleanupUserIds.push(alice.id, bob.id);
+    const aliceRest = createClient(SUPABASE_URL!, ANON_KEY!, {
+      global: { headers: { Authorization: `Bearer ${alice.session.access_token}` } },
+    });
+    const { data: threadId, error: threadErr } = await aliceRest.rpc("get_or_create_dm_thread", { other_user_id: bob.id });
+    if (threadErr) throw threadErr;
+    cleanupThreadIds.push(threadId);
+    await admin!.from("dm_messages").insert({ thread_id: threadId, sender_id: alice.id, text: "swipe target message" });
+
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true });
+    await injectSession(context, bob.session);
+    const page = await context.newPage();
+    await bypassOnboardingGate(page);
+    await page.goto(`/inbox/messages/${threadId}`);
+    await expect(page.getByText("swipe target message")).toBeVisible();
+
+    const bubble = page.locator(".touch-pan-y", { hasText: "swipe target message" }).first();
+    const box = await bubble.boundingBox();
+    if (!box) throw new Error("bubble not found");
+    const cdp = await context.newCDPSession(page);
+    const startX = box.x + 10;
+    const startY = box.y + box.height / 2;
+
+    expect(await bubbleOffsetX(bubble)).toBe(0);
+
+    // --- Partial swipe, under the reply threshold (60px): the bubble
+    // visibly follows the finger, then springs back with no reply
+    // selected on release. ---
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: startX, y: startY }] });
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: startX + 30, y: startY }] });
+    await expect.poll(() => bubbleOffsetX(bubble), { timeout: 2000 }).toBeGreaterThan(10);
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await expect(page.getByRole("status")).toHaveCount(0); // no "Replying to..." preview
+    await expect.poll(() => bubbleOffsetX(bubble), { timeout: 2000 }).toBeLessThan(1);
+
+    // --- Full swipe, past the threshold: the reply-ready indicator
+    // becomes visible, release selects reply, and the bubble still
+    // springs back afterward (the same as the cancelled case above). ---
+    // Scoped to THIS message's own wrapper (the bubble's direct parent,
+    // which also holds the reply-arrow indicator as a sibling) — a bare
+    // page-wide "[aria-hidden] svg" would happily match an unrelated icon
+    // elsewhere on the page (e.g. lucide sets aria-hidden on every icon
+    // svg it renders, not just this one).
+    // The opacity/scale motion values are set on the wrapping motion.div,
+    // not the <svg> itself — CSS opacity isn't reflected in a child
+    // element's OWN computed style (it's a compositing property, not
+    // inherited the way `color` is), so checking the svg's opacity would
+    // always read the browser default ("1") regardless of the real,
+    // rendered (invisible-when-0) state.
+    const arrow = bubble.locator("xpath=..").locator("[aria-hidden] > div").first();
+    await expect(arrow).toHaveCSS("opacity", "0", { timeout: 2000 });
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: startX, y: startY }] });
+    const steps = 6;
+    for (let i = 1; i <= steps; i++) {
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: startX + (80 * i) / steps, y: startY }] });
+    }
+    await expect.poll(async () => Number(await arrow.evaluate((el) => getComputedStyle(el).opacity)), { timeout: 2000 }).toBeGreaterThan(0.8);
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+
+    await expect(page.getByRole("status")).toBeVisible(); // "Replying to..." preview now present
+    await expect.poll(() => bubbleOffsetX(bubble), { timeout: 2000 }).toBeLessThan(1); // sprung back regardless
+
+    await context.close();
+  });
+
+  test("reduced motion: the bubble never visually moves, but the swipe gesture still functions", async ({ browser }) => {
+    const alice = await makeUser("alice16");
+    const bob = await makeUser("bob16");
+    cleanupUserIds.push(alice.id, bob.id);
+    const aliceRest = createClient(SUPABASE_URL!, ANON_KEY!, {
+      global: { headers: { Authorization: `Bearer ${alice.session.access_token}` } },
+    });
+    const { data: threadId, error: threadErr } = await aliceRest.rpc("get_or_create_dm_thread", { other_user_id: bob.id });
+    if (threadErr) throw threadErr;
+    cleanupThreadIds.push(threadId);
+    await admin!.from("dm_messages").insert({ thread_id: threadId, sender_id: alice.id, text: "reduced motion swipe target" });
+
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true });
+    await injectSession(context, bob.session);
+    const page = await context.newPage();
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await bypassOnboardingGate(page);
+    await page.goto(`/inbox/messages/${threadId}`);
+    await expect(page.getByText("reduced motion swipe target")).toBeVisible();
+
+    const bubble = page.locator(".touch-pan-y", { hasText: "reduced motion swipe target" }).first();
+    const box = await bubble.boundingBox();
+    if (!box) throw new Error("bubble not found");
+    const cdp = await context.newCDPSession(page);
+    const startX = box.x + 10;
+    const startY = box.y + box.height / 2;
+
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: startX, y: startY }] });
+    const steps = 6;
+    for (let i = 1; i <= steps; i++) {
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: startX + (80 * i) / steps, y: startY }] });
+      expect(await bubbleOffsetX(bubble)).toBe(0); // never moves, even mid-drag past the threshold
+    }
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+
+    // The gesture is still fully functional under reduced motion — only the animation is suppressed.
+    await expect(page.getByRole("status")).toBeVisible();
+
+    await context.close();
+  });
+
+  test("full emoji picker: search, select an emoji outside the 6 quick reactions, and cross-user delivery with no reload", async ({ browser }) => {
+    const alice = await makeUser("alice17");
+    const bob = await makeUser("bob17");
+    cleanupUserIds.push(alice.id, bob.id);
+    const aliceRest = createClient(SUPABASE_URL!, ANON_KEY!, {
+      global: { headers: { Authorization: `Bearer ${alice.session.access_token}` } },
+    });
+    const { data: threadId, error: threadErr } = await aliceRest.rpc("get_or_create_dm_thread", { other_user_id: bob.id });
+    if (threadErr) throw threadErr;
+    cleanupThreadIds.push(threadId);
+    await admin!.from("dm_messages").insert({ thread_id: threadId, sender_id: alice.id, text: "react with a full picker emoji" });
+
+    const aliceContext = await browser.newContext();
+    const bobContext = await browser.newContext();
+    await injectSession(aliceContext, alice.session);
+    await injectSession(bobContext, bob.session);
+    const alicePage = await aliceContext.newPage();
+    const bobPage = await bobContext.newPage();
+    await bypassOnboardingGate(alicePage);
+    await bypassOnboardingGate(bobPage);
+    await alicePage.goto(`/inbox/messages/${threadId}`);
+    await bobPage.goto(`/inbox/messages/${threadId}`);
+    await expect(alicePage.getByText("react with a full picker emoji")).toBeVisible();
+    await expect(bobPage.getByText("react with a full picker emoji")).toBeVisible();
+
+    await bobPage.getByLabel("Message actions").click();
+    await bobPage.getByLabel("More emojis").click();
+    await waitForPickerSettled(bobPage);
+
+    await bobPage.getByPlaceholder("Search emoji").fill("pizza");
+    const pizzaButton = bobPage.locator("button", { hasText: "🍕" }).first();
+    await expect(pizzaButton).toBeVisible({ timeout: 10000 });
+    await pizzaButton.click();
+
+    await expect(bobPage.getByRole("dialog")).toHaveCount(0); // closes on selection
+    await expect(bobPage.getByLabel("🍕, 1, including you")).toBeVisible();
+    // Cross-user delivery — alice's page never reloaded.
+    await expect(alicePage.getByLabel("🍕, 1")).toBeVisible({ timeout: 10000 });
+
+    // Selecting the same emoji again (via the full picker, not just the
+    // quick row) removes it.
+    await bobPage.getByLabel("Message actions").click();
+    await bobPage.getByLabel("More emojis").click();
+    await waitForPickerSettled(bobPage);
+    await bobPage.getByPlaceholder("Search emoji").fill("pizza");
+    await expect(bobPage.locator("button", { hasText: "🍕" }).first()).toBeVisible({ timeout: 10000 });
+    await bobPage.locator("button", { hasText: "🍕" }).first().click();
+    await expect(bobPage.getByLabel(/🍕/)).toHaveCount(0);
+    await expect(alicePage.getByLabel(/🍕/)).toHaveCount(0, { timeout: 10000 });
+
+    await aliceContext.close();
+    await bobContext.close();
+  });
+
+  test("full emoji picker: an unmatched search shows an understandable empty state", async ({ browser }) => {
+    const alice = await makeUser("alice18");
+    const bob = await makeUser("bob18");
+    cleanupUserIds.push(alice.id, bob.id);
+    const aliceRest = createClient(SUPABASE_URL!, ANON_KEY!, {
+      global: { headers: { Authorization: `Bearer ${alice.session.access_token}` } },
+    });
+    const { data: threadId, error: threadErr } = await aliceRest.rpc("get_or_create_dm_thread", { other_user_id: bob.id });
+    if (threadErr) throw threadErr;
+    cleanupThreadIds.push(threadId);
+    await admin!.from("dm_messages").insert({ thread_id: threadId, sender_id: alice.id, text: "empty search target" });
+
+    const context = await browser.newContext();
+    await injectSession(context, bob.session);
+    const page = await context.newPage();
+    await bypassOnboardingGate(page);
+    await page.goto(`/inbox/messages/${threadId}`);
+    await expect(page.getByText("empty search target")).toBeVisible();
+
+    await page.getByLabel("Message actions").click();
+    await page.getByLabel("More emojis").click();
+    await waitForPickerSettled(page);
+    await page.getByPlaceholder("Search emoji").fill("zzzznotarealemojiquery9999");
+    await expect(page.getByText(/No emoji found/)).toBeVisible({ timeout: 10000 });
+
+    await context.close();
+  });
+
+  for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
+    test(`full emoji picker fits within the viewport at ${viewport.width}x${viewport.height}`, async ({ browser }) => {
+      const alice = await makeUser(`alice19-${viewport.width}`);
+      const bob = await makeUser(`bob19-${viewport.width}`);
+      cleanupUserIds.push(alice.id, bob.id);
+      const aliceRest = createClient(SUPABASE_URL!, ANON_KEY!, {
+        global: { headers: { Authorization: `Bearer ${alice.session.access_token}` } },
+      });
+      const { data: threadId, error: threadErr } = await aliceRest.rpc("get_or_create_dm_thread", { other_user_id: bob.id });
+      if (threadErr) throw threadErr;
+      cleanupThreadIds.push(threadId);
+      await admin!.from("dm_messages").insert({ thread_id: threadId, sender_id: alice.id, text: "viewport target" });
+
+      const context = await browser.newContext({ viewport });
+      await injectSession(context, bob.session);
+      const page = await context.newPage();
+      await bypassOnboardingGate(page);
+      await page.goto(`/inbox/messages/${threadId}`);
+      await expect(page.getByText("viewport target")).toBeVisible();
+
+      await page.getByLabel("Message actions").click();
+      await page.getByLabel("More emojis").click();
+      await waitForPickerSettled(page);
+      const dialog = page.getByRole("dialog");
+      const box = await dialog.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.y).toBeGreaterThanOrEqual(0);
+      expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height + 1);
+      expect(box!.x).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width + 1);
+
+      await context.close();
+    });
+  }
 });

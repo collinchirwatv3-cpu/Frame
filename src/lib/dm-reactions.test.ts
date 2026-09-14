@@ -24,7 +24,7 @@ vi.mock("@/lib/supabase/client", () => ({
   }),
 }));
 
-const { fetchReactions, setReaction, DM_REACTIONS } = await import("./dm-reactions");
+const { fetchReactions, setReaction, DM_REACTIONS, isValidReactionEmoji } = await import("./dm-reactions");
 
 beforeEach(() => {
   inResponses = [];
@@ -61,10 +61,10 @@ describe("fetchReactions", () => {
     expect(result).toEqual([{ messageId: "m1", userId: "u2", emoji: "👍" }]);
   });
 
-  it("excludes a row whose emoji falls outside the fixed set, rather than trusting the row blindly", async () => {
+  it("includes a row whose emoji is outside the fixed 6 quick reactions — the full picker allows others, and the server already validated it", async () => {
     inResponses = [{ data: [{ message_id: "m1", user_id: "u1", emoji: "🍕" }], error: null }];
     const result = await fetchReactions("t1", ["m1"]);
-    expect(result).toEqual([]);
+    expect(result).toEqual([{ messageId: "m1", userId: "u1", emoji: "🍕" }]);
   });
 
   it("chunks requests past 100 message ids into separate queries, not one oversized IN clause", async () => {
@@ -107,5 +107,44 @@ describe("setReaction", () => {
   it("throws on a genuine RPC error (e.g. rate-limited or blocked) rather than swallowing it", async () => {
     rpcResponse = { error: { message: "Too many reactions. Please slow down." } };
     await expect(setReaction("m1", "❤️")).rejects.toThrow("Too many reactions");
+  });
+});
+
+describe("isValidReactionEmoji", () => {
+  it("accepts each of the 6 quick reactions", () => {
+    for (const { emoji } of DM_REACTIONS) expect(isValidReactionEmoji(emoji)).toBe(true);
+  });
+
+  it("accepts a complex ZWJ sequence (family emoji) as one grapheme cluster", () => {
+    expect(isValidReactionEmoji("👨‍👩‍👧‍👦")).toBe(true);
+  });
+
+  it("accepts a skin-tone-modified emoji", () => {
+    expect(isValidReactionEmoji("🤝🏽")).toBe(true);
+  });
+
+  it("accepts a flag (two regional indicators)", () => {
+    expect(isValidReactionEmoji("🇺🇸")).toBe(true);
+  });
+
+  it("rejects a plain ASCII letter or digit", () => {
+    expect(isValidReactionEmoji("a")).toBe(false);
+    expect(isValidReactionEmoji("5")).toBe(false);
+  });
+
+  it("rejects an empty string", () => {
+    expect(isValidReactionEmoji("")).toBe(false);
+  });
+
+  it("rejects real text, even short text", () => {
+    expect(isValidReactionEmoji("hi")).toBe(false);
+  });
+
+  it("rejects two emoji concatenated — not a single grapheme cluster", () => {
+    expect(isValidReactionEmoji("😀😀")).toBe(false);
+  });
+
+  it("rejects an oversized payload", () => {
+    expect(isValidReactionEmoji("🇺🇸".repeat(20))).toBe(false);
   });
 });

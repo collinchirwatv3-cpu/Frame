@@ -16,6 +16,29 @@
  *    the dev server throws "eval() is not supported in this environment" and
  *    the app fails to hydrate. Production never needs it and never gets it.
  */
+/** In dev only, when NEXT_PUBLIC_SUPABASE_URL points at a local Supabase
+ * instance (`supabase start`, e.g. http://127.0.0.1:54321) rather than a
+ * real *.supabase.co project, connect-src needs that exact origin (plus
+ * its ws: counterpart for Realtime) — the *.supabase.co allowance below
+ * doesn't cover it and localhost dev/testing would otherwise be silently
+ * blocked by CSP rather than actually exercising the app. Never applies
+ * in production, where NEXT_PUBLIC_SUPABASE_URL is always the real
+ * project and this returns nothing extra. */
+function localSupabaseOrigins(): string[] {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!url) return [];
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return [];
+  }
+  if (parsed.hostname !== "127.0.0.1" && parsed.hostname !== "localhost") return [];
+  const httpOrigin = parsed.origin;
+  const wsOrigin = `${parsed.protocol === "https:" ? "wss:" : "ws:"}//${parsed.host}`;
+  return [httpOrigin, wsOrigin];
+}
+
 export function buildContentSecurityPolicy(nonce: string): string {
   const isDev = process.env.NODE_ENV !== "production";
 
@@ -62,6 +85,7 @@ export function buildContentSecurityPolicy(nonce: string): string {
       // entry above does NOT implicitly cover this; needs its own wss: entry.
       "wss://*.supabase.co",
       "https://*.r2.dev",
+      ...(isDev ? localSupabaseOrigins() : []),
     ],
     "font-src": ["'self'"],
     "object-src": ["'none'"],

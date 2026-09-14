@@ -8,6 +8,26 @@ import "@testing-library/jest-dom/vitest";
 Element.prototype.scrollIntoView = vi.fn();
 
 vi.mock("@/lib/use-dm-reactions", () => ({ useDMReactions: () => ({ reactions: [], error: false, retry: vi.fn() }) }));
+// jsdom has no matchMedia — DMMessageBubble (rendered for real here, not
+// mocked) uses it for its reduced-motion swipe-gesture behavior. This
+// file's own tests don't exercise that; see DMMessageBubble.test.tsx for
+// dedicated reduced-motion coverage.
+vi.mock("@/lib/use-prefers-reduced-motion", () => ({ usePrefersReducedMotion: () => false }));
+// DMEmojiPickerSheet's own selection/toggle/error logic is covered in its
+// own test file (mocking frimousse there) — this file only needs to prove
+// the THREAD PAGE's wiring around it: which message it opens for, that
+// closing/selecting actually closes it, and that navigating away resets
+// it. next/dynamic's dynamic import of the real module is bypassed
+// entirely by mocking the module it imports.
+vi.mock("@/components/inbox/DMEmojiPickerSheet", () => ({
+  DMEmojiPickerSheet: ({ messageId, currentEmoji, onReacted, onClose }: { messageId: string; currentEmoji: string | null; onReacted: () => void; onClose: () => void }) => (
+    <div role="dialog" aria-label="Choose an emoji">
+      <p>picker for {messageId}, current: {currentEmoji ?? "none"}</p>
+      <button type="button" onClick={onClose}>Close emoji picker</button>
+      <button type="button" onClick={() => { onReacted(); onClose(); }}>fake-select</button>
+    </div>
+  ),
+}));
 
 let currentThreadId = "t1";
 vi.mock("next/navigation", () => ({
@@ -848,6 +868,66 @@ describe("DM thread page", () => {
       fireEvent.click(screen.getByText("Reply"));
 
       expect(screen.getByText(/Replying to yourself/)).toBeInTheDocument();
+    });
+  });
+
+  describe("opening the full emoji picker", () => {
+    function bubbleFor(text: string) {
+      return screen.getByText(text).closest<HTMLElement>(".relative")!;
+    }
+
+    it("'More emojis' opens the picker for that specific message", async () => {
+      render(<DMThreadPage />);
+      await waitFor(() => expect(screen.getByText("hi!")).toBeInTheDocument());
+
+      fireEvent.click(within(bubbleFor("hi!")).getByLabelText("Message actions"));
+      fireEvent.click(screen.getByLabelText("More emojis"));
+
+      await waitFor(() => expect(screen.getByRole("dialog", { name: "Choose an emoji" })).toBeInTheDocument());
+      expect(screen.getByText(/picker for m2,/)).toBeInTheDocument();
+    });
+
+    it("closing the picker removes it and restores focus to the button that opened it", async () => {
+      render(<DMThreadPage />);
+      await waitFor(() => expect(screen.getByText("hi!")).toBeInTheDocument());
+
+      fireEvent.click(within(bubbleFor("hi!")).getByLabelText("Message actions"));
+      const moreEmojisButton = screen.getByLabelText("More emojis");
+      fireEvent.click(moreEmojisButton);
+      await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
+
+      fireEvent.click(screen.getByText("Close emoji picker"));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("selecting an emoji closes the picker", async () => {
+      render(<DMThreadPage />);
+      await waitFor(() => expect(screen.getByText("hi!")).toBeInTheDocument());
+
+      fireEvent.click(within(bubbleFor("hi!")).getByLabelText("Message actions"));
+      fireEvent.click(screen.getByLabelText("More emojis"));
+      await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
+
+      fireEvent.click(screen.getByText("fake-select"));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("navigating to a different thread closes the picker", async () => {
+      const { rerender } = render(<DMThreadPage />);
+      await waitFor(() => expect(screen.getByText("hi!")).toBeInTheDocument());
+
+      fireEvent.click(within(bubbleFor("hi!")).getByLabelText("Message actions"));
+      fireEvent.click(screen.getByLabelText("More emojis"));
+      await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
+
+      fetchMessagesInitialResult = [
+        { id: "other-1", threadId: "t2", senderId: "me", text: "a different conversation", createdAt: "2026-09-05T00:00:00.000Z" },
+      ];
+      currentThreadId = "t2";
+      rerender(<DMThreadPage />);
+
+      await waitFor(() => expect(screen.getByText("a different conversation")).toBeInTheDocument());
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
   });
 });

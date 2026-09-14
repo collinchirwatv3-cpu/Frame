@@ -50,6 +50,14 @@ export function useDMReactions(threadId: string, userId: string | null, messageI
   // in-flight work for the OLD identity gets a chance to run.
   const epochRef = useRef(0);
   const knownIdsRef = useRef<Set<string>>(new Set());
+  // Ids that are "known" (in knownIdsRef) but whose most recent fetch
+  // attempt failed and hasn't since been superseded by a successful one —
+  // distinct from knownIdsRef itself, which only ever grows and says
+  // nothing about whether a given id's data actually arrived. Drives
+  // `fetchError` so an unrelated scope's success (e.g. an incremental
+  // fetch for a newly-loaded message C) can never mask an id (B) that's
+  // still genuinely missing its data.
+  const failedIdsRef = useRef<Set<string>>(new Set());
   const isFetchingRef = useRef(false);
   const pendingFullRef = useRef(false);
   const pendingNewIdsRef = useRef<Set<string>>(new Set());
@@ -64,6 +72,7 @@ export function useDMReactions(threadId: string, userId: string | null, messageI
   useLayoutEffect(() => {
     epochRef.current += 1;
     knownIdsRef.current = new Set();
+    failedIdsRef.current = new Set();
     isFetchingRef.current = false;
     pendingFullRef.current = false;
     pendingNewIdsRef.current = new Set();
@@ -99,16 +108,34 @@ export function useDMReactions(threadId: string, userId: string | null, messageI
     try {
       const rows = await fetchReactions(fetchThreadId, ids);
       if (epochRef.current === myEpoch) {
-        setState((prev) => (prev.identity === identity ? { ...prev, rows: mergeReactions(prev.rows, scope, rows), fetchError: false } : prev));
+        // Only the ids actually covered by THIS fetch can be considered
+        // resolved — an unrelated id that failed on some earlier attempt
+        // and hasn't been retried yet must keep `fetchError` true even
+        // though this fetch, for a different scope, succeeded.
+        for (const id of scope) failedIdsRef.current.delete(id);
+        setState((prev) =>
+          prev.identity === identity
+            ? { ...prev, rows: mergeReactions(prev.rows, scope, rows), fetchError: failedIdsRef.current.size > 0 }
+            : prev
+        );
       }
     } catch {
       // Last-known-good rows are preserved — only the error flag changes.
       if (epochRef.current === myEpoch) {
+        for (const id of scope) failedIdsRef.current.add(id);
         setState((prev) => (prev.identity === identity ? { ...prev, fetchError: true } : prev));
       }
     } finally {
-      isFetchingRef.current = false;
+      // Only the request that still OWNS the current identity's lock may
+      // release it or dispatch queued follow-up work. A request for an
+      // identity that's since been navigated away from can settle at any
+      // time — without this guard it would unconditionally clear
+      // isFetchingRef here, which (if a genuinely current fetch for the
+      // NEW identity happens to be in flight at that exact moment) frees
+      // the lock out from under it and lets a second, unserialized fetch
+      // start concurrently for the identity that's actually active.
       if (epochRef.current === myEpoch) {
+        isFetchingRef.current = false;
         if (pendingFullRef.current) {
           pendingFullRef.current = false;
           pendingNewIdsRef.current.clear();
@@ -155,15 +182,23 @@ export function useDMReactions(threadId: string, userId: string | null, messageI
 
   // Owns the realtime subscription and everything that should trigger a
   // full refresh of everything already known: a live dm_reactions change,
-  // an explicit retry(), and Supabase's own automatic reconnect after a
-  // dropped connection. Deliberately excludes messageIds/messageKey from
-  // its dependencies — receiving a message or loading older history must
+  // an explicit retry(), and every SUBSCRIBED confirmation (the first one
+  // included — see the comment below) whether that's the initial
+  // confirmation or Supabase's own automatic reconnect after a dropped
+  // connection. Deliberately excludes messageIds/messageKey from its
+  // dependencies — receiving a message or loading older history must
   // never tear down and recreate this subscription.
   useEffect(() => {
     if (!userId) return;
     const myEpoch = epochRef.current;
 
-    if (skipInitialRetryFetchRef.current) {
+    // Every pass through this effect explicitly refreshes everything known,
+    // independent of realtime — except literally the first pass for this
+    // identity (mount), where the messageIds effect already owns the
+    // initial load and a duplicate fetch here would just race it for no
+    // reason.
+    const isMountPass = skipInitialRetryFetchRef.current;
+    if (isMountPass) {
       skipInitialRetryFetchRef.current = false;
     } else if (knownIdsRef.current.size > 0) {
       // Not the first pass for this identity — a retry() bump. Refresh
@@ -171,6 +206,12 @@ export function useDMReactions(threadId: string, userId: string | null, messageI
       scheduleFetch([], true, threadId, myEpoch);
     }
 
+    // True once this effect's OWN channel instance has confirmed SUBSCRIBED
+    // at least once — distinct from isMountPass, which is about the EFFECT
+    // pass, not the channel. Resets to false every time this effect (re)runs
+    // with a fresh channel; a later SUBSCRIBED on that same instance is
+    // Supabase's own automatic reconnect after a drop, not a first
+    // confirmation.
     let subscribedBefore = false;
     const client = createClient();
     const channel = client
@@ -183,10 +224,23 @@ export function useDMReactions(threadId: string, userId: string | null, messageI
         if (epochRef.current !== myEpoch) return;
         if (status === "SUBSCRIBED") {
           setState((prev) => (prev.identity === identity ? { ...prev, realtimeDegraded: false } : prev));
-          // A resubscribe of this SAME channel instance — Supabase's own
-          // automatic reconnect after a drop, not this effect's first
-          // confirmation — may have missed events while disconnected.
-          if (subscribedBefore && knownIdsRef.current.size > 0) {
+          // The initial HTTP snapshot (the messageIds effect) and this
+          // confirmation are two independent async operations that race —
+          // a reaction can change in the gap between the snapshot actually
+          // being taken and the subscription actually going live, and
+          // nothing re-delivers a change that happened before a Postgres
+          // Changes subscription was confirmed. A catch-up here closes that
+          // gap — needed on the very first confirmation of a mount (nothing
+          // else covers it there) and on every later reconnect of this same
+          // channel instance (ditto). It's redundant only when this is the
+          // first confirmation of a NON-mount pass (a retry() bump): the
+          // top-of-effect branch above just did the exact same full refresh
+          // moments ago for that case, so firing again here would be a
+          // pointless duplicate request racing its own queue. Routed
+          // through the existing fetch queue (scheduleFetch) regardless, so
+          // this can never race the initial HTTP load or any other
+          // in-flight fetch — it just queues behind it.
+          if ((subscribedBefore || isMountPass) && knownIdsRef.current.size > 0) {
             scheduleFetch([], true, threadId, myEpoch);
           }
           subscribedBefore = true;
