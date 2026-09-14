@@ -928,7 +928,11 @@ test.describe("DM — authenticated browser coverage (requires a real Supabase p
     await waitForPickerSettled(bobPage);
 
     await bobPage.getByPlaceholder("Search emoji").fill("pizza");
-    const pizzaButton = bobPage.locator("button", { hasText: "🍕" }).first();
+    // Scoped to the dialog specifically — once bob has already reacted
+    // (below), the message's own reaction-summary CHIP also renders
+    // "🍕 1" text, and an unscoped page-wide locator would ambiguously
+    // match that instead of the picker's own emoji button.
+    const pizzaButton = bobPage.getByRole("dialog").locator("button", { hasText: "🍕" }).first();
     await expect(pizzaButton).toBeVisible({ timeout: 10000 });
     await pizzaButton.click();
 
@@ -943,8 +947,9 @@ test.describe("DM — authenticated browser coverage (requires a real Supabase p
     await bobPage.getByLabel("More emojis").click();
     await waitForPickerSettled(bobPage);
     await bobPage.getByPlaceholder("Search emoji").fill("pizza");
-    await expect(bobPage.locator("button", { hasText: "🍕" }).first()).toBeVisible({ timeout: 10000 });
-    await bobPage.locator("button", { hasText: "🍕" }).first().click();
+    const pizzaButtonAgain = bobPage.getByRole("dialog").locator("button", { hasText: "🍕" }).first();
+    await expect(pizzaButtonAgain).toBeVisible({ timeout: 10000 });
+    await pizzaButtonAgain.click();
     await expect(bobPage.getByLabel(/🍕/)).toHaveCount(0);
     await expect(alicePage.getByLabel(/🍕/)).toHaveCount(0, { timeout: 10000 });
 
@@ -1010,6 +1015,88 @@ test.describe("DM — authenticated browser coverage (requires a real Supabase p
       expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height + 1);
       expect(box!.x).toBeGreaterThanOrEqual(0);
       expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width + 1);
+
+      await context.close();
+    });
+  }
+
+  for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
+    test(`full emoji picker stays keyboard-safe as an on-screen keyboard opens and closes at ${viewport.width}x${viewport.height}`, async ({ browser }) => {
+      const alice = await makeUser(`alice20-${viewport.width}`);
+      const bob = await makeUser(`bob20-${viewport.width}`);
+      cleanupUserIds.push(alice.id, bob.id);
+      const aliceRest = createClient(SUPABASE_URL!, ANON_KEY!, {
+        global: { headers: { Authorization: `Bearer ${alice.session.access_token}` } },
+      });
+      const { data: threadId, error: threadErr } = await aliceRest.rpc("get_or_create_dm_thread", { other_user_id: bob.id });
+      if (threadErr) throw threadErr;
+      cleanupThreadIds.push(threadId);
+      await admin!.from("dm_messages").insert({ thread_id: threadId, sender_id: alice.id, text: "keyboard-safe target" });
+
+      const context = await browser.newContext({ viewport });
+      await injectSession(context, bob.session);
+      const page = await context.newPage();
+      await bypassOnboardingGate(page);
+      await page.goto(`/inbox/messages/${threadId}`);
+      await expect(page.getByText("keyboard-safe target")).toBeVisible();
+
+      await page.getByLabel("Message actions").click();
+      await page.getByLabel("More emojis").click();
+      await waitForPickerSettled(page);
+
+      const dialog = page.getByRole("dialog");
+      const search = page.getByPlaceholder("Search emoji");
+      const closeButton = page.getByLabel("Close emoji picker");
+
+      // Deterministic visualViewport resize/pan simulation of an on-screen
+      // keyboard opening — NOT a real device keyboard; CDP/Playwright
+      // cannot drive one, and this synthetic browser-level signal is the
+      // same one the app itself listens to (see use-visual-viewport-bounds.ts
+      // and its use in ConversationViewport, exercised the same way by
+      // dm.spec.ts). Genuine on-device keyboard behavior on real iPhone
+      // hardware has not been verified in this session.
+      const keyboardHeight = Math.round(viewport.height * 0.45);
+      const visibleHeight = viewport.height - keyboardHeight;
+      await page.evaluate((h) => {
+        const vv = window.visualViewport!;
+        Object.defineProperty(vv, "height", { configurable: true, value: h });
+        Object.defineProperty(vv, "offsetTop", { configurable: true, value: 0 });
+        vv.dispatchEvent(new Event("resize"));
+      }, visibleHeight);
+
+      // The dialog must shrink and stay fully above the keyboard — never
+      // rendered behind/under it — and its search field and Close button
+      // must both remain visible and reachable.
+      await expect(async () => {
+        const box = await dialog.boundingBox();
+        expect(box).not.toBeNull();
+        expect(box!.y).toBeGreaterThanOrEqual(0);
+        expect(box!.y + box!.height).toBeLessThanOrEqual(visibleHeight + 1);
+      }).toPass({ timeout: 5000 });
+      await expect(search).toBeVisible();
+      await expect(closeButton).toBeVisible();
+      const searchBox = await search.boundingBox();
+      const closeBox = await closeButton.boundingBox();
+      expect(searchBox!.y + searchBox!.height).toBeLessThanOrEqual(visibleHeight + 1);
+      expect(closeBox!.y + closeBox!.height).toBeLessThanOrEqual(visibleHeight + 1);
+
+      // Keyboard closes — the picker should grow back.
+      await page.evaluate(() => {
+        const vv = window.visualViewport!;
+        delete (vv as unknown as Record<string, unknown>).height;
+        delete (vv as unknown as Record<string, unknown>).offsetTop;
+        vv.dispatchEvent(new Event("resize"));
+      });
+      await expect(async () => {
+        const box = await dialog.boundingBox();
+        expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height + 1);
+        expect(box!.height).toBeGreaterThan(visibleHeight * 0.5);
+      }).toPass({ timeout: 5000 });
+
+      // Close button is still reachable and functional after the resize
+      // round-trip.
+      await closeButton.click();
+      await expect(dialog).toHaveCount(0);
 
       await context.close();
     });

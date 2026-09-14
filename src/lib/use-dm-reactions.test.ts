@@ -130,10 +130,14 @@ describe("useDMReactions", () => {
   });
 
   it("retry() triggers a fresh fetch, with no realtime event involved", async () => {
-    // Mount alone now produces two calls — see "catches up on the very
-    // first SUBSCRIBED confirmation" below — before retry() adds a third.
+    // Mount alone produces two calls (initial fetch + catch-up on the
+    // first SUBSCRIBED confirmation). retry() tears down and resubscribes
+    // a NEW channel, which now ALSO gets an unconditional catch-up on ITS
+    // own first SUBSCRIBED (bug fix below), on top of retry's own
+    // top-of-effect refresh — two more calls, four total.
     queue = [
       { rows: [] },
+      { rows: [{ messageId: "m1", userId: "u1", emoji: "🙏" }] },
       { rows: [{ messageId: "m1", userId: "u1", emoji: "🙏" }] },
       { rows: [{ messageId: "m1", userId: "u1", emoji: "😮" }] },
     ];
@@ -145,7 +149,7 @@ describe("useDMReactions", () => {
       result.current.retry();
     });
     await waitFor(() => expect(result.current.reactions).toEqual([{ messageId: "m1", userId: "u1", emoji: "😮" }]));
-    expect(fetchReactionsSpy).toHaveBeenCalledTimes(3);
+    expect(fetchReactionsSpy).toHaveBeenCalledTimes(4);
   });
 
   it("unsubscribes on unmount", () => {
@@ -408,6 +412,46 @@ describe("useDMReactions", () => {
       pending[2].resolve([{ messageId: "m1", userId: "userB", emoji: "👍" }]);
     });
     await waitFor(() => expect(result.current.reactions).toEqual([{ messageId: "m1", userId: "userB", emoji: "👍" }]));
+  });
+
+  it("BUG FIX: a reaction changing during retry's OWN snapshot-to-subscription gap (not just mount's) is still caught up", async () => {
+    // Mount settles normally first.
+    queue = [
+      { rows: [{ messageId: "m1", userId: "u1", emoji: "❤️" }] },
+      { rows: [{ messageId: "m1", userId: "u1", emoji: "❤️" }] },
+    ];
+    const { result } = renderHook(() => useDMReactions("t1", "u1", ["m1"]));
+    await waitFor(() => expect(result.current.reactions).toEqual([{ messageId: "m1", userId: "u1", emoji: "❤️" }]));
+    expect(fetchReactionsSpy).toHaveBeenCalledTimes(2);
+
+    // From here on, any NEW channel (retry tears down the old one and
+    // creates a fresh one) does not auto-confirm — full manual control
+    // over exactly when ITS first SUBSCRIBED lands, independent of
+    // retry's own top-of-effect fetch.
+    deferSubscribeConfirmation = true;
+    queue = [{ rows: [{ messageId: "m1", userId: "u1", emoji: "❤️" }] }]; // retry's own snapshot — stale, unchanged
+    act(() => {
+      result.current.retry();
+    });
+    await waitFor(() => expect(fetchReactionsSpy).toHaveBeenCalledTimes(3)); // retry's top-of-effect fetch has resolved
+    expect(result.current.reactions).toEqual([{ messageId: "m1", userId: "u1", emoji: "❤️" }]);
+
+    // The reaction changes in the exact gap between THAT snapshot and the
+    // new channel's own subscription actually confirming.
+    queue = [{ rows: [{ messageId: "m1", userId: "u2", emoji: "👍" }] }];
+
+    // The new channel confirms for the first time now — no dm_reactions
+    // postgres_changes event ever fires; only this SUBSCRIBED confirmation
+    // itself should catch it up. Without the fix, a retry-created
+    // channel's first confirmation was skipped as "redundant" with the
+    // top-of-effect fetch, which by definition can't see a change that
+    // happens AFTER it already ran — this reaction would stay stuck at
+    // ❤️ forever.
+    await act(async () => {
+      currentChannel()._status("SUBSCRIBED");
+    });
+    await waitFor(() => expect(result.current.reactions).toEqual([{ messageId: "m1", userId: "u2", emoji: "👍" }]));
+    expect(fetchReactionsSpy).toHaveBeenCalledTimes(4);
   });
 
   it("BUG B: a reaction changing after the initial snapshot but before the first subscription confirmation is not missed", async () => {

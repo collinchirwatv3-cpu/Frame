@@ -1,5 +1,5 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
 import { DMEmojiPickerSheet } from "./DMEmojiPickerSheet";
 
@@ -141,5 +141,124 @@ describe("DMEmojiPickerSheet", () => {
   it("shows no error state before any selection is made", () => {
     render(<DMEmojiPickerSheet messageId="m1" currentEmoji={null} onReacted={vi.fn()} onClose={vi.fn()} />);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  describe("focus trap", () => {
+    function focusables() {
+      return [screen.getByLabelText("Close emoji picker"), screen.getByPlaceholderText("Search emoji"), screen.getByLabelText("Skin tone")];
+    }
+
+    it("Tab from the last focusable element wraps to the first, staying inside the dialog", () => {
+      render(<DMEmojiPickerSheet messageId="m1" currentEmoji={null} onReacted={vi.fn()} onClose={vi.fn()} />);
+      const [close, , skinTone] = focusables();
+      skinTone.focus();
+      expect(skinTone).toHaveFocus();
+      fireEvent.keyDown(document, { key: "Tab" });
+      expect(close).toHaveFocus();
+    });
+
+    it("Shift+Tab from the first focusable element wraps to the last, staying inside the dialog", () => {
+      render(<DMEmojiPickerSheet messageId="m1" currentEmoji={null} onReacted={vi.fn()} onClose={vi.fn()} />);
+      const [close, , skinTone] = focusables();
+      close.focus();
+      expect(close).toHaveFocus();
+      fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+      expect(skinTone).toHaveFocus();
+    });
+
+    it("Tab in the middle of the dialog does not touch focus — the browser's own default handling applies", () => {
+      render(<DMEmojiPickerSheet messageId="m1" currentEmoji={null} onReacted={vi.fn()} onClose={vi.fn()} />);
+      const [, search] = focusables();
+      search.focus();
+      const evt = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+      const prevented = !document.dispatchEvent(evt);
+      expect(prevented).toBe(false); // not intercepted — browser default Tab order takes over
+    });
+
+    it("focus landing outside the dialog is pulled back in on the next Tab", () => {
+      render(<DMEmojiPickerSheet messageId="m1" currentEmoji={null} onReacted={vi.fn()} onClose={vi.fn()} />);
+      const [close] = focusables();
+      document.body.focus(); // simulate focus having escaped the dialog
+      fireEvent.keyDown(document, { key: "Tab" });
+      expect(close).toHaveFocus();
+    });
+  });
+
+  describe("closing while a mutation is pending", () => {
+    it("does not crash, and the pending request's eventual resolution is silently ignored after unmount", async () => {
+      setReactionResult = "hang";
+      const onReacted = vi.fn();
+      const onClose = vi.fn();
+      const { unmount } = render(<DMEmojiPickerSheet messageId="m1" currentEmoji={null} onReacted={onReacted} onClose={onClose} />);
+      selectEmoji("🍕");
+      await waitFor(() => expect(setReactionSpy).toHaveBeenCalledTimes(1));
+
+      expect(() => unmount()).not.toThrow();
+      pendingResolve?.();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      // Neither callback fires for a request that settles after the
+      // component (and the caller's own state tied to it) is gone.
+      expect(onReacted).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("keyboard-safe sizing (visualViewport)", () => {
+    const originalVV = window.visualViewport;
+    afterEach(() => {
+      Object.defineProperty(window, "visualViewport", { value: originalVV, configurable: true });
+    });
+
+    function installVisualViewport(height: number, offsetTop = 0) {
+      const listeners = new Set<() => void>();
+      const state = { height, offsetTop };
+      Object.defineProperty(window, "visualViewport", {
+        configurable: true,
+        value: {
+          get height() {
+            return state.height;
+          },
+          get offsetTop() {
+            return state.offsetTop;
+          },
+          scale: 1,
+          addEventListener: (_: string, cb: () => void) => listeners.add(cb),
+          removeEventListener: (_: string, cb: () => void) => listeners.delete(cb),
+        },
+      });
+      return {
+        set(next: { height?: number; offsetTop?: number }) {
+          Object.assign(state, next);
+          listeners.forEach((cb) => cb());
+        },
+      };
+    }
+
+    it("sizes the dialog from the current visual viewport, not a static value", () => {
+      Object.defineProperty(window, "innerHeight", { value: 844, configurable: true });
+      installVisualViewport(844);
+      render(<DMEmojiPickerSheet messageId="m1" currentEmoji={null} onReacted={vi.fn()} onClose={vi.fn()} />);
+      const dialog = screen.getByRole("dialog");
+      expect(dialog.style.height).toBe("675.2px"); // 80% of 844
+      expect(dialog.style.bottom).toBe("0px");
+    });
+
+    it("shrinks and lifts the dialog when a keyboard reduces the visual viewport", () => {
+      Object.defineProperty(window, "innerHeight", { value: 844, configurable: true });
+      const vv = installVisualViewport(844);
+      render(<DMEmojiPickerSheet messageId="m1" currentEmoji={null} onReacted={vi.fn()} onClose={vi.fn()} />);
+      const dialog = screen.getByRole("dialog");
+
+      act(() => vv.set({ height: 500 }));
+      expect(dialog.style.height).toBe("400px"); // 80% of 500
+      expect(dialog.style.bottom).toBe("344px"); // 844 - 500
+    });
+
+    it("still renders with a bounded height when visualViewport is unavailable", () => {
+      Object.defineProperty(window, "visualViewport", { value: undefined, configurable: true });
+      render(<DMEmojiPickerSheet messageId="m1" currentEmoji={null} onReacted={vi.fn()} onClose={vi.fn()} />);
+      const dialog = screen.getByRole("dialog");
+      expect(dialog.style.height).toBe("80dvh");
+      expect(dialog.style.bottom).toBe("0px");
+    });
   });
 });

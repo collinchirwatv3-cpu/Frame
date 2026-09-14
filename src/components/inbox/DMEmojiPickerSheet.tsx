@@ -6,9 +6,13 @@ import { X } from "lucide-react";
 import { EmojiPicker } from "frimousse";
 import { setReaction } from "@/lib/dm-reactions";
 import { usePrefersReducedMotion } from "@/lib/use-prefers-reduced-motion";
+import { useEscapeToClose } from "@/lib/use-escape-to-close";
+import { useVisualViewportBounds } from "@/lib/use-visual-viewport-bounds";
 import { cn } from "@/lib/utils";
 
 const SPRING = { type: "spring", stiffness: 420, damping: 38, mass: 0.7 } as const;
+const HEIGHT_FRACTION = 0.8;
+const FOCUSABLE_SELECTOR = 'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
  * The full emoji picker, lazy-loaded (see the `next/dynamic` import at the
@@ -37,6 +41,18 @@ export function DMEmojiPickerSheet({ messageId, currentEmoji, onReacted, onClose
   const alive = useRef(true);
   const reducedMotion = usePrefersReducedMotion();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  // This component is only ever mounted by the caller while the picker is
+  // open (page.tsx renders it conditionally) — "open" is always true from
+  // its own point of view, so this reuses the same shared Escape-to-close
+  // behavior every other sheet/modal in the app already uses instead of a
+  // second, duplicate keydown listener.
+  useEscapeToClose(true, onClose);
+  // Viewport-aware sizing — see use-visual-viewport-bounds.ts. Falls back
+  // to a static 80dvh (this sheet's original behavior) when
+  // visualViewport isn't available at all (older browsers, some test
+  // environments) rather than rendering with no height constraint.
+  const bounds = useVisualViewportBounds(HEIGHT_FRACTION);
 
   useEffect(() => {
     alive.current = true;
@@ -49,13 +65,40 @@ export function DMEmojiPickerSheet({ messageId, currentEmoji, onReacted, onClose
     closeButtonRef.current?.focus();
   }, []);
 
+  // Focus trap: Tab/Shift+Tab cycle only through this dialog's own
+  // focusable elements while it's open, so keyboard focus can never
+  // escape into (and the backdrop's own full-viewport overlay already
+  // blocks pointer access to) the conversation behind it.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Tab" || !dialogRef.current) return;
+      // No visibility filter needed here: everything in this dialog is
+      // shown via conditional RENDERING (EmojiPicker.Loading/Empty/List
+      // swap in and out of the tree entirely, not CSS display:none), so
+      // anything querySelectorAll finds is already genuinely present and
+      // interactable right now.
+      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const activeEl = document.activeElement;
+      if (e.shiftKey && activeEl === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && activeEl === last) {
+        e.preventDefault();
+        first.focus();
+      } else if (!dialogRef.current.contains(activeEl)) {
+        // Focus somehow ended up outside the dialog (e.g. a programmatic
+        // .focus() elsewhere) — pull it back in rather than letting Tab
+        // continue from wherever it landed.
+        e.preventDefault();
+        first.focus();
+      }
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  }, []);
 
   async function handleSelect(emoji: string) {
     if (busy) return;
@@ -86,15 +129,23 @@ export function DMEmojiPickerSheet({ messageId, currentEmoji, onReacted, onClose
         transition={reducedMotion ? { duration: 0 } : undefined}
       />
       <motion.div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Choose an emoji"
-        className="fixed inset-x-0 bottom-0 z-40 flex flex-col overflow-hidden rounded-t-2xl bg-bg shadow-2xl"
-        // Inline style, not a Tailwind arbitrary-value class — `dvh` sizing
-        // here needs to be a real, always-applied constraint (this sheet's
-        // content can be arbitrarily tall), not dependent on whichever
-        // utility classes happen to survive Tailwind's JIT scan.
-        style={{ height: "80dvh", maxHeight: "80dvh", paddingBottom: "env(safe-area-inset-bottom)" }}
+        className="fixed inset-x-0 z-40 flex flex-col overflow-hidden rounded-t-2xl bg-bg shadow-2xl"
+        // Inline style, not a Tailwind arbitrary-value class — sizing here
+        // needs to be a real, always-applied constraint (this sheet's
+        // content can be arbitrarily tall) that tracks the ACTUAL visible
+        // viewport as an on-screen keyboard opens, closes, or pans it, not
+        // a static dvh guess that has no way to react to any of that.
+        // Falls back to a static 80dvh anchored to the layout viewport's
+        // own bottom when visualViewport isn't available at all.
+        style={
+          bounds
+            ? { height: bounds.height, bottom: bounds.bottomInset, paddingBottom: "env(safe-area-inset-bottom)" }
+            : { height: "80dvh", maxHeight: "80dvh", bottom: 0, paddingBottom: "env(safe-area-inset-bottom)" }
+        }
         initial={reducedMotion ? false : { y: "100%" }}
         animate={{ y: 0 }}
         exit={{ y: "100%" }}

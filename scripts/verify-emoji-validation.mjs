@@ -1,14 +1,20 @@
 // Direct, no-mocks verification of is_valid_reaction_emoji() and
-// set_dm_reaction()'s expanded acceptance against a REAL Postgres instance
-// (its regex/loop logic can't be unit-tested any other way — this is SQL,
-// not JS). Defaults to local Supabase (`supabase start`); point SEED_URL/
-// SEED_ANON/SEED_SERVICE at another instance to run elsewhere. Never run
-// against production — this migration should reach it only via the normal
-// deploy path, not this script.
+// set_dm_reaction()'s catalogue-backed acceptance against a REAL Postgres
+// instance (a table-lookup function still can't be unit-tested any other
+// way — this is SQL, not JS). Defaults to local Supabase (`supabase
+// start`); point SEED_URL/SEED_ANON/SEED_SERVICE at another instance to
+// run elsewhere. Never run against production — this migration should
+// reach it only via the normal deploy path, not this script.
 //
 // Usage:
 //   node scripts/verify-emoji-validation.mjs
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { createClient } from "@supabase/supabase-js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const root = join(__dirname, "..");
 
 const URL_BASE = process.env.SEED_URL ?? "http://127.0.0.1:54321";
 const ANON_KEY =
@@ -58,7 +64,7 @@ try {
   const cases = [
     // [emoji, expected, label]
     ["❤️", true, "current quick reaction: red heart + VS16"],
-    ["👍", true, "current quick reaction: thumbs up"],
+    ["👍", true, "current quick reaction: thumbs up (explicit catalogue supplement — see generate-emoji-catalogue.mjs)"],
     ["😂", true, "current quick reaction: face with tears of joy"],
     ["😮", true, "current quick reaction: face with open mouth"],
     ["😢", true, "current quick reaction: crying face"],
@@ -67,15 +73,14 @@ try {
     ["🤝🏽", true, "skin-tone modified: handshake, medium skin tone"],
     ["👩🏽‍❤️‍💋‍👨🏿", true, "ZWJ sequence with two different skin tones: kiss"],
     ["🏳️‍🌈", true, "ZWJ sequence: rainbow flag (white flag + VS16 + ZWJ + rainbow)"],
+    ["🏴󠁧󠁢󠁥󠁮󠁧󠁿", true, "subdivision flag: England (black flag + TAG sequence, U+E0000 block — the structural walker this replaced had no rule for these at all)"],
     ["🇺🇸", true, "flag: two regional indicators (US)"],
     ["🇯🇵", true, "flag: two regional indicators (Japan)"],
     ["5️⃣", true, "keycap: digit 5"],
     ["#️⃣", true, "keycap: hash"],
     ["*️⃣", true, "keycap: asterisk"],
-    ["⭐", true, "legacy BMP symbol: star (no VS16)"],
-    ["⭐️", true, "legacy BMP symbol: star + VS16"],
-    ["🫠", true, "recent-vintage emoji (melting face, Unicode 14.0) — forward-compat range check"],
-    ["🩷", true, "recent-vintage emoji (pink heart, Unicode 15.0) — forward-compat range check"],
+    ["🫠", true, "recent-vintage emoji (melting face, Unicode 14.0) — present because it's in the shipped catalogue, not a range guess"],
+    ["🩷", true, "recent-vintage emoji (pink heart, Unicode 15.0)"],
     [null, false, "null (handled by the column allowing NULL, not this function, but must not crash)"],
     ["", false, "empty string"],
     ["a", false, "plain ASCII letter"],
@@ -84,7 +89,14 @@ try {
     ["😀🎉", false, "two different unrelated emoji concatenated, no ZWJ"],
     ["😀️😀", false, "two emoji separated only by a stray VS16, no ZWJ"],
     ["🇺🇸🇯🇵", false, "two flags concatenated (4 regional indicators) — not a valid single flag"],
-    ["🇺", false, "a single lone regional indicator (incomplete flag)"],
+    // A lone regional indicator letter ("🇺") is a real row in the same
+    // data.json the picker itself reads (label: "regional indicator U",
+    // no group/subgroup — likely unreachable by category browsing, but
+    // not excluded from the data the catalogue is generated from). The
+    // catalogue's whole design is to accept exactly what that source
+    // contains, not to second-guess which of its entries "should" count
+    // as a real flag — so this is correctly accepted, not a regression.
+    ["🇺", true, "a single lone regional indicator letter — present in the same source data.json, so correctly accepted like everything else in it"],
     ["42", false, "bare digits outside the keycap pattern"],
     ["#", false, "a bare hash outside the keycap pattern"],
     ["<script>alert(1)</script>", false, "HTML/script injection shaped string"],
@@ -92,6 +104,10 @@ try {
     [" 😀", false, "leading whitespace plus emoji"],
     ["ok 👍", false, "real text with an emoji appended"],
     ["👍".repeat(10), false, "the same emoji repeated many times, no ZWJ between any pair"],
+    ["\u200d😀", false, "leading ZWJ before a single emoji — not a real sequence (the structural walker this replaced wrongly accepted this)"],
+    ["😀\u200d", false, "trailing ZWJ after a single emoji — not a real sequence (ditto)"],
+    ["👨‍👩‍👧‍👦😀", false, "a real ZWJ sequence with an unrelated emoji appended, no joiner between them"],
+    ["👨‍🚀‍👩", false, "two well-formed-looking ZWJ-joined bases that aren't an actual defined combination — catalogue lookup rejects what the structural walker's adjacency rule alone could not distinguish from a real sequence"],
   ];
 
   for (const [emoji, expected, label] of cases) {
@@ -101,6 +117,40 @@ try {
       continue;
     }
     log(label, data === expected, `(got ${data}, expected ${expected})`);
+  }
+
+  // --- Every emoji the picker can actually produce, verified against the
+  // real validator — not a sample, the entire generated catalogue plus its
+  // quick-reaction supplement (~3980 entries), in batches to stay fast
+  // without opening thousands of connections at once. ---
+  const catalogueSql = readFileSync(join(root, "supabase/migrations/20260917070000_dm_reaction_emoji_validation.sql"), "utf8");
+  const beginIdx = catalogueSql.indexOf("BEGIN GENERATED CATALOGUE");
+  const endIdx = catalogueSql.indexOf("END GENERATED CATALOGUE");
+  const catalogueBlock = catalogueSql.slice(beginIdx, endIdx);
+  const catalogueEmoji = [...catalogueBlock.matchAll(/\(\s*'((?:[^'\\]|'')*)'\s*,\s*'[^']*'\s*\)/g)].map(([, e]) => e.replace(/''/g, "'"));
+  if (catalogueEmoji.length < 3000) {
+    log("Extracted the generated catalogue from the migration file for a full sweep", false, `(only parsed ${catalogueEmoji.length} entries — regex likely out of sync with the generator's output format)`);
+  } else {
+    const BATCH = 200;
+    let allValid = true;
+    let checked = 0;
+    const failures = [];
+    for (let i = 0; i < catalogueEmoji.length; i += BATCH) {
+      const batch = catalogueEmoji.slice(i, i + BATCH);
+      const results = await Promise.all(batch.map((e) => admin.rpc("is_valid_reaction_emoji", { p_emoji: e })));
+      results.forEach((r, j) => {
+        checked++;
+        if (r.error || r.data !== true) {
+          allValid = false;
+          failures.push({ emoji: batch[j], error: r.error?.message, data: r.data });
+        }
+      });
+    }
+    log(
+      `Every emoji in the generated catalogue (${checked} checked) is accepted by is_valid_reaction_emoji`,
+      allValid,
+      allValid ? "" : `(${failures.length} failed, first few: ${JSON.stringify(failures.slice(0, 5))})`
+    );
   }
 
   // --- End-to-end through set_dm_reaction() as a real participant ---

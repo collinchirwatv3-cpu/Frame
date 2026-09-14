@@ -42,8 +42,12 @@ export function DMMessageBubble({ message, userId, otherName, disabled, reaction
   onReactionChange: () => void;
   /** Opens the full emoji picker for this message — the heavy picker UI
    * itself lives once, lifted to the thread page, not one instance per
-   * bubble; this just tells the caller which message it's for. */
-  onOpenPicker: (message: DMMessage) => void;
+   * bubble; this just tells the caller which message it's for. Also
+   * passes the PERSISTENT "Message actions" button (not the "More emojis"
+   * button, which unmounts the instant the local actions menu closes) so
+   * the picker can restore focus to something that's actually still in
+   * the DOM once it closes. */
+  onOpenPicker: (message: DMMessage, trigger: HTMLElement | null) => void;
 }) {
   const own = message.senderId === userId;
   // Grouped by ALL distinct emoji actually present, not just the 6 quick
@@ -223,7 +227,7 @@ export function DMMessageBubble({ message, userId, otherName, disabled, reaction
               aria-pressed={reactions.some((r) => r.userId === userId && r.emoji === emoji)} disabled={busy}
               onClick={() => void react(emoji)} className="p-2 text-xl rounded-lg hover:bg-bg disabled:opacity-50">{emoji}</button>)}
             <button type="button" aria-label="More emojis" disabled={busy}
-              onClick={() => { setActions(false); onOpenPicker(message); }}
+              onClick={() => { setActions(false); onOpenPicker(message, menuButton.current); }}
               className="p-2 rounded-lg hover:bg-bg disabled:opacity-50 text-text-secondary">
               <Plus size={18} />
             </button>

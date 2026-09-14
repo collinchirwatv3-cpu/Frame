@@ -206,13 +206,6 @@ export function useDMReactions(threadId: string, userId: string | null, messageI
       scheduleFetch([], true, threadId, myEpoch);
     }
 
-    // True once this effect's OWN channel instance has confirmed SUBSCRIBED
-    // at least once — distinct from isMountPass, which is about the EFFECT
-    // pass, not the channel. Resets to false every time this effect (re)runs
-    // with a fresh channel; a later SUBSCRIBED on that same instance is
-    // Supabase's own automatic reconnect after a drop, not a first
-    // confirmation.
-    let subscribedBefore = false;
     const client = createClient();
     const channel = client
       .channel(`dm-reactions:${threadId}:${userId}`)
@@ -224,26 +217,31 @@ export function useDMReactions(threadId: string, userId: string | null, messageI
         if (epochRef.current !== myEpoch) return;
         if (status === "SUBSCRIBED") {
           setState((prev) => (prev.identity === identity ? { ...prev, realtimeDegraded: false } : prev));
-          // The initial HTTP snapshot (the messageIds effect) and this
-          // confirmation are two independent async operations that race —
-          // a reaction can change in the gap between the snapshot actually
-          // being taken and the subscription actually going live, and
-          // nothing re-delivers a change that happened before a Postgres
-          // Changes subscription was confirmed. A catch-up here closes that
-          // gap — needed on the very first confirmation of a mount (nothing
-          // else covers it there) and on every later reconnect of this same
-          // channel instance (ditto). It's redundant only when this is the
-          // first confirmation of a NON-mount pass (a retry() bump): the
-          // top-of-effect branch above just did the exact same full refresh
-          // moments ago for that case, so firing again here would be a
-          // pointless duplicate request racing its own queue. Routed
-          // through the existing fetch queue (scheduleFetch) regardless, so
-          // this can never race the initial HTTP load or any other
-          // in-flight fetch — it just queues behind it.
-          if ((subscribedBefore || isMountPass) && knownIdsRef.current.size > 0) {
+          // The HTTP snapshot that preceded this (the messageIds effect on
+          // mount, or the top-of-effect refresh above on a retry() bump)
+          // and this confirmation are two independent async operations
+          // that race — a reaction can change in the gap between whichever
+          // snapshot was taken and THIS SPECIFIC channel actually going
+          // live, and nothing re-delivers a change that happened before a
+          // Postgres Changes subscription was confirmed. That gap exists
+          // on every fresh channel this effect creates, not just a mount:
+          // a retry() bump tears down the old channel and subscribes a
+          // NEW one, and that new channel's own first confirmation can
+          // lag its triggering top-of-effect fetch by an arbitrary
+          // network round trip, during which a change can land and go
+          // uncaught otherwise. So every confirmation catches up
+          // unconditionally — the very first one of any pass (mount or
+          // retry) and every later reconnect of the same channel instance
+          // alike — with no "this pass already just refreshed" dedup:
+          // that dedup was the actual bug (it assumed the top-of-effect
+          // fetch and this channel's first SUBSCRIBED always happen at
+          // the same moment, when the latter is genuinely asynchronous).
+          // Routed through the existing fetch queue (scheduleFetch)
+          // regardless, so a redundant catch-up right after a top-of-
+          // effect refresh just queues behind it — never races it.
+          if (knownIdsRef.current.size > 0) {
             scheduleFetch([], true, threadId, myEpoch);
           }
-          subscribedBefore = true;
         } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
           setState((prev) => (prev.identity === identity ? { ...prev, realtimeDegraded: true } : prev));
         }

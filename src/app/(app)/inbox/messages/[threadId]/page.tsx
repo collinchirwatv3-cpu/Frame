@@ -130,14 +130,18 @@ export default function DMThreadPage() {
     composerRef.current?.focus();
   }
   const [pickerMessage, setPickerMessage] = useState<DMMessage | null>(null);
-  // Captured at open time so closing (Escape, backdrop tap, a selection, or
-  // the Close button) can restore focus to whatever actually triggered the
-  // picker — the "+ More emojis" button inside that specific message's
-  // own actions menu, not a fixed element.
+  // The PERSISTENT "Message actions" button for whichever message opened
+  // the picker, passed explicitly by DMMessageBubble — not captured via
+  // document.activeElement, which at open time is still the "More emojis"
+  // button that unmounts the instant its own actions menu closes (the
+  // same synchronous click handler that calls openPicker). Focusing a
+  // detached node on close is a silent no-op, so capturing that transient
+  // element would leave focus nowhere; the actions button that stays
+  // mounted is what closing must restore focus to.
   const pickerTriggerRef = useRef<HTMLElement | null>(null);
-  function openPicker(message: DMMessage) {
+  function openPicker(message: DMMessage, trigger: HTMLElement | null) {
     if (thread?.otherUserUnavailable) return;
-    pickerTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    pickerTriggerRef.current = trigger;
     setPickerMessage(message);
   }
   function closePicker() {

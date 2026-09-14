@@ -319,12 +319,13 @@ describe("DMMessageBubble", () => {
     expect(screen.getByLabelText("🍕, 1")).toBeInTheDocument();
   });
 
-  it("'More emojis' in the actions menu closes the menu and calls onOpenPicker with this message", () => {
+  it("'More emojis' in the actions menu closes the menu and calls onOpenPicker with this message and the PERSISTENT Message-actions button (not the More-emojis button, which unmounts)", () => {
     const onOpenPicker = vi.fn();
     render(<DMMessageBubble message={MESSAGE} userId="me" otherName="Them" disabled={false} reactions={[]} onReply={vi.fn()} onReactionChange={vi.fn()} onOpenPicker={onOpenPicker} />);
-    fireEvent.click(screen.getByLabelText("Message actions"));
+    const menuButton = screen.getByLabelText("Message actions");
+    fireEvent.click(menuButton);
     fireEvent.click(screen.getByLabelText("More emojis"));
-    expect(onOpenPicker).toHaveBeenCalledWith(MESSAGE);
+    expect(onOpenPicker).toHaveBeenCalledWith(MESSAGE, menuButton);
     expect(screen.queryByRole("group", { name: "Message actions" })).not.toBeInTheDocument();
   });
 

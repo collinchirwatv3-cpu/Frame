@@ -887,17 +887,23 @@ describe("DM thread page", () => {
       expect(screen.getByText(/picker for m2,/)).toBeInTheDocument();
     });
 
-    it("closing the picker removes it and restores focus to the button that opened it", async () => {
+    it("closing the picker removes it and restores focus to the PERSISTENT Message-actions button, not the More-emojis button that unmounted", async () => {
       render(<DMThreadPage />);
       await waitFor(() => expect(screen.getByText("hi!")).toBeInTheDocument());
 
-      fireEvent.click(within(bubbleFor("hi!")).getByLabelText("Message actions"));
+      const menuButton = within(bubbleFor("hi!")).getByLabelText("Message actions");
+      fireEvent.click(menuButton);
       const moreEmojisButton = screen.getByLabelText("More emojis");
       fireEvent.click(moreEmojisButton);
       await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
+      // The "More emojis" button (and the rest of the local actions menu)
+      // is gone the instant the picker opens — closing later can't
+      // possibly restore focus to it.
+      expect(screen.queryByLabelText("More emojis")).not.toBeInTheDocument();
 
       fireEvent.click(screen.getByText("Close emoji picker"));
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(menuButton).toHaveFocus();
     });
 
     it("selecting an emoji closes the picker", async () => {
