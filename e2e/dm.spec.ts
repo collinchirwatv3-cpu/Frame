@@ -58,3 +58,39 @@ test("the inbox thread list loads without error", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Inbox" })).toBeVisible();
   expect(pageErrors).toEqual([]);
 });
+
+for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
+  test(`conversation layout reserves the visible screen at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await skipOnboarding(page);
+    await page.goto("/inbox/messages/e2e-test-thread-id");
+    await expect(page.getByLabel("Back")).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Primary", exact: true })).toHaveCount(0);
+    await expect(page.locator("main")).toHaveCSS("padding-left", "0px");
+    const composer = page.locator("form");
+    await expect(composer).toBeVisible();
+    const box = await composer.boundingBox();
+    expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height + 1);
+
+    // Deterministic visualViewport resize/pan simulation; not a real iOS keyboard.
+    await page.evaluate(() => {
+      const vv = window.visualViewport!;
+      Object.defineProperty(vv, "height", { configurable: true, value: 250 });
+      Object.defineProperty(vv, "offsetTop", { configurable: true, value: 25 });
+      vv.dispatchEvent(new Event("resize"));
+    });
+    await expect(page.getByTestId("conversation-viewport")).toHaveCSS("height", "250px");
+    const reduced = await composer.boundingBox();
+    expect(reduced!.y + reduced!.height).toBeLessThanOrEqual(276);
+    await page.evaluate(() => {
+      const vv = window.visualViewport!;
+      delete (vv as unknown as Record<string, unknown>).height;
+      delete (vv as unknown as Record<string, unknown>).offsetTop;
+      vv.dispatchEvent(new Event("resize"));
+    });
+    await expect(page.getByTestId("conversation-viewport")).toHaveCSS("height", `${viewport.height}px`);
+    await page.getByLabel("Back").click();
+    await expect(page).toHaveURL(/\/inbox$/);
+    await expect(page.getByRole("navigation", { name: "Primary", exact: true }).first()).toBeVisible();
+  });
+}

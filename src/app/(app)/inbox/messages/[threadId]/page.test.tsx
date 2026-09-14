@@ -10,7 +10,6 @@ Element.prototype.scrollIntoView = vi.fn();
 let currentThreadId = "t1";
 vi.mock("next/navigation", () => ({
   useParams: () => ({ threadId: currentThreadId }),
-  useRouter: () => ({ back: vi.fn(), push: vi.fn() }),
 }));
 
 let onChangeCapture: (() => void) | null = null;
@@ -753,7 +752,12 @@ describe("DM thread page", () => {
       fetchThreadResult = { ...THREAD, otherUserUnavailable: true, otherUser: { ...THREAD.otherUser, displayName: "Unavailable", username: "" } };
       render(<DMThreadPage />);
       await waitFor(() => expect(screen.getByText("Unavailable")).toBeInTheDocument());
-      expect(screen.queryByRole("link")).not.toBeInTheDocument();
+      // The Back link (always present, to a fixed /inbox destination) is
+      // not what this test is about — only that nothing links to the
+      // unavailable profile itself.
+      expect(screen.queryByRole("link", { name: "Unavailable" })).not.toBeInTheDocument();
+      expect(document.querySelector('a[href^="/profile/"]')).not.toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Back" })).toHaveAttribute("href", "/inbox");
     });
   });
 });

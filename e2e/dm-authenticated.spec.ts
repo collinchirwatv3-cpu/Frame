@@ -144,8 +144,8 @@ test.describe("DM — authenticated browser coverage (requires a real Supabase p
     if (threadErr) throw threadErr;
     cleanupThreadIds.push(threadId);
 
-    const aliceContext = await browser.newContext();
-    const bobContext = await browser.newContext();
+    const aliceContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const bobContext = await browser.newContext({ viewport: { width: 844, height: 390 } });
     await injectSession(aliceContext, alice.session);
     await injectSession(bobContext, bob.session);
     const alicePage = await aliceContext.newPage();
@@ -166,6 +166,12 @@ test.describe("DM — authenticated browser coverage (requires a real Supabase p
     // Bob's page never reloads — this only passes if realtime delivery
     // (useDMRealtime) plus the sync-cursor drain actually works end to end.
     await expect(bobPage.getByText(messageText)).toBeVisible({ timeout: 10000 });
+
+    for (const page of [alicePage, bobPage]) {
+      await expect(page.getByRole("navigation", { name: "Primary", exact: true })).toHaveCount(0);
+      const composer = await page.locator("form").boundingBox();
+      expect(composer!.y + composer!.height).toBeLessThanOrEqual(page.viewportSize()!.height + 1);
+    }
 
     await aliceContext.close();
     await bobContext.close();
@@ -219,7 +225,7 @@ test.describe("DM — authenticated browser coverage (requires a real Supabase p
     );
     if (secondBatch.error) throw new Error(`seeding second 60 history messages failed: ${secondBatch.error.message}`);
 
-    const context = await browser.newContext();
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
     await injectSession(context, alice.session);
     const page = await context.newPage();
     await bypassOnboardingGate(page);
@@ -230,6 +236,13 @@ test.describe("DM — authenticated browser coverage (requires a real Supabase p
     await page.getByText("Load earlier messages").click();
     await expect(page.getByText("history-19")).toBeVisible();
     await expect(page.getByText("history-0")).toBeVisible();
+
+    await expect(page.getByLabel("Back")).toBeVisible();
+    const composer = await page.locator("form").boundingBox();
+    expect(composer!.y + composer!.height).toBeLessThanOrEqual(845);
+    const scroller = page.locator(".overflow-y-auto");
+    expect(await scroller.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(845);
 
     await context.close();
   });

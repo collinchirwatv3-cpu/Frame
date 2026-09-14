@@ -8,6 +8,7 @@ import { navItems } from "./nav-items";
 import { CHROME_FADE_TRANSITION } from "@/lib/motion";
 import { CHROME_GLASS_CLASS, CHROME_TAP_SCALE } from "@/lib/chrome";
 import { usePlayerStore } from "@/store/player-store";
+import { hidesFloatingNav } from "@/lib/nav-routes";
 
 // Floating pill instead of the old edge-to-edge bar — icon-only for
 // inactive destinations, inset from every edge rather than flush against
@@ -20,6 +21,11 @@ import { usePlayerStore } from "@/store/player-store";
 export function BottomNav() {
   const pathname = usePathname();
   const directorMode = usePlayerStore((s) => s.directorMode);
+
+  // An open DM conversation's own header/composer already claim the full
+  // top and bottom edges — this floating pill has nowhere to sit there
+  // without covering the composer. The inbox LIST route keeps it.
+  if (hidesFloatingNav(pathname)) return null;
 
   return (
     <motion.nav

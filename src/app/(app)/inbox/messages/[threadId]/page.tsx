@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Send } from "lucide-react";
+import { ConversationViewport } from "@/components/inbox/ConversationViewport";
 import { Avatar } from "@/components/ui/Avatar";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -86,7 +87,6 @@ function ThreadSkeleton() {
  */
 export default function DMThreadPage() {
   const { threadId } = useParams<{ threadId: string }>();
-  const router = useRouter();
   const userId = useCurrentUserStore((s) => s.profile?.id ?? null);
 
   const [thread, setThread] = useState<DMThread | null>(null);
@@ -414,15 +414,20 @@ export default function DMThreadPage() {
   const canMessage = !thread?.otherUserUnavailable;
 
   return (
-    <div className="h-dvh flex flex-col">
-      <div className="flex items-center gap-3 px-4 pt-8 pb-3 border-b border-border shrink-0">
-        <button
-          onClick={() => router.back()}
+    <ConversationViewport>
+      <div className="flex items-center gap-3 px-4 pb-3 border-b border-border shrink-0" style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}>
+        {/* A fixed destination, not router.back() — this conversation can
+        be opened directly (a shared link, a push notification), with no
+        in-app history entry to go back to. router.back() in that case
+        would leave the app entirely or land somewhere unrelated; the one
+        destination that's always correct is the inbox itself. */}
+        <Link
+          href="/inbox"
           aria-label="Back"
           className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-card transition-colors shrink-0"
         >
           <ArrowLeft size={18} />
-        </button>
+        </Link>
         {thread &&
           (canMessage ? (
             <Link href={`/profile/${thread.otherUser.username}`} className="flex items-center gap-2.5 min-w-0">
@@ -437,7 +442,7 @@ export default function DMThreadPage() {
           ))}
       </div>
 
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
+      <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
         {status === "loading" ? (
           <ThreadSkeleton />
         ) : status === "error" ? (
@@ -510,7 +515,7 @@ export default function DMThreadPage() {
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Message…"
             disabled={status !== "ready"}
-            className="flex-1 bg-card border border-border rounded-full px-4 py-2 text-sm outline-none focus:border-primary transition-colors disabled:opacity-50"
+            className="flex-1 min-w-0 bg-card border border-border rounded-full px-4 py-2 text-base md:text-sm outline-none focus:border-primary transition-colors disabled:opacity-50"
           />
           <button
             type="submit"
@@ -527,6 +532,6 @@ export default function DMThreadPage() {
           )}
         </form>
       )}
-    </div>
+    </ConversationViewport>
   );
 }

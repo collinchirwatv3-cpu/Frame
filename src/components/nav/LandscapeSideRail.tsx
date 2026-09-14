@@ -9,6 +9,7 @@ import { CHROME_FADE_TRANSITION } from "@/lib/motion";
 import { CHROME_GLASS_CLASS, CHROME_TAP_SCALE } from "@/lib/chrome";
 import { usePlayerStore } from "@/store/player-store";
 import { useIsLandscapeMobile } from "@/lib/use-landscape-mobile";
+import { hidesFloatingNav } from "@/lib/nav-routes";
 
 // BottomNav rotated 90° for a phone turned sideways: the horizontal row of
 // four icons along the bottom in portrait becomes a vertical column along
@@ -29,7 +30,10 @@ export function LandscapeSideRail() {
   const directorMode = usePlayerStore((s) => s.directorMode);
   const isLandscapeMobile = useIsLandscapeMobile();
 
-  if (!isLandscapeMobile) return null;
+  // Same DM-conversation exception as BottomNav (see hidesFloatingNav) —
+  // in landscape this rail would otherwise float over the message list
+  // right where the conversation's own content needs the space.
+  if (!isLandscapeMobile || hidesFloatingNav(pathname)) return null;
 
   return (
     <motion.nav
