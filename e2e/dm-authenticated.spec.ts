@@ -384,4 +384,347 @@ test.describe("DM — authenticated browser coverage (requires a real Supabase p
 
     await context.close();
   });
+
+  // --- Reactions and replies (20260917060000_dm_replies_reactions.sql /
+  // useDMReactions / DMMessageBubble) ---------------------------------
+  //
+  // scripts/verify-dm-reactions-replies.mjs already covers the database
+  // side of this (RLS, constraints, set_dm_reaction's rate limiting) with
+  // no browser involved, and DMMessageBubble.test.tsx covers the
+  // component's own logic against a synthetic jsdom tree with mocked
+  // network calls and mocked (jsdom fireEvent) touch events. Neither
+  // establishes that a real browser, talking to the real API/RPCs, with a
+  // real live realtime subscription across two independent authenticated
+  // sessions, actually behaves correctly end to end — that's what this
+  // block is for.
+
+  test("reactions: add, change, and remove sync live to the other participant with no reload; selecting the same emoji again removes it", async ({ browser }) => {
+    const alice = await makeUser("alice6");
+    const bob = await makeUser("bob6");
+    cleanupUserIds.push(alice.id, bob.id);
+    const aliceRest = createClient(SUPABASE_URL!, ANON_KEY!, {
+      global: { headers: { Authorization: `Bearer ${alice.session.access_token}` } },
+    });
+    const { data: threadId, error: threadErr } = await aliceRest.rpc("get_or_create_dm_thread", { other_user_id: bob.id });
+    if (threadErr) throw threadErr;
+    cleanupThreadIds.push(threadId);
+    await admin!.from("dm_messages").insert({ thread_id: threadId, sender_id: alice.id, text: "react to me" });
+
+    const aliceContext = await browser.newContext();
+    const bobContext = await browser.newContext();
+    await injectSession(aliceContext, alice.session);
+    await injectSession(bobContext, bob.session);
+    const alicePage = await aliceContext.newPage();
+    const bobPage = await bobContext.newPage();
+    await bypassOnboardingGate(alicePage);
+    await bypassOnboardingGate(bobPage);
+    await alicePage.goto(`/inbox/messages/${threadId}`);
+    await bobPage.goto(`/inbox/messages/${threadId}`);
+    await expect(alicePage.getByText("react to me")).toBeVisible();
+    await expect(bobPage.getByText("react to me")).toBeVisible();
+
+    const reactGroup = bobPage.getByRole("group", { name: "React to message" });
+
+    // Bob adds a reaction.
+    await bobPage.getByLabel("Message actions").click();
+    await reactGroup.getByLabel("Love", { exact: true }).click();
+    await expect(bobPage.getByLabel("Love, 1, including you")).toBeVisible();
+    // Alice's page is never reloaded — this only passes if the realtime
+    // subscription plus the independent HTTP refresh actually round-trip.
+    await expect(alicePage.getByLabel("Love, 1")).toBeVisible({ timeout: 10000 });
+
+    // Bob changes it to a different emoji — the old chip is replaced, not added alongside.
+    await bobPage.getByLabel("Message actions").click();
+    await reactGroup.getByLabel("Like", { exact: true }).click();
+    await expect(bobPage.getByLabel("Like, 1, including you")).toBeVisible();
+    await expect(bobPage.getByLabel("Love, 1", { exact: true })).toHaveCount(0);
+    await expect(alicePage.getByLabel("Like, 1")).toBeVisible({ timeout: 10000 });
+    await expect(alicePage.getByLabel("Love, 1")).toHaveCount(0);
+
+    // Selecting the SAME emoji again removes it entirely.
+    await bobPage.getByLabel("Message actions").click();
+    await reactGroup.getByLabel("Like", { exact: true }).click();
+    await expect(bobPage.getByLabel(/^Like, \d/)).toHaveCount(0);
+    await expect(alicePage.getByLabel(/^Like, \d/)).toHaveCount(0, { timeout: 10000 });
+
+    await aliceContext.close();
+    await bobContext.close();
+  });
+
+  test("reactions and quoted replies survive new messages and loading older history, including a reply whose parent lives on an unloaded page", async ({ browser }) => {
+    test.setTimeout(150000); // includes the same deliberate 61s wait as the history-loading test above.
+    const alice = await makeUser("alice10");
+    const bob = await makeUser("bob10");
+    cleanupUserIds.push(alice.id, bob.id);
+    const aliceRest = createClient(SUPABASE_URL!, ANON_KEY!, {
+      global: { headers: { Authorization: `Bearer ${alice.session.access_token}` } },
+    });
+    const { data: threadId, error: threadErr } = await aliceRest.rpc("get_or_create_dm_thread", { other_user_id: bob.id });
+    if (threadErr) throw threadErr;
+    cleanupThreadIds.push(threadId);
+
+    // Deliberately disjoint literal strings (no one substring of another) —
+    // Playwright's getByText does substring matching by default, and
+    // "quoting X" would otherwise also match a getByText("X") search,
+    // making several of the assertions below ambiguous.
+    const ROOT_TEXT = "root-message-oldest";
+    const REPLY_TEXT = "reply-quoting-root";
+    const { data: root, error: rootErr } = await admin!
+      .from("dm_messages")
+      .insert({ thread_id: threadId, sender_id: alice.id, text: ROOT_TEXT })
+      .select("id")
+      .single();
+    if (rootErr) throw new Error(`seeding root message failed: ${rootErr.message}`);
+
+    // 100 filler messages, same rate-limit-aware shape as the plain
+    // history-loading test above: two batches of 50 (25/25 per sender,
+    // under enforce_dm_rate_limit's 30/minute cap), 61s apart. Total after
+    // this is 101 messages — MESSAGE_PAGE_SIZE (100) guarantees `root`
+    // itself falls off the initial page.
+    const base = Date.now();
+    const firstBatch = await admin!.from("dm_messages").insert(
+      Array.from({ length: 50 }, (_, i) => ({
+        thread_id: threadId,
+        sender_id: i % 2 === 0 ? alice.id : bob.id,
+        text: `filler-${i}`,
+        created_at: new Date(base + (i + 1) * 1000).toISOString(),
+      }))
+    );
+    if (firstBatch.error) throw new Error(`seeding first 50 filler messages failed: ${firstBatch.error.message}`);
+
+    await new Promise((resolve) => setTimeout(resolve, 61000));
+
+    const secondBatch = await admin!.from("dm_messages").insert(
+      Array.from({ length: 50 }, (_, i) => ({
+        thread_id: threadId,
+        sender_id: i % 2 === 0 ? alice.id : bob.id,
+        text: `filler-${50 + i}`,
+        created_at: new Date(base + (51 + i) * 1000).toISOString(),
+      }))
+    );
+    if (secondBatch.error) throw new Error(`seeding second 50 filler messages failed: ${secondBatch.error.message}`);
+
+    // The newest message quotes the very first one — its parent will not
+    // be part of the initially-loaded page.
+    const { data: reply, error: replyErr } = await admin!
+      .from("dm_messages")
+      .insert({
+        thread_id: threadId,
+        sender_id: bob.id,
+        text: REPLY_TEXT,
+        reply_to_id: root.id,
+        created_at: new Date(base + 200 * 1000).toISOString(),
+      })
+      .select("id")
+      .single();
+    if (replyErr) throw new Error(`seeding reply message failed: ${replyErr.message}`);
+
+    // Pre-seed reactions on both the root (unloaded-page) message and the
+    // newest (loaded-page) message before the page ever loads.
+    const { error: rootReactErr } = await aliceRest.rpc("set_dm_reaction", { p_message_id: root.id, p_emoji: "🙏" });
+    if (rootReactErr) throw rootReactErr;
+    const { error: replyReactErr } = await aliceRest.rpc("set_dm_reaction", { p_message_id: reply.id, p_emoji: "😮" });
+    if (replyReactErr) throw replyReactErr;
+
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    await injectSession(context, alice.session);
+    const page = await context.newPage();
+    await bypassOnboardingGate(page);
+    await page.goto(`/inbox/messages/${threadId}`);
+
+    await expect(page.getByText(REPLY_TEXT)).toBeVisible();
+    // The quoted preview on the loaded reply already names the real
+    // parent's text, even though root itself isn't part of the loaded
+    // page yet — fetchMessages' withReplies() resolves parents
+    // independently of pagination. Exactly one match for ROOT_TEXT proves
+    // both things at once: it's the blockquote's quoted text (correct,
+    // not a "Message unavailable" fallback, which would be zero matches),
+    // and root's own separate bubble isn't loaded yet (which would make
+    // it two).
+    await expect(page.getByText(ROOT_TEXT)).toHaveCount(1);
+
+    // Reload — proves this is genuinely refetched and correct, not just
+    // carried over in client state from the page that authored it.
+    await page.reload();
+    await expect(page.getByText(REPLY_TEXT)).toBeVisible();
+    await expect(page.getByText(ROOT_TEXT)).toHaveCount(1);
+    await expect(page.getByLabel("Surprised, 1")).toBeVisible(); // reaction loaded over HTTP, no realtime event needed
+
+    // A new message arrives — the reply's reaction must survive it.
+    await admin!.from("dm_messages").insert({ thread_id: threadId, sender_id: bob.id, text: "arrives-after-everything-else" });
+    await expect(page.getByText("arrives-after-everything-else")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByLabel("Surprised, 1")).toBeVisible();
+
+    // Loading older history reveals the root message itself (now a second,
+    // separate match for ROOT_TEXT) and its own reaction, fetched
+    // incrementally, without disturbing the reply's reaction above.
+    await page.getByText("Load earlier messages").click();
+    await expect(page.getByText(ROOT_TEXT)).toHaveCount(2);
+    await expect(page.getByLabel("Thanks, 1")).toBeVisible();
+    await expect(page.getByLabel("Surprised, 1")).toBeVisible();
+
+    await context.close();
+  });
+
+  test("reply via the message-actions menu and via a real touch swipe gesture, both quoting the correct original message", async ({ browser }) => {
+    const alice = await makeUser("alice11");
+    const bob = await makeUser("bob11");
+    cleanupUserIds.push(alice.id, bob.id);
+    const aliceRest = createClient(SUPABASE_URL!, ANON_KEY!, {
+      global: { headers: { Authorization: `Bearer ${alice.session.access_token}` } },
+    });
+    const { data: threadId, error: threadErr } = await aliceRest.rpc("get_or_create_dm_thread", { other_user_id: bob.id });
+    if (threadErr) throw threadErr;
+    cleanupThreadIds.push(threadId);
+    await admin!.from("dm_messages").insert({ thread_id: threadId, sender_id: alice.id, text: "original message to quote" });
+
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true });
+    await injectSession(context, bob.session);
+    const page = await context.newPage();
+    await bypassOnboardingGate(page);
+    await page.goto(`/inbox/messages/${threadId}`);
+    await expect(page.getByText("original message to quote")).toBeVisible();
+
+    // --- Reply via the message-actions menu ---
+    await page.getByLabel("Message actions").click();
+    await page.getByRole("button", { name: "Reply" }).click();
+    await expect(page.getByRole("status")).toContainText("Replying to");
+    await page.getByPlaceholder("Message…").fill("replying via the menu");
+    await page.getByLabel("Send message").click();
+    await expect(page.getByText("replying via the menu")).toBeVisible();
+    const menuReplyBubble = page.locator("div").filter({ hasText: "replying via the menu" }).filter({ hasText: "original message to quote" }).last();
+    await expect(menuReplyBubble).toBeVisible();
+
+    // --- Reply via a genuine touch swipe ---
+    // CDP-dispatched touch events go through Chromium's real touch input
+    // pipeline — the same code path an actual touchscreen digitizer
+    // drives, including real touch-action/gesture handling — NOT a
+    // synthetic React TouchEvent the way DMMessageBubble.test.tsx's jsdom
+    // fireEvent.touchStart/touchEnd is, and a step further than
+    // page.dispatchEvent (which also just constructs a plain synthetic
+    // Event object rather than driving the browser's own input pipeline).
+    // Short of an actual physical device, this is as real as an automated
+    // browser gets.
+    const originalBubble = page.locator(".touch-pan-y", { hasText: "original message to quote" }).first();
+    const box = await originalBubble.boundingBox();
+    if (!box) throw new Error("original message bubble not found");
+    const cdp = await context.newCDPSession(page);
+    const startX = box.x + 10;
+    const startY = box.y + box.height / 2;
+    const endX = box.x + 100;
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: startX, y: startY }] });
+    const steps = 5;
+    for (let i = 1; i <= steps; i++) {
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchMove",
+        touchPoints: [{ x: startX + ((endX - startX) * i) / steps, y: startY }],
+      });
+    }
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+
+    await expect(page.getByRole("status")).toContainText("Replying to");
+    await page.getByPlaceholder("Message…").fill("replying via swipe");
+    await page.getByLabel("Send message").click();
+    await expect(page.getByText("replying via swipe")).toBeVisible();
+    const swipeReplyBubble = page.locator("div").filter({ hasText: "replying via swipe" }).filter({ hasText: "original message to quote" }).last();
+    await expect(swipeReplyBubble).toBeVisible();
+
+    await context.close();
+  });
+
+  test("blocked: neither participant can react or reply, but existing reactions and message history stay readable", async ({ browser }) => {
+    const alice = await makeUser("alice12");
+    const bob = await makeUser("bob12");
+    cleanupUserIds.push(alice.id, bob.id);
+    const aliceRest = createClient(SUPABASE_URL!, ANON_KEY!, {
+      global: { headers: { Authorization: `Bearer ${alice.session.access_token}` } },
+    });
+    const { data: threadId, error: threadErr } = await aliceRest.rpc("get_or_create_dm_thread", { other_user_id: bob.id });
+    if (threadErr) throw threadErr;
+    cleanupThreadIds.push(threadId);
+    const { data: msg, error: msgErr } = await admin!
+      .from("dm_messages")
+      .insert({ thread_id: threadId, sender_id: alice.id, text: "before block" })
+      .select("id")
+      .single();
+    if (msgErr) throw new Error(`seeding message failed: ${msgErr.message}`);
+    const { error: reactErr } = await aliceRest.rpc("set_dm_reaction", { p_message_id: msg.id, p_emoji: "❤️" });
+    if (reactErr) throw reactErr;
+
+    const context = await browser.newContext();
+    await injectSession(context, alice.session);
+    const page = await context.newPage();
+    await bypassOnboardingGate(page);
+    await page.goto(`/inbox/messages/${threadId}`);
+    await expect(page.getByText("before block")).toBeVisible();
+    await expect(page.getByLabel("Love, 1, including you")).toBeVisible();
+
+    await aliceRest.from("blocks").insert({ blocker_id: alice.id, blocked_id: bob.id });
+    await page.reload();
+
+    // Existing history and its reaction stay visible and readable...
+    await expect(page.getByText("before block")).toBeVisible();
+    await expect(page.getByLabel("Love, 1")).toBeVisible();
+    // ...but there is no way left to react or reply: the actions menu
+    // itself is gone (DMMessageBubble hides it whenever `disabled`).
+    await expect(page.getByLabel("Message actions")).not.toBeVisible();
+    await expect(page.getByText("You can't send messages in this conversation.")).toBeVisible();
+    await expect(page.getByPlaceholder("Message…")).not.toBeVisible();
+
+    // The DB boundary rejects both a reaction and a reply attempt from the
+    // blocked side regardless of what the UI shows.
+    const bobRest = createClient(SUPABASE_URL!, ANON_KEY!, {
+      global: { headers: { Authorization: `Bearer ${bob.session.access_token}` } },
+    });
+    const { error: bobReactErr } = await bobRest.rpc("set_dm_reaction", { p_message_id: msg.id, p_emoji: "👍" });
+    expect(bobReactErr).toBeTruthy();
+    const { error: bobReplyErr } = await bobRest
+      .from("dm_messages")
+      .insert({ thread_id: threadId, sender_id: bob.id, text: "blocked reply attempt", reply_to_id: msg.id });
+    expect(bobReplyErr).toBeTruthy();
+
+    await context.close();
+  });
+
+  test("keyboard: React and Reply actions in the message-actions menu are both operable without a mouse", async ({ browser }) => {
+    const alice = await makeUser("alice13");
+    const bob = await makeUser("bob13");
+    cleanupUserIds.push(alice.id, bob.id);
+    const aliceRest = createClient(SUPABASE_URL!, ANON_KEY!, {
+      global: { headers: { Authorization: `Bearer ${alice.session.access_token}` } },
+    });
+    const { data: threadId, error: threadErr } = await aliceRest.rpc("get_or_create_dm_thread", { other_user_id: bob.id });
+    if (threadErr) throw threadErr;
+    cleanupThreadIds.push(threadId);
+    await admin!.from("dm_messages").insert({ thread_id: threadId, sender_id: alice.id, text: "keyboard target" });
+
+    const context = await browser.newContext();
+    await injectSession(context, bob.session);
+    const page = await context.newPage();
+    await bypassOnboardingGate(page);
+    await page.goto(`/inbox/messages/${threadId}`);
+    await expect(page.getByText("keyboard target")).toBeVisible();
+
+    await page.getByLabel("Message actions").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("group", { name: "Message actions" })).toBeVisible();
+    // Opening the menu moves focus straight to Reply (DMMessageBubble's own
+    // focus-management effect) — confirm it landed somewhere keyboard-reachable.
+    await expect(page.getByRole("button", { name: "Reply" })).toBeFocused();
+
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("group", { name: "Message actions" })).toHaveCount(0);
+    await expect(page.getByLabel("Message actions")).toBeFocused();
+
+    // Reopen and drive a reaction purely via Tab + Enter — Reply is
+    // focused first, so one Tab reaches the first reaction button.
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("group", { name: "Message actions" })).toBeVisible();
+    await page.keyboard.press("Tab");
+    await expect(page.getByLabel("Love", { exact: true })).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.getByLabel("Love, 1, including you")).toBeVisible();
+
+    await context.close();
+  });
 });

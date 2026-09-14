@@ -1,14 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Send } from "lucide-react";
+import { ArrowLeft, Send, X } from "lucide-react";
+import { DMMessageBubble } from "@/components/inbox/DMMessageBubble";
+import { useDMReactions } from "@/lib/use-dm-reactions";
 import { ConversationViewport } from "@/components/inbox/ConversationViewport";
 import { Avatar } from "@/components/ui/Avatar";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { cn, formatRelativeTime } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import {
   fetchThread,
   fetchMessages,
@@ -102,6 +104,22 @@ export default function DMThreadPage() {
   const [syncIncomplete, setSyncIncomplete] = useState(false);
   const [syncRetrying, setSyncRetrying] = useState(false);
   const [draft, setDraft] = useState("");
+  const [replyTo, setReplyTo] = useState<DMMessage | null>(null);
+  const composerRef = useRef<HTMLInputElement>(null);
+  const reactionState = useDMReactions(threadId, userId, messages.map((m) => m.id));
+  const reactions = reactionState.reactions;
+  const reactionsByMessage = useMemo(() => {
+    const grouped = new Map<string, typeof reactions>();
+    for (const reaction of reactions) {
+      grouped.set(reaction.messageId, [...(grouped.get(reaction.messageId) ?? []), reaction]);
+    }
+    return grouped;
+  }, [reactions]);
+  function chooseReply(message: DMMessage) {
+    if (thread?.otherUserUnavailable || status !== "ready") return;
+    setReplyTo(message);
+    composerRef.current?.focus();
+  }
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -273,6 +291,7 @@ export default function DMThreadPage() {
     setLoadingOlder(false);
     setSyncRetrying(false);
     setDraft("");
+    setReplyTo(null);
   }
 
   // The two ref resets tied to the same identity change can't live in the
@@ -362,15 +381,19 @@ export default function DMThreadPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const text = draft.trim();
-    if (!text || sending) return;
+    if (!text || sending || status !== "ready" || thread?.otherUserUnavailable) return;
     const myEpoch = epochRef.current;
     setSending(true);
     setSendError(false);
     try {
-      const sent = await sendMessage(threadId, text);
+      const sent = replyTo ? await sendMessage(threadId, text, replyTo.id) : await sendMessage(threadId, text);
       if (epochRef.current !== myEpoch) return;
       if (sent) {
         setDraft("");
+        setReplyTo((current) => current?.id === replyTo?.id ? null : current);
+        if (replyTo && sent.replyToId === replyTo.id) {
+          sent.replyTo = { id: replyTo.id, senderId: replyTo.senderId, text: replyTo.text };
+        }
         shouldScrollToBottomRef.current = true;
         // Intentionally does NOT touch syncCursorRef — an optimistic
         // append is not a synced fetch (see the file-level comment); the
@@ -466,23 +489,14 @@ export default function DMThreadPage() {
                 </button>
               </div>
             )}
-            {messages.map((message) => {
-              const own = message.senderId === userId;
-              return (
-                <div
-                  key={message.id}
-                  className={cn(
-                    "max-w-[75%] px-3.5 py-2 rounded-2xl text-sm",
-                    own ? "self-end bg-primary text-bg" : "self-start bg-card"
-                  )}
-                >
-                  <p>{message.text}</p>
-                  <p className={cn("text-[10px] mt-1", own ? "text-bg/70" : "text-text-secondary")}>
-                    {formatRelativeTime(message.createdAt)}
-                  </p>
-                </div>
-              );
-            })}
+            {messages.map((message) => (
+              <DMMessageBubble key={`${threadId}:${userId}:${message.id}`} message={message} userId={userId ?? ""}
+                otherName={thread?.otherUser.displayName ?? "Unavailable"} disabled={!canMessage}
+                reactions={reactionsByMessage.get(message.id) ?? []} onReply={chooseReply} onReactionChange={reactionState.retry} />
+            ))}
+            {reactionState.error && <button type="button" onClick={reactionState.retry} className="text-xs text-primary self-center">
+              Couldn&apos;t load reactions — Retry
+            </button>}
             {syncIncomplete && (
               <button
                 onClick={retrySync}
@@ -507,10 +521,18 @@ export default function DMThreadPage() {
       ) : (
         <form
           onSubmit={handleSubmit}
-          className="relative flex items-center gap-2 px-4 py-3 border-t border-border shrink-0"
+          className="relative flex flex-wrap items-center gap-2 px-4 py-3 border-t border-border shrink-0"
           style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 0.75rem)" }}
         >
+          {replyTo && <div className="w-full flex items-center gap-2 border-l-2 border-primary pl-2 text-xs" role="status">
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold">Replying to {replyTo.senderId === userId ? "yourself" : thread?.otherUser.displayName}</p>
+              <p className="truncate text-text-secondary">{replyTo.text}</p>
+            </div>
+            <button type="button" aria-label="Cancel reply" onClick={() => { setReplyTo(null); composerRef.current?.focus(); }} className="p-2"><X size={16} /></button>
+          </div>}
           <input
+            ref={composerRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Message…"

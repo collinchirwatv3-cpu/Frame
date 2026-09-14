@@ -35,12 +35,12 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
-  const { threadId, text } = parsed.data;
+  const { threadId, text, replyToId } = parsed.data;
 
   const { data, error } = await supabase
     .from("dm_messages")
-    .insert({ thread_id: threadId, sender_id: user.id, text })
-    .select("id, thread_id, sender_id, text, created_at")
+    .insert({ thread_id: threadId, sender_id: user.id, text, ...(replyToId ? { reply_to_id: replyToId } : {}) })
+    .select("id, thread_id, sender_id, text, created_at, reply_to_id")
     .single();
 
   if (error || !data) {

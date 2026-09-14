@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act, within } from "@testing-library/react";
 import { useEffect } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
@@ -6,6 +6,8 @@ import "@testing-library/jest-dom/vitest";
 // jsdom doesn't implement scrollIntoView at all — real browsers do, this is
 // a test-environment gap only.
 Element.prototype.scrollIntoView = vi.fn();
+
+vi.mock("@/lib/use-dm-reactions", () => ({ useDMReactions: () => ({ reactions: [], error: false, retry: vi.fn() }) }));
 
 let currentThreadId = "t1";
 vi.mock("next/navigation", () => ({
@@ -96,8 +98,12 @@ vi.mock("@/lib/dm", () => ({
     markThreadReadSpy(id, through);
     return Promise.resolve();
   },
-  sendMessage: async (threadId: string, text: string) => {
-    sendMessageSpy(threadId, text);
+  sendMessage: async (threadId: string, text: string, replyToId?: string) => {
+    // Mirrors the exact call arity page.tsx actually uses (2 args when
+    // not replying, never a 3rd explicit `undefined`) so existing
+    // 2-arg toHaveBeenCalledWith assertions keep working unchanged.
+    if (replyToId !== undefined) sendMessageSpy(threadId, text, replyToId);
+    else sendMessageSpy(threadId, text);
     await sendMessageGate;
     if (sendMessageResult === "throw") throw new Error("network exploded");
     return sendMessageResult;
@@ -758,6 +764,90 @@ describe("DM thread page", () => {
       expect(screen.queryByRole("link", { name: "Unavailable" })).not.toBeInTheDocument();
       expect(document.querySelector('a[href^="/profile/"]')).not.toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Back" })).toHaveAttribute("href", "/inbox");
+    });
+  });
+
+  describe("composing a reply", () => {
+    function bubbleFor(text: string) {
+      return screen.getByText(text).closest<HTMLElement>(".relative")!;
+    }
+
+    it("selecting Reply on a message shows a reply preview above the composer and focuses it", async () => {
+      render(<DMThreadPage />);
+      await waitFor(() => expect(screen.getByText("hi!")).toBeInTheDocument());
+
+      fireEvent.click(within(bubbleFor("hi!")).getByLabelText("Message actions"));
+      fireEvent.click(screen.getByText("Reply"));
+
+      expect(screen.getByText("hi!", { selector: "p.truncate" })).toBeInTheDocument();
+      expect(screen.getByText(/Replying to Them/)).toBeInTheDocument();
+      expect(screen.getByPlaceholderText("Message…")).toHaveFocus();
+    });
+
+    it("sending while a reply is selected passes the replied-to message's id", async () => {
+      sendMessageResult = { id: "mX", threadId: "t1", senderId: "me", text: "a reply", createdAt: "2026-09-01T00:02:00.000Z" };
+      render(<DMThreadPage />);
+      await waitFor(() => expect(screen.getByText("hi!")).toBeInTheDocument());
+
+      fireEvent.click(within(bubbleFor("hi!")).getByLabelText("Message actions"));
+      fireEvent.click(screen.getByText("Reply"));
+      fireEvent.change(screen.getByPlaceholderText("Message…"), { target: { value: "a reply" } });
+      fireEvent.click(screen.getByLabelText("Send message"));
+
+      await waitFor(() => expect(sendMessageSpy).toHaveBeenCalledWith("t1", "a reply", "m2"));
+    });
+
+    it("sending clears the reply preview afterward", async () => {
+      sendMessageResult = { id: "mX", threadId: "t1", senderId: "me", text: "a reply", createdAt: "2026-09-01T00:02:00.000Z" };
+      render(<DMThreadPage />);
+      await waitFor(() => expect(screen.getByText("hi!")).toBeInTheDocument());
+
+      fireEvent.click(within(bubbleFor("hi!")).getByLabelText("Message actions"));
+      fireEvent.click(screen.getByText("Reply"));
+      fireEvent.change(screen.getByPlaceholderText("Message…"), { target: { value: "a reply" } });
+      fireEvent.click(screen.getByLabelText("Send message"));
+
+      await waitFor(() => expect(screen.queryByText(/Replying to Them/)).not.toBeInTheDocument());
+    });
+
+    it("canceling a reply (the X button) clears the preview without sending anything", async () => {
+      render(<DMThreadPage />);
+      await waitFor(() => expect(screen.getByText("hi!")).toBeInTheDocument());
+
+      fireEvent.click(within(bubbleFor("hi!")).getByLabelText("Message actions"));
+      fireEvent.click(screen.getByText("Reply"));
+      expect(screen.getByText(/Replying to Them/)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByLabelText("Cancel reply"));
+      expect(screen.queryByText(/Replying to Them/)).not.toBeInTheDocument();
+    });
+
+    it("navigating to a different thread clears any pending reply selection", async () => {
+      const { rerender } = render(<DMThreadPage />);
+      await waitFor(() => expect(screen.getByText("hi!")).toBeInTheDocument());
+
+      fireEvent.click(within(bubbleFor("hi!")).getByLabelText("Message actions"));
+      fireEvent.click(screen.getByText("Reply"));
+      expect(screen.getByText(/Replying to Them/)).toBeInTheDocument();
+
+      fetchMessagesInitialResult = [
+        { id: "other-1", threadId: "t2", senderId: "me", text: "a different conversation", createdAt: "2026-09-05T00:00:00.000Z" },
+      ];
+      currentThreadId = "t2";
+      rerender(<DMThreadPage />);
+
+      await waitFor(() => expect(screen.getByText("a different conversation")).toBeInTheDocument());
+      expect(screen.queryByText(/Replying to/)).not.toBeInTheDocument();
+    });
+
+    it("replying to your own message labels it 'yourself', not the other participant's name", async () => {
+      render(<DMThreadPage />);
+      await waitFor(() => expect(screen.getByText("hey there")).toBeInTheDocument());
+
+      fireEvent.click(within(bubbleFor("hey there")).getByLabelText("Message actions"));
+      fireEvent.click(screen.getByText("Reply"));
+
+      expect(screen.getByText(/Replying to yourself/)).toBeInTheDocument();
     });
   });
 });

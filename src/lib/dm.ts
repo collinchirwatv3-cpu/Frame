@@ -21,6 +21,8 @@ export type DMMessage = {
   senderId: string;
   text: string;
   createdAt: string;
+  replyToId?: string | null;
+  replyTo?: { id: string; senderId: string; text: string } | null;
 };
 
 /** A message's position for keyset pagination and for the read boundary
@@ -161,8 +163,20 @@ export async function fetchThread(threadId: string, viewerId: string): Promise<D
 
 const MESSAGE_LIMIT = 100;
 
-function toMessage(row: { id: string; thread_id: string; sender_id: string; text: string; created_at: string }): DMMessage {
-  return { id: row.id, threadId: row.thread_id, senderId: row.sender_id, text: row.text, createdAt: row.created_at };
+function toMessage(row: { id: string; thread_id: string; sender_id: string; text: string; created_at: string; reply_to_id?: string | null }): DMMessage {
+  return { id: row.id, threadId: row.thread_id, senderId: row.sender_id, text: row.text, createdAt: row.created_at, replyToId: row.reply_to_id ?? null };
+}
+
+/** Fetch quoted parents independently of the current history page. RLS
+ * applies to this query too; an unavailable parent gets a neutral fallback. */
+async function withReplies(messages: DMMessage[]): Promise<DMMessage[]> {
+  const ids = [...new Set(messages.flatMap((m) => m.replyToId ? [m.replyToId] : []))];
+  if (!ids.length) return messages;
+  const { data, error } = await createClient().from("dm_messages")
+    .select("id, sender_id, text").in("id", ids);
+  if (error) throw new Error(error.message);
+  const parents = new Map((data ?? []).map((m) => [m.id, { id: m.id, senderId: m.sender_id, text: m.text }]));
+  return messages.map((m) => ({ ...m, replyTo: m.replyToId ? parents.get(m.replyToId) ?? null : null }));
 }
 
 /**
@@ -205,7 +219,7 @@ export async function fetchMessages(
       p_limit: MESSAGE_LIMIT,
     });
     if (error) throw new Error(error.message);
-    return (data ?? []).map(toMessage);
+    return withReplies((data ?? []).map(toMessage));
   }
 
   if (options?.before) {
@@ -216,18 +230,18 @@ export async function fetchMessages(
       p_limit: MESSAGE_LIMIT,
     });
     if (error) throw new Error(error.message);
-    return (data ?? []).map(toMessage).reverse();
+    return withReplies((data ?? []).map(toMessage).reverse());
   }
 
   const { data, error } = await supabase
     .from("dm_messages")
-    .select("id, thread_id, sender_id, text, created_at")
+    .select("id, thread_id, sender_id, text, created_at, reply_to_id")
     .eq("thread_id", threadId)
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
     .limit(MESSAGE_LIMIT);
   if (error) throw new Error(error.message);
-  return (data ?? []).map(toMessage).reverse();
+  return withReplies((data ?? []).map(toMessage).reverse());
 }
 
 /** Goes through the rate-limited route, not a direct client insert — see
@@ -235,12 +249,12 @@ export async function fetchMessages(
  * Never throws: a rejected fetch (offline, DNS, aborted) is caught and
  * treated the same as a non-ok response — callers only ever need to
  * branch on "did this return a message or not." */
-export async function sendMessage(threadId: string, text: string): Promise<DMMessage | null> {
+export async function sendMessage(threadId: string, text: string, replyToId?: string): Promise<DMMessage | null> {
   try {
     const res = await fetch("/api/dm/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ threadId, text }),
+      body: JSON.stringify({ threadId, text, ...(replyToId ? { replyToId } : {}) }),
     });
     if (!res.ok) return null;
     const data = await res.json();

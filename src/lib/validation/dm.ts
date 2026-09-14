@@ -5,6 +5,7 @@ import { z } from "zod";
  * request fails here with a clear 400 instead of a raw Postgres error. */
 export const sendDmMessageSchema = z.object({
   threadId: z.string().uuid(),
+  replyToId: z.string().uuid().optional(),
   text: z.string().trim().min(1, "Message can't be empty").max(2000, "Message is too long"),
 });
 
