@@ -54,6 +54,8 @@ export function buildContentSecurityPolicy(nonce: string): string {
     "img-src": [
       "'self'",
       "data:",
+      // ThumbnailPicker previews the creator's selected image locally.
+      "blob:",
       "https://*.supabase.co",
       "https://*.r2.dev",
       // Cloudflare Stream serves thumbnails from a per-account
@@ -69,6 +71,8 @@ export function buildContentSecurityPolicy(nonce: string): string {
     ],
     "media-src": [
       "'self'",
+      // Local file inspection, preview, and recorded-video playback.
+      "blob:",
       "https://*.r2.dev",
       "https://*.cloudflarestream.com",
       // TEMPORARY — demo content only, same as img-src above. Was
@@ -79,6 +83,9 @@ export function buildContentSecurityPolicy(nonce: string): string {
     ],
     "connect-src": [
       "'self'",
+      // Direct creator uploads use TUS requests to Stream's upload hosts.
+      "https://*.videodelivery.net",
+      "https://*.cloudflarestream.com",
       "https://*.supabase.co",
       // Realtime (useWatchRoom's sync channel) connects over a WebSocket,
       // not plain HTTPS — connect-src matches by scheme, so the https:
