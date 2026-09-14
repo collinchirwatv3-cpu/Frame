@@ -104,8 +104,29 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
       return () => window.clearTimeout(t);
     }
 
-    el.play().catch(() => {});
-    if (!muted) fadeVolume(el, 0, 1, 500);
+    // Explicit assignment, not reliance on the muted={muted} JSX prop:
+    // React only rewrites that DOM property when the prop value itself
+    // changes, so a prior autoplay-blocked fallback (below) forcing this
+    // element muted would otherwise stick forever even once the browser
+    // would allow sound again. Setting it here means every activation
+    // re-attempts the user's actual preference.
+    el.muted = muted;
+    el.play()
+      .then(() => {
+        if (!muted) fadeVolume(el, 0, 1, 500);
+      })
+      .catch(() => {
+        // Browser blocked unmuted autoplay — no user gesture on this
+        // domain yet this session. Fall back to muted so the scene still
+        // plays instead of sitting frozen and silent; this only touches
+        // this element directly, not the store, so the next activation
+        // (almost always after the user's first tap anywhere) tries
+        // unmuted again rather than staying stuck silent for good.
+        if (!muted) {
+          el.muted = true;
+          el.play().catch(() => {});
+        }
+      });
     // ownProfile/video.id intentionally excluded — this effect governs
     // play/pause timing on scroll, not history-writing; picking up a
     // slightly stale profile/video reference for the fire-and-forget write

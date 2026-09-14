@@ -25,7 +25,7 @@ type PlayerState = {
 };
 
 export const usePlayerStore = create<PlayerState>((set) => ({
-  muted: true,
+  muted: false,
   activeId: null,
   directorMode: false,
   isScrubbing: false,

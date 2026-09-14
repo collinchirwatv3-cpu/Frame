@@ -17,16 +17,20 @@ import {
 type Phase = "unsupported" | "requesting" | "denied" | "live" | "recording" | "reviewing";
 type FacingMode = "environment" | "user";
 
-// Safari only started shipping MediaRecorder support for mp4 recently and
-// still prefers it; every other real target supports vp9/vp8 webm. First
-// supported wins — no fallback needed beyond the browser's own default.
+// webm goes first even though Safari prefers mp4: Safari has no webm
+// MediaRecorder support at all, so it falls through to the mp4 candidate
+// regardless of order. Putting mp4 first was the bug — some Chromium
+// builds (notably Android Chrome/WebView) report isTypeSupported() true
+// for "video/mp4;codecs=h264,aac" but their MediaRecorder mp4 muxer only
+// writes the video track, silently dropping audio. webm's audio muxing is
+// reliable on those same targets, so it must win whenever it's available.
 function pickMimeType(): string {
   if (typeof MediaRecorder === "undefined") return "";
   const candidates = [
-    "video/mp4;codecs=h264,aac",
     "video/webm;codecs=vp9,opus",
     "video/webm;codecs=vp8,opus",
     "video/webm",
+    "video/mp4;codecs=h264,aac",
   ];
   return candidates.find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
 }
@@ -207,7 +211,6 @@ export function CameraCapture({
           src={reviewUrl}
           controls
           autoPlay
-          muted
           className="w-full rounded-2xl bg-card border border-border aspect-video object-contain"
         />
         <div className="flex gap-3 w-full">
