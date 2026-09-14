@@ -2,7 +2,8 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import { TrendingGrid } from "@/components/explore/TrendingGrid";
 import { SaveCollectionButton } from "@/components/collections/SaveCollectionButton";
-import { collections, videos } from "@/lib/mock-data";
+import { fetchCollectionDetail } from "@/lib/video-fetch";
+import { createClient } from "@/lib/supabase/server";
 
 export default async function CollectionDetailPage({
   params,
@@ -10,10 +11,10 @@ export default async function CollectionDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const collection = collections.find((c) => c.id === id);
-  if (!collection) notFound();
-
-  const collectionVideos = videos.filter((v) => collection.videoIds.includes(v.id));
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) notFound();
+  const result = await fetchCollectionDetail(id, await createClient());
+  if (!result) notFound();
+  const { collection, videos: collectionVideos } = result;
 
   return (
     <div className="pb-24 md:pb-8">

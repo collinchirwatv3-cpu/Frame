@@ -23,13 +23,15 @@ vi.mock("@/lib/supabase/client", () => ({
       builder.eq = record("eq");
       builder.order = record("order");
       builder.limit = record("limit");
+      builder.in = record("in");
+      builder.maybeSingle = record("maybeSingle");
       builder.then = (resolve: (v: unknown) => unknown) => Promise.resolve(response).then(resolve);
       return builder;
     },
   }),
 }));
 
-const { fetchTopCreators, fetchFeaturedCollections } = await import("./video-fetch");
+const { fetchTopCreators, fetchFeaturedCollections, fetchCollections, fetchCollectionDetail } = await import("./video-fetch");
 
 beforeEach(() => {
   calls = [];
@@ -119,5 +121,36 @@ describe("fetchFeaturedCollections", () => {
     mockResponses.collections = { data: null, error: { message: "boom" } };
     const result = await fetchFeaturedCollections();
     expect(result).toEqual([]);
+  });
+});
+
+
+describe("live collections", () => {
+  it("returns an empty catalogue without bundled demo fallbacks", async () => {
+    expect(await fetchCollections()).toEqual([]);
+    expect(calls.some((call) => call.method === "eq")).toBe(false);
+  });
+
+  it("surfaces collection list errors for the Discover retry state", async () => {
+    mockResponses.collections = { data: null, error: new Error("offline") };
+    await expect(fetchCollections()).rejects.toThrow("offline");
+  });
+
+  it("returns null for a deleted collection without requesting its videos", async () => {
+    mockResponses.collections = { data: null, error: null };
+    const { createClient } = await import("./supabase/client");
+    expect(await fetchCollectionDetail("deleted", createClient())).toBeNull();
+    expect(calls.every((call) => call.table === "collections")).toBe(true);
+  });
+
+  it("orders live videos by collection position and explicitly excludes private/unready videos", async () => {
+    mockResponses.collections = { data: { id: "c1", title: "Real collection", description: "", cover_url: "", collection_videos: [], curator: null } };
+    mockResponses.collection_videos = { data: [{ video_id: "v2" }, { video_id: "v1" }] };
+    mockResponses.videos = { data: ["v1", "v2"].map((id) => ({ id, playback_url: "/video", poster_url: "/poster", profiles: { id: "creator" } })) };
+    const { createClient } = await import("./supabase/client");
+    const result = await fetchCollectionDetail("c1", createClient());
+    expect(result?.videos.map((v) => v.id)).toEqual(["v2", "v1"]);
+    expect(calls).toContainEqual({ table: "videos", method: "eq", args: ["visibility", "public"] });
+    expect(calls).toContainEqual({ table: "videos", method: "eq", args: ["processing_status", "ready"] });
   });
 });

@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { ProfileTabs } from "@/components/profile/ProfileTabs";
 import { FeaturedWork } from "@/components/profile/FeaturedWork";
-import { collections } from "@/lib/mock-data";
+import { fetchCollections } from "@/lib/video-fetch";
+import type { Collection } from "@/lib/types";
 import { fetchOwnVideos, toDisplayVideo, type OwnVideo } from "@/lib/profile-videos";
 import { useCurrentUserStore } from "@/store/current-user-store";
 import { useEngagementStore } from "@/store/engagement-store";
@@ -15,6 +16,7 @@ export default function ProfilePage() {
   const userId = useEngagementStore((s) => s.userId);
   const hydrated = useEngagementStore((s) => s.hydrated);
   const router = useRouter();
+  const [collections, setCollections] = useState<Collection[]>([]);
   const [ownVideos, setOwnVideos] = useState<OwnVideo[]>([]);
 
   // userId resolves (to a value or null) before profile does — hydrated is
@@ -28,7 +30,12 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!userId) return;
-    fetchOwnVideos(userId).then(setOwnVideos);
+    let cancelled = false;
+    fetchOwnVideos(userId).then((videos) => { if (!cancelled) setOwnVideos(videos); });
+    fetchCollections().then((items) => { if (!cancelled) setCollections(items); }).catch(() => {
+      if (!cancelled) setCollections([]);
+    });
+    return () => { cancelled = true; };
   }, [userId]);
 
   if (!hydrated || !userId || !profile) return null;

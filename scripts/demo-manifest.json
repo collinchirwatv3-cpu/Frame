@@ -1,0 +1,40 @@
+{
+  "creators": [
+    {
+      "id": "1901feaf-349b-435c-847a-b801b6a707ab",
+      "username": "milo_aerial",
+      "email": "milo.aerial@seed.frame.app"
+    },
+    {
+      "id": "23b673ac-f0a8-4124-94fc-07a7ad255600",
+      "username": "reddrift",
+      "email": "reddrift@seed.frame.app"
+    },
+    {
+      "id": "ff4d26f5-179c-4d59-a60f-c3eccb2fdaa1",
+      "username": "auroraok",
+      "email": "auroraok@seed.frame.app"
+    },
+    {
+      "id": "0ed62952-0271-463c-93d5-e3cc2a10d2c0",
+      "username": "nightpulse",
+      "email": "nightpulse@seed.frame.app"
+    }
+  ],
+  "videoIds": [
+    "9b3a9560-47ab-4687-88d5-68fba532beb8",
+    "44ec8be3-32c6-4dec-a2bb-23f04121c4d4",
+    "6b3cf47e-0fdf-4614-a986-0219c8af0415",
+    "76bfe705-bf8c-49d4-be62-63ea68ae1c11",
+    "2e9abccc-82ff-477d-934f-d6388e5a4983",
+    "b6b9b1a0-2f8e-4b0f-9d3c-7b6a1e2f9c01",
+    "c7cae2b1-3f9f-4c1a-8e4d-8c7b2f3a0d12",
+    "d8dbf3c2-4a0a-4d2b-9f5e-9d8c3a4b1e23"
+  ],
+  "collectionIds": [
+    "f9cf458e-feef-4b68-8361-f86c0a56effc",
+    "f21943b6-9769-4f3c-8e0e-2e1cfcb10c86",
+    "c3ef8d04-ae1a-4bf5-9475-d8633d1ef2e8",
+    "677703cb-4680-4ecb-b2df-e19a8ef33e59"
+  ]
+}

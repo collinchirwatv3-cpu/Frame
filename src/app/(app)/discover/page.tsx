@@ -13,10 +13,10 @@ import {
   fetchSavedVideos,
   fetchHistoryVideos,
   fetchDiscoverVideos,
+  fetchCollections,
 } from "@/lib/video-fetch";
-import { collections } from "@/lib/mock-data";
 import { useEngagementStore } from "@/store/engagement-store";
-import type { Video } from "@/lib/types";
+import type { Collection, Video } from "@/lib/types";
 
 const SHELF_CAP = 20;
 
@@ -101,6 +101,7 @@ export default function DiscoverPage() {
 
   const userId = useEngagementStore((s) => s.userId);
   const hydrated = useEngagementStore((s) => s.hydrated);
+  const [collections, setCollections] = useState<Collection[]>([]);
   const [shelves, setShelves] = useState<Shelves>(EMPTY_SHELVES);
   const [status, setStatus] = useState<"loading" | "error" | "ready">("loading");
   const [retryCount, setRetryCount] = useState(0);
@@ -112,10 +113,11 @@ export default function DiscoverPage() {
   useEffect(() => {
     if (!hydrated) return;
     let cancelled = false;
-    fetchShelves(userId)
-      .then((result) => {
+    Promise.all([fetchShelves(userId), fetchCollections()])
+      .then(([result, loadedCollections]) => {
         if (cancelled) return;
         setShelves(result);
+        setCollections(loadedCollections);
         setStatus("ready");
       })
       .catch(() => {

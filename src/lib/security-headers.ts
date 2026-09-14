@@ -64,10 +64,6 @@ export function buildContentSecurityPolicy(nonce: string): string {
       // Stream's upload/embed domain, unused by this app's plain <video>
       // player, which points straight at the HLS manifest).
       "https://*.cloudflarestream.com",
-      // TEMPORARY — demo content only (src/lib/mock-data.ts), remove before
-      // real alpha launch. See next.config.ts's remotePatterns for the
-      // matching image-optimizer allowance and why this needs flagging.
-      "https://picsum.photos",
     ],
     "media-src": [
       "'self'",
@@ -75,11 +71,6 @@ export function buildContentSecurityPolicy(nonce: string): string {
       "blob:",
       "https://*.r2.dev",
       "https://*.cloudflarestream.com",
-      // TEMPORARY — demo content only, same as img-src above. Was
-      // commondatastorage.googleapis.com; that bucket's public access got
-      // revoked (confirmed live — every URL there now 403s), swapped to
-      // placeholdervideo.dev, which sends explicit CORS headers.
-      "https://placeholdervideo.dev",
     ],
     "connect-src": [
       "'self'",

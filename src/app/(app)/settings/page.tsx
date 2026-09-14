@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LogOut, ShieldAlert, ShieldOff, Trash2, Volume2, VolumeX } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { categories } from "@/lib/mock-data";
+import { categories } from "@/lib/categories";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { usePlayerStore } from "@/store/player-store";
 import { createClient } from "@/lib/supabase/client";

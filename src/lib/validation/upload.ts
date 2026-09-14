@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { categories } from "@/lib/mock-data";
+import { categories } from "@/lib/categories";
 import type { Category } from "@/lib/types";
 
 /** Below this, a video is always "short" — see the API route, which

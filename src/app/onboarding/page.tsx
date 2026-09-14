@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { categories } from "@/lib/mock-data";
+import { categories } from "@/lib/categories";
 import { useOnboardingStore } from "@/store/onboarding-store";
 import { Logo } from "@/components/ui/Logo";
 import { DURATION } from "@/lib/motion";

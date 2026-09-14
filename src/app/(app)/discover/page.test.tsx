@@ -20,6 +20,7 @@ vi.mock("@/lib/video-fetch", () => ({
   fetchSavedVideos: async () => [],
   fetchHistoryVideos: async () => [],
   fetchDiscoverVideos: async () => [],
+  fetchCollections: async () => [],
 }));
 
 vi.mock("@/store/engagement-store", () => ({

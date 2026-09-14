@@ -33,9 +33,16 @@ cp .env.local.example .env.local   # fill in Supabase + Cloudflare keys when rea
 npm run dev
 ```
 
-The app runs fully on mock data (`src/lib/mock-data.ts`) with zero env vars set —
-the feed, explore, and profile screens all work out of the box. Auth and upload
-publish are stubbed until Supabase/Cloudflare Stream credentials are added.
+The app reads real Supabase data and requires the configured environment. Bundled
+demo profiles, videos, and collections have been removed; empty accounts show
+empty states. Uploads require Cloudflare Stream credentials. Category choices
+live in `src/lib/categories.ts`. Private share-token playback remains unimplemented.
+
+The retired seed identities are recorded in `scripts/demo-manifest.json`.
+`node --env-file=.env.local scripts/remove-demo-data.mjs` previews those exact
+records; `--apply` verifies identities, snapshots their content locally, then
+removes them and associated cascading interactions. It refuses non-demo videos
+or changed identities. This is not a general-purpose user cleanup command.
 
 ## Version 2 — Cinematic Social Network
 

@@ -15,7 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { categories } from "@/lib/mock-data";
+import { categories } from "@/lib/categories";
 import { checkUpload, qualityLabel, type UploadCheck } from "@/lib/video-validation";
 import { deriveTitleFromFilename } from "@/lib/upload";
 import { LONGFORM_MIN_DURATION_SECONDS } from "@/lib/validation/upload";
@@ -107,8 +107,7 @@ export function UploadDropzone() {
   const setDraftDescription = useUploadDraftStore((s) => s.setDescription);
   const setDraftCategory = useUploadDraftStore((s) => s.setCategory);
   const clearDraft = useUploadDraftStore((s) => s.clearDraft);
-  // No real per-creator upload history exists yet (that's Milestone 2 —
-  // real video data replacing mock-data.ts) to derive a smarter default from.
+  // Use the creator's saved choice, or the first supported category.
   const category = draftCategory ?? categories[0];
 
   // A different table than current-user-store's profile (business_channels

@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import type { Collection, Creator, Video } from "@/lib/types";
 
@@ -298,23 +299,10 @@ type CollectionRow = {
   collection_videos: { video_id: string }[];
 };
 
-/** The first real read of collections/collection_videos anywhere in this
- * app — every other collections surface (CollectionsShelf, /collections/[id])
- * still reads mock-data.ts. collections has no client write grant
- * (platform-curated, is_featured/curator_id set only via direct SQL/
- * service-role, same precedent as invite codes). */
-export async function fetchFeaturedCollections(limit = 10): Promise<Collection[]> {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("collections")
-    .select(
-      "id, title, description, cover_url, is_featured, curator:profiles!collections_curator_id_fkey(id, display_name), collection_videos(video_id)"
-    )
-    .eq("is_featured", true)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  if (error || !data) return [];
-  return (data as unknown as CollectionRow[]).map((row) => ({
+const COLLECTION_SELECT = "id, title, description, cover_url, is_featured, curator:profiles!collections_curator_id_fkey(id, display_name), collection_videos(video_id)";
+
+function toCollection(row: CollectionRow): Collection {
+  return {
     id: row.id,
     title: row.title,
     description: row.description,
@@ -323,7 +311,41 @@ export async function fetchFeaturedCollections(limit = 10): Promise<Collection[]
     isFeatured: row.is_featured,
     curatorId: row.curator?.id,
     curatorName: row.curator?.display_name,
-  }));
+  };
+}
+
+export async function fetchCollections(limit = 50, featuredOnly = false): Promise<Collection[]> {
+  let query = createClient().from("collections").select(COLLECTION_SELECT);
+  if (featuredOnly) query = query.eq("is_featured", true);
+  const { data, error } = await query.order("created_at", { ascending: false }).limit(limit);
+  if (error) throw error;
+  return (data as unknown as CollectionRow[] ?? []).map(toCollection);
+}
+
+export async function fetchFeaturedCollections(limit = 10): Promise<Collection[]> {
+  try {
+    return await fetchCollections(limit, true);
+  } catch {
+    return [];
+  }
+}
+
+/** Uses the caller's session/RLS, including on the server. */
+export async function fetchCollectionDetail(id: string, supabase: SupabaseClient) {
+  const { data, error } = await supabase.from("collections").select(COLLECTION_SELECT).eq("id", id).maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const collection = toCollection(data as unknown as CollectionRow);
+  const { data: items, error: itemsError } = await supabase.from("collection_videos")
+    .select("video_id").eq("collection_id", id).order("position");
+  if (itemsError) throw itemsError;
+  const ids = (items ?? []).map((item) => item.video_id as string);
+  if (!ids.length) return { collection, videos: [] as Video[] };
+  const { data: rows, error: videosError } = await supabase.from("videos").select(SELECT)
+    .in("id", ids).eq("visibility", "public").eq("processing_status", "ready");
+  if (videosError) throw videosError;
+  const byId = new Map((rows as unknown as Row[] ?? []).map(toVideo).filter((v) => v !== null).map((v) => [v.id, v]));
+  return { collection, videos: ids.flatMap((id) => byId.has(id) ? [byId.get(id)!] : []) };
 }
 
 /** A specific creator's public, ready videos (both films and shorts) for

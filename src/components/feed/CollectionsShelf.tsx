@@ -5,7 +5,7 @@ import type { Collection } from "@/lib/types";
 /**
  * Collections, styled to match Shelf.tsx exactly (same heading size, same
  * fixed card height) — Home's shelf-consistent presentation of the
- * mock-data collections list, distinct from FeaturedCollections (Search's
+ * live collections list, distinct from FeaturedCollections (Search's
  * larger editorial cards, backed by the real collections table).
  */
 export function CollectionsShelf({ collections }: { collections: Collection[] }) {
