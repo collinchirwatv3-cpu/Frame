@@ -55,6 +55,7 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
 
+  const muted = usePlayerStore((s) => s.muted);
   const directorMode = usePlayerStore((s) => s.directorMode);
   const isScrubbing = usePlayerStore((s) => s.isScrubbing);
   const enterDirectorMode = usePlayerStore((s) => s.enterDirectorMode);
@@ -137,6 +138,22 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
   //    when not ready yet, instead of trying once and giving up.
   useEffect(() => {
     const cleanups: (() => void)[] = [];
+
+    // Mirrors VideoCard.tsx's own play logic: set muted imperatively (not
+    // just via the muted={muted} JSX prop, which React won't re-apply if
+    // the value hasn't changed) and fall back to a muted play if the
+    // browser blocks unmuted autoplay, rather than leaving the short
+    // frozen silent with no gesture to have unlocked sound yet.
+    function attemptPlay(video: HTMLVideoElement) {
+      video.muted = muted;
+      video.play().catch(() => {
+        if (!muted) {
+          video.muted = true;
+          video.play().catch(() => {});
+        }
+      });
+    }
+
     videoRefs.current.forEach((video, index) => {
       if (!video) return;
       if (index !== activeIndex) {
@@ -144,15 +161,15 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
         return;
       }
       if (video.readyState >= 3) {
-        video.play().catch(() => {});
+        attemptPlay(video);
       } else {
-        const onReady = () => video.play().catch(() => {});
+        const onReady = () => attemptPlay(video);
         video.addEventListener("loadeddata", onReady, { once: true });
         cleanups.push(() => video.removeEventListener("loadeddata", onReady));
       }
     });
     return () => cleanups.forEach((fn) => fn());
-  }, [activeIndex, shorts.length]);
+  }, [activeIndex, shorts.length, muted]);
 
   // Had no keyboard path at all before this — SwipeFeed's own arrow-key
   // scroll (src/components/feed/SwipeFeed.tsx) was never mirrored here.
@@ -233,7 +250,7 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
                   src={short.playbackUrl}
                   poster={short.posterUrl}
                   className="w-full h-full object-contain"
-                  muted
+                  muted={muted}
                   loop
                   playsInline
                 />
