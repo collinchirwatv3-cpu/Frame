@@ -16,7 +16,29 @@ vi.mock("frimousse", () => {
   };
   const Search = (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />;
   const Viewport = ({ children }: { children: React.ReactNode }) => <div>{children}</div>;
-  const List = () => null;
+  // Mirrors the two shapes real frimousse renders that are NOT legitimate
+  // tab stops, so the focus trap's exclusion logic is exercised against
+  // something closer to its actual output rather than an empty grid:
+  // (1) an emoji-grid cell — a real, visible, enabled <button> that
+  // frimousse itself always gives `tabIndex={-1}` (arrow keys move a
+  // virtual "active" cell, never real DOM focus); and (2) its offscreen
+  // row/category-header size probe, rendered inside an `aria-hidden="true"`
+  // wrapper regardless of the inner element's own tabIndex — here given
+  // tabIndex 0 specifically to prove exclusion comes from the hidden
+  // ancestor, not incidentally from also being tabindex-negative.
+  const List = ({ components }: { components?: { Emoji?: React.ComponentType<{ emoji: { emoji: string; label: string; isActive: boolean }; tabIndex: number; role: string; "aria-label": string }> } }) => {
+    const Emoji = components?.Emoji;
+    return (
+      <div>
+        {Emoji && <Emoji emoji={{ emoji: "🍕", label: "pizza", isActive: false }} tabIndex={-1} role="gridcell" aria-label="pizza" />}
+        <div aria-hidden="true" style={{ height: 0, visibility: "hidden" }}>
+          <button type="button" tabIndex={0}>
+            hidden sizer probe
+          </button>
+        </div>
+      </div>
+    );
+  };
   const Loading = () => null;
   const Empty = () => null;
   const SkinToneSelector = (props: React.ButtonHTMLAttributes<HTMLButtonElement>) => <button type="button" {...props}>✋</button>;
@@ -181,6 +203,55 @@ describe("DMEmojiPickerSheet", () => {
       document.body.focus(); // simulate focus having escaped the dialog
       fireEvent.keyDown(document, { key: "Tab" });
       expect(close).toHaveFocus();
+    });
+
+    it("an emoji-grid cell (Frimousse's own tabIndex={-1}) is never treated as a tab stop", () => {
+      render(<DMEmojiPickerSheet messageId="m1" currentEmoji={null} onReacted={vi.fn()} onClose={vi.fn()} />);
+      const pizza = screen.getByRole("gridcell", { name: "pizza" });
+      expect(pizza).toHaveAttribute("tabindex", "-1");
+      const [close, , skinTone] = focusables();
+      // Real DOM order is close, search, skinTone, THEN the emoji cell —
+      // so a broken trap that included tabindex-negative buttons would
+      // compute the emoji cell (not skinTone) as "last", wrapping Tab
+      // from skinTone somewhere other than close.
+      skinTone.focus();
+      fireEvent.keyDown(document, { key: "Tab" });
+      expect(close).toHaveFocus();
+      expect(pizza).not.toHaveFocus();
+    });
+
+    it("an element inside a hidden ancestor is never treated as a tab stop, even with tabIndex={0}", () => {
+      render(<DMEmojiPickerSheet messageId="m1" currentEmoji={null} onReacted={vi.fn()} onClose={vi.fn()} />);
+      const hiddenProbe = screen.getByText("hidden sizer probe");
+      expect(hiddenProbe).toHaveAttribute("tabindex", "0");
+      const [close, , skinTone] = focusables();
+      skinTone.focus();
+      fireEvent.keyDown(document, { key: "Tab" });
+      expect(close).toHaveFocus();
+      expect(hiddenProbe).not.toHaveFocus();
+    });
+
+    it("the trap is still correct after searching narrows the grid", () => {
+      render(<DMEmojiPickerSheet messageId="m1" currentEmoji={null} onReacted={vi.fn()} onClose={vi.fn()} />);
+      fireEvent.change(screen.getByPlaceholderText("Search emoji"), { target: { value: "pizza" } });
+      const [close, , skinTone] = focusables();
+      skinTone.focus();
+      fireEvent.keyDown(document, { key: "Tab" });
+      expect(close).toHaveFocus();
+      fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+      expect(skinTone).toHaveFocus();
+    });
+
+    it("the trap is still correct while a mutation is pending", async () => {
+      setReactionResult = "hang";
+      render(<DMEmojiPickerSheet messageId="m1" currentEmoji={null} onReacted={vi.fn()} onClose={vi.fn()} />);
+      selectEmoji("🍕");
+      await waitFor(() => expect(setReactionSpy).toHaveBeenCalledTimes(1));
+      const [close, , skinTone] = focusables();
+      skinTone.focus();
+      fireEvent.keyDown(document, { key: "Tab" });
+      expect(close).toHaveFocus();
+      pendingResolve?.();
     });
   });
 

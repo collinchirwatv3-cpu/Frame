@@ -291,12 +291,24 @@ test.describe("DM — authenticated browser coverage (requires a real Supabase p
     const page = await context.newPage();
     await bypassOnboardingGate(page);
 
-    // Fail the FIRST post-load "after" drain call only — a real network
-    // blip mid-sync — by aborting the first matching request only.
-    let intercepted = false;
+    // Fail every "after" drain call until the test's own manual retry
+    // below — not just the first one. A single new message triggers
+    // refresh() more than once (the dm_messages INSERT event AND the
+    // dm_threads row markThreadRead touches both carry realtime updates,
+    // and refresh()'s own overlap-coalescing means a second trigger while
+    // one is in flight queues exactly one automatic follow-up run) — with
+    // only the very first call aborted, that automatic follow-up already
+    // succeeds and self-heals syncIncomplete within milliseconds, closing
+    // the "Continue syncing" window (and detaching the button mid-click)
+    // before this test ever gets to click it, confirmed via a captured
+    // trace showing two additional successful fetch_dm_messages_after
+    // calls landing within ~300ms of the aborted one. Blocking every
+    // attempt until the deliberate `syncBlocked = false` below is what
+    // actually matches this test's intent: sync stays broken until a
+    // manual retry, and the manual retry is what recovers it.
+    let syncBlocked = true;
     await page.route("**/rest/v1/rpc/fetch_dm_messages_after", async (route) => {
-      if (!intercepted) {
-        intercepted = true;
+      if (syncBlocked) {
         await route.abort("failed");
         return;
       }
@@ -306,11 +318,27 @@ test.describe("DM — authenticated browser coverage (requires a real Supabase p
     await page.goto(`/inbox/messages/${threadId}`);
     await expect(page.getByText("seed")).toBeVisible();
 
-    // A new message triggers realtime -> refresh -> the intercepted,
-    // failing drain call -> syncIncomplete.
+    // A new message triggers realtime -> refresh -> the blocked, failing
+    // drain call -> syncIncomplete.
     await admin!.from("dm_messages").insert({ thread_id: threadId, sender_id: bob.id, text: "arrives during the blip" });
     await expect(page.getByText(/Continue syncing/)).toBeVisible({ timeout: 10000 });
 
+    // One inserted message legitimately fires TWO independent realtime
+    // signals (the dm_messages INSERT itself, and the dm_threads row it
+    // touches) that can each still be in flight — over a real websocket,
+    // not synchronous with the insert above — when the assertion above
+    // resolves. Unblocking immediately risks one of THOSE unrelated,
+    // already-in-flight automatic retries (not this test's own click)
+    // winning the race and clearing syncIncomplete out from under
+    // Playwright's click mid-action, which showed up as an intermittent
+    // "element was detached from the DOM" failure even with every attempt
+    // blocked up to this point. Waiting for network quiescence first
+    // ensures both signals have already been received and failed (while
+    // still blocked) before the deliberate unblock+click below, so the
+    // click is unambiguously what causes the recovery this test verifies.
+    await page.waitForLoadState("networkidle");
+
+    syncBlocked = false;
     await page.getByText(/Continue syncing/).click();
     await expect(page.getByText("arrives during the blip")).toBeVisible({ timeout: 10000 });
     await expect(page.getByText(/Continue syncing/)).not.toBeVisible();
@@ -495,9 +523,22 @@ test.describe("DM — authenticated browser coverage (requires a real Supabase p
     // making several of the assertions below ambiguous.
     const ROOT_TEXT = "root-message-oldest";
     const REPLY_TEXT = "reply-quoting-root";
+    // Every seeded message below (root, fillers, and the reply) gets an
+    // explicit created_at comfortably in the past — 10 minutes leaves
+    // enough slack for this test's own deliberate 61s rate-limit wait plus
+    // ordinary page-load/network time. The reply previously used
+    // `Date.now() + 200s` off a `base` of real "now": still in the future
+    // by the time the real-time message near the bottom of this test was
+    // inserted (which uses the DB's actual now()), so the SEEDED reply —
+    // not the genuinely new message — was the newest thing the page's
+    // sync cursor had seen, and the real new message landed behind that
+    // cursor and was silently dropped. That was a test-fixture bug, not a
+    // synchronization bug: seeded history must stay in the past, exactly
+    // like real historical messages would.
+    const base = Date.now() - 10 * 60 * 1000;
     const { data: root, error: rootErr } = await admin!
       .from("dm_messages")
-      .insert({ thread_id: threadId, sender_id: alice.id, text: ROOT_TEXT })
+      .insert({ thread_id: threadId, sender_id: alice.id, text: ROOT_TEXT, created_at: new Date(base).toISOString() })
       .select("id")
       .single();
     if (rootErr) throw new Error(`seeding root message failed: ${rootErr.message}`);
@@ -507,7 +548,6 @@ test.describe("DM — authenticated browser coverage (requires a real Supabase p
     // under enforce_dm_rate_limit's 30/minute cap), 61s apart. Total after
     // this is 101 messages — MESSAGE_PAGE_SIZE (100) guarantees `root`
     // itself falls off the initial page.
-    const base = Date.now();
     const firstBatch = await admin!.from("dm_messages").insert(
       Array.from({ length: 50 }, (_, i) => ({
         thread_id: threadId,
@@ -530,8 +570,11 @@ test.describe("DM — authenticated browser coverage (requires a real Supabase p
     );
     if (secondBatch.error) throw new Error(`seeding second 50 filler messages failed: ${secondBatch.error.message}`);
 
-    // The newest message quotes the very first one — its parent will not
-    // be part of the initially-loaded page.
+    // The newest SEEDED message quotes the very first one — its parent
+    // will not be part of the initially-loaded page. Still safely in the
+    // past (base + 200s, i.e. under 7 real minutes ago) so it can't
+    // outrun the genuinely-new message inserted with the real current
+    // time below.
     const { data: reply, error: replyErr } = await admin!
       .from("dm_messages")
       .insert({
@@ -576,8 +619,12 @@ test.describe("DM — authenticated browser coverage (requires a real Supabase p
     await expect(page.getByText(ROOT_TEXT)).toHaveCount(1);
     await expect(page.getByLabel("Surprised, 1")).toBeVisible(); // reaction loaded over HTTP, no realtime event needed
 
-    // A new message arrives — the reply's reaction must survive it.
-    await admin!.from("dm_messages").insert({ thread_id: threadId, sender_id: bob.id, text: "arrives-after-everything-else" });
+    // A new message arrives — the reply's reaction must survive it. Uses
+    // the DB's actual current time (no explicit created_at), same as any
+    // real incoming message would — genuinely newer than every seeded
+    // message above.
+    const { error: newMessageErr } = await admin!.from("dm_messages").insert({ thread_id: threadId, sender_id: bob.id, text: "arrives-after-everything-else" });
+    if (newMessageErr) throw new Error(`seeding the final real-time message failed: ${newMessageErr.message}`);
     await expect(page.getByText("arrives-after-everything-else")).toBeVisible({ timeout: 20000 });
     await expect(page.getByLabel("Surprised, 1")).toBeVisible();
 
@@ -1101,4 +1148,42 @@ test.describe("DM — authenticated browser coverage (requires a real Supabase p
       await context.close();
     });
   }
+
+  test("own-profile Inbox icon shows a badge for an unread DM thread, live, and clears it once read", async ({ browser }) => {
+    const alice = await makeUser("alice21");
+    const bob = await makeUser("bob21");
+    cleanupUserIds.push(alice.id, bob.id);
+    const { data: aliceProfile } = await admin!.from("profiles").select("username").eq("id", alice.id).single();
+
+    const bobRest = createClient(SUPABASE_URL!, ANON_KEY!, {
+      global: { headers: { Authorization: `Bearer ${bob.session.access_token}` } },
+    });
+    const { data: threadId, error: threadErr } = await bobRest.rpc("get_or_create_dm_thread", { other_user_id: alice.id });
+    if (threadErr) throw threadErr;
+    cleanupThreadIds.push(threadId);
+
+    const context = await browser.newContext();
+    await injectSession(context, alice.session);
+    const page = await context.newPage();
+    await bypassOnboardingGate(page);
+    await page.goto(`/profile/${aliceProfile!.username}`);
+    await expect(page.getByLabel("Inbox")).toBeVisible();
+    await expect(page.getByLabel(/unread/)).toHaveCount(0);
+
+    // bob sends a message — alice's already-open profile page picks it up
+    // live via useUnreadDMCount's own realtime subscription, no reload.
+    await admin!.from("dm_messages").insert({ thread_id: threadId, sender_id: bob.id, text: "unread badge check" });
+    await expect(page.getByLabel("Inbox, 1 unread")).toBeVisible({ timeout: 10000 });
+
+    // Opening the thread marks it read; back on the profile, the badge
+    // clears — proving the badge reflects DM read state specifically, not
+    // just unread notifications (which this test never touches).
+    await page.goto(`/inbox/messages/${threadId}`);
+    await expect(page.getByText("unread badge check")).toBeVisible();
+    await page.goto(`/profile/${aliceProfile!.username}`);
+    await expect(page.getByLabel("Inbox")).toBeVisible();
+    await expect(page.getByLabel(/unread/)).toHaveCount(0);
+
+    await context.close();
+  });
 });

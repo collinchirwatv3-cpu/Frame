@@ -12,7 +12,30 @@ import { cn } from "@/lib/utils";
 
 const SPRING = { type: "spring", stiffness: 420, damping: 38, mass: 0.7 } as const;
 const HEIGHT_FRACTION = 0.8;
-const FOCUSABLE_SELECTOR = 'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+// Broad candidate selector — narrowed below by the actual `.tabIndex` IDL
+// property (not a `[tabindex="-1"]` attribute-string match, which can't
+// express "negative", "not overridden", or any other non-"-1" value) plus
+// a hidden-ancestor check. Frimousse's own emoji-grid cells are real
+// `<button>`s but every one carries an explicit `tabIndex: -1` (arrow-key
+// navigation there moves a virtual "active" cell, never real DOM focus),
+// and its row/category-header size-probing elements are rendered inside an
+// `aria-hidden="true"` wrapper — neither is an actual tab stop, and a
+// selector alone can't reliably distinguish them from the picker's own
+// Close/Search/SkinTone controls.
+const FOCUSABLE_SELECTOR = "button:not([disabled]), [href], input:not([disabled]), [tabindex]";
+
+/** True if `el` (or any ancestor up to and including `boundary`) is
+ * `hidden` or `aria-hidden="true"` — used to keep the focus trap off
+ * Frimousse's offscreen sizing elements. */
+function hasHiddenAncestor(el: HTMLElement, boundary: HTMLElement): boolean {
+  let node: HTMLElement | null = el;
+  while (node) {
+    if (node.hidden || node.getAttribute("aria-hidden") === "true") return true;
+    if (node === boundary) return false;
+    node = node.parentElement;
+  }
+  return false;
+}
 
 /**
  * The full emoji picker, lazy-loaded (see the `next/dynamic` import at the
@@ -72,12 +95,16 @@ export function DMEmojiPickerSheet({ messageId, currentEmoji, onReacted, onClose
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key !== "Tab" || !dialogRef.current) return;
-      // No visibility filter needed here: everything in this dialog is
-      // shown via conditional RENDERING (EmojiPicker.Loading/Empty/List
-      // swap in and out of the tree entirely, not CSS display:none), so
-      // anything querySelectorAll finds is already genuinely present and
-      // interactable right now.
-      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+      const dialog = dialogRef.current;
+      // Recomputed on every Tab press (not cached) so this stays correct
+      // as the picker's own content changes underneath it — a search
+      // filtering the emoji grid, or a pending mutation disabling it,
+      // never touch the actual tab stops (Close/Search/SkinTone all stay
+      // enabled throughout), but this still re-derives from the live DOM
+      // rather than trusting a snapshot.
+      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+        (el) => el.tabIndex >= 0 && !hasHiddenAncestor(el, dialog)
+      );
       if (focusable.length === 0) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
@@ -88,7 +115,7 @@ export function DMEmojiPickerSheet({ messageId, currentEmoji, onReacted, onClose
       } else if (!e.shiftKey && activeEl === last) {
         e.preventDefault();
         first.focus();
-      } else if (!dialogRef.current.contains(activeEl)) {
+      } else if (!dialog.contains(activeEl)) {
         // Focus somehow ended up outside the dialog (e.g. a programmatic
         // .focus() elsewhere) — pull it back in rather than letting Tab
         // continue from wherever it landed.

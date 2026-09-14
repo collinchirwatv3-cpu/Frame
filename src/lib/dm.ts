@@ -117,6 +117,45 @@ export async function fetchThreads(viewerId: string): Promise<DMThread[]> {
   return (data as unknown as ThreadRow[]).map((row) => toThread(row, viewerId));
 }
 
+const UNREAD_COUNT_SELECT =
+  "user_a_id, user_b_id, last_message_at, last_message_id, user_a_last_read_at, user_a_last_read_message_id, user_b_last_read_at, user_b_last_read_message_id";
+
+type UnreadThreadRow = Pick<
+  ThreadRow,
+  | "user_a_id"
+  | "user_b_id"
+  | "last_message_at"
+  | "last_message_id"
+  | "user_a_last_read_at"
+  | "user_a_last_read_message_id"
+  | "user_b_last_read_at"
+  | "user_b_last_read_message_id"
+>;
+
+/** How many of the caller's threads have unread activity — a lightweight
+ * count-only query (no profile embeds) for the Inbox icon's badge, sharing
+ * fetchThreads' own per-side unread rule (isUnread) instead of
+ * reimplementing it. PostgREST filters can't compare two columns against
+ * each other (only a column against a literal), so "unread" can't be
+ * pushed into a WHERE clause — this fetches the minimal columns for every
+ * thread the caller is part of and counts client-side, same shape
+ * fetchThreads already uses for its own per-thread `unread` flag, just
+ * without the profile joins a badge doesn't need. */
+export async function fetchUnreadThreadCount(viewerId: string): Promise<number> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("dm_threads")
+    .select(UNREAD_COUNT_SELECT)
+    .or(`user_a_id.eq.${viewerId},user_b_id.eq.${viewerId}`);
+  if (error || !data) return 0;
+  return (data as unknown as UnreadThreadRow[]).reduce((count, row) => {
+    const isA = row.user_a_id === viewerId;
+    const lastReadAt = isA ? row.user_a_last_read_at : row.user_b_last_read_at;
+    const lastReadId = isA ? row.user_a_last_read_message_id : row.user_b_last_read_message_id;
+    return isUnread(row.last_message_at, row.last_message_id, lastReadAt, lastReadId) ? count + 1 : count;
+  }, 0);
+}
+
 /** Finds or creates the 1:1 thread with `otherUserId`, via the narrow RPC —
  * never a direct insert (dm_threads has no client insert grant at all, and
  * the RPC is also what enforces the block check, canonical id ordering,

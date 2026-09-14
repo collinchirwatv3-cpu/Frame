@@ -9,6 +9,11 @@ vi.mock("@/lib/use-unread-notification-count", () => ({
   useUnreadNotificationCount: () => unreadCount,
 }));
 
+let unreadDMCount = 0;
+vi.mock("@/lib/use-unread-dm-count", () => ({
+  useUnreadDMCount: () => unreadDMCount,
+}));
+
 const pushSpy = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pushSpy, replace: vi.fn() }) }));
 
@@ -37,6 +42,8 @@ beforeEach(() => {
   pushSpy.mockClear();
   getOrCreateThreadSpy.mockClear();
   getOrCreateThreadResult = "t1";
+  unreadCount = 0;
+  unreadDMCount = 0;
 });
 
 describe("ProfileHeader — Message button", () => {
@@ -62,21 +69,40 @@ describe("ProfileHeader — Message button", () => {
 });
 
 describe("ProfileHeader — Inbox unread badge", () => {
-  it("shows no dot when there are no unread notifications", () => {
+  it("shows no dot when there's no unread activity at all", () => {
     unreadCount = 0;
+    unreadDMCount = 0;
     render(<ProfileHeader creator={creator} isCreator videoCount={0} own />);
     expect(screen.getByLabelText("Inbox")).toBeInTheDocument();
     expect(screen.queryByLabelText(/unread/)).not.toBeInTheDocument();
   });
 
-  it("shows a restrained dot and an updated accessible label when there's unread activity", () => {
+  it("shows a restrained dot and an updated accessible label for unread notifications", () => {
     unreadCount = 4;
     render(<ProfileHeader creator={creator} isCreator videoCount={0} own />);
     expect(screen.getByLabelText("Inbox, 4 unread")).toBeInTheDocument();
   });
 
+  // /inbox shows a notifications list AND a DM thread list, so an unread
+  // DM must light up the same badge — not just unread notifications, which
+  // was the only signal it used before this fix.
+  it("shows the badge for unread DM threads too, even with zero unread notifications", () => {
+    unreadCount = 0;
+    unreadDMCount = 2;
+    render(<ProfileHeader creator={creator} isCreator videoCount={0} own />);
+    expect(screen.getByLabelText("Inbox, 2 unread")).toBeInTheDocument();
+  });
+
+  it("combines unread notifications and unread DM threads into one count", () => {
+    unreadCount = 3;
+    unreadDMCount = 2;
+    render(<ProfileHeader creator={creator} isCreator videoCount={0} own />);
+    expect(screen.getByLabelText("Inbox, 5 unread")).toBeInTheDocument();
+  });
+
   it("never shows the badge on someone else's profile (own=false), which has no Inbox icon at all", () => {
     unreadCount = 4;
+    unreadDMCount = 2;
     render(<ProfileHeader creator={creator} isCreator={false} videoCount={0} own={false} />);
     expect(screen.queryByLabelText(/Inbox/)).not.toBeInTheDocument();
   });

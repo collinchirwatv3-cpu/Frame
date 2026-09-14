@@ -37,9 +37,15 @@ vi.mock("@/lib/supabase/client", () => ({
 
 const fetchMock = vi.fn();
 
-const { fetchThreads, fetchThread, getOrCreateThread, markThreadRead, fetchMessages, sendMessage } = await import(
-  "./dm"
-);
+const {
+  fetchThreads,
+  fetchThread,
+  fetchUnreadThreadCount,
+  getOrCreateThread,
+  markThreadRead,
+  fetchMessages,
+  sendMessage,
+} = await import("./dm");
 
 const A_PROFILE = { id: "me", username: "me_user", display_name: "Me", avatar_url: null };
 const B_PROFILE = { id: "them", username: "them_user", display_name: "Them", avatar_url: null };
@@ -175,6 +181,47 @@ describe("fetchThreads", () => {
   it("returns an empty list on a query error", async () => {
     mockResponses.dm_threads = { data: null, error: { message: "boom" } };
     expect(await fetchThreads("me")).toEqual([]);
+  });
+});
+
+describe("fetchUnreadThreadCount", () => {
+  it("counts only the threads with unread activity for this viewer, regardless of which side they're on", async () => {
+    mockResponses.dm_threads = {
+      data: [
+        // Unread: viewer is user_a, never read.
+        threadRow({ id: "t1", last_message_at: "2026-09-01T00:00:00.000Z", last_message_id: "m1" }),
+        // Read: viewer is user_a, caught up.
+        threadRow({
+          id: "t2",
+          last_message_at: "2026-09-01T00:00:00.000Z",
+          last_message_id: "m1",
+          user_a_last_read_at: "2026-09-01T00:00:00.000Z",
+          user_a_last_read_message_id: "m1",
+        }),
+        // Unread: viewer is user_b this time — must use the b-side columns.
+        threadRow({
+          id: "t3",
+          user_a_id: "them",
+          user_b_id: "me",
+          last_message_at: "2026-09-02T00:00:00.000Z",
+          last_message_id: "m3",
+        }),
+        // No activity yet — never unread.
+        threadRow({ id: "t4" }),
+      ],
+      error: null,
+    };
+    expect(await fetchUnreadThreadCount("me")).toBe(2);
+  });
+
+  it("returns 0 on a query error", async () => {
+    mockResponses.dm_threads = { data: null, error: { message: "boom" } };
+    expect(await fetchUnreadThreadCount("me")).toBe(0);
+  });
+
+  it("returns 0 when the viewer has no threads at all", async () => {
+    mockResponses.dm_threads = { data: [], error: null };
+    expect(await fetchUnreadThreadCount("me")).toBe(0);
   });
 });
 

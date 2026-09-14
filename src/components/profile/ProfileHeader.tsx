@@ -21,6 +21,7 @@ import { EditProfileModal } from "@/components/profile/EditProfileModal";
 import { formatCount, shareContent } from "@/lib/utils";
 import { useEngagementStore } from "@/store/engagement-store";
 import { useUnreadNotificationCount } from "@/lib/use-unread-notification-count";
+import { useUnreadDMCount } from "@/lib/use-unread-dm-count";
 import { getOrCreateThread } from "@/lib/dm";
 import type { Creator } from "@/lib/types";
 
@@ -69,7 +70,13 @@ export function ProfileHeader({
   const blocked = useEngagementStore((s) => !!s.blockedUsers[creator.id]);
   const toggleFollow = useEngagementStore((s) => s.toggleFollow);
   const toggleBlock = useEngagementStore((s) => s.toggleBlock);
-  const unreadCount = useUnreadNotificationCount(own ? creator.id : null);
+  // The Inbox icon leads to /inbox, which shows BOTH a notifications list
+  // and a DM thread list — the badge needs to reflect either, not just
+  // notifications (which was the only signal it used before, so an unread
+  // DM with zero unread notifications used to show no badge at all).
+  const unreadNotificationCount = useUnreadNotificationCount(own ? creator.id : null);
+  const unreadDMCount = useUnreadDMCount(own ? creator.id : null);
+  const unreadCount = unreadNotificationCount + unreadDMCount;
 
   async function handleMessage() {
     setMessaging(true);
