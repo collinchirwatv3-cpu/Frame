@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AtSign,
@@ -20,6 +21,7 @@ import { EditProfileModal } from "@/components/profile/EditProfileModal";
 import { formatCount, shareContent } from "@/lib/utils";
 import { useEngagementStore } from "@/store/engagement-store";
 import { useUnreadNotificationCount } from "@/lib/use-unread-notification-count";
+import { getOrCreateThread } from "@/lib/dm";
 import type { Creator } from "@/lib/types";
 
 function Stat({ value, label, href }: { value: number; label: string; href?: string }) {
@@ -58,14 +60,28 @@ export function ProfileHeader({
    * hides Settings/Inbox/Edit Profile, shows Follow instead. */
   own?: boolean;
 }) {
+  const router = useRouter();
   const [shared, setShared] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [blockError, setBlockError] = useState(false);
+  const [actionError, setActionError] = useState(false);
+  const [messaging, setMessaging] = useState(false);
   const following = useEngagementStore((s) => !!s.followedCreators[creator.id]);
   const blocked = useEngagementStore((s) => !!s.blockedUsers[creator.id]);
   const toggleFollow = useEngagementStore((s) => s.toggleFollow);
   const toggleBlock = useEngagementStore((s) => s.toggleBlock);
   const unreadCount = useUnreadNotificationCount(own ? creator.id : null);
+
+  async function handleMessage() {
+    setMessaging(true);
+    const threadId = await getOrCreateThread(creator.id);
+    setMessaging(false);
+    if (threadId) {
+      router.push(`/inbox/messages/${threadId}`);
+    } else {
+      setActionError(true);
+      window.setTimeout(() => setActionError(false), 2400);
+    }
+  }
 
   async function handleBlock() {
     if (
@@ -77,16 +93,16 @@ export function ProfileHeader({
     }
     const ok = await toggleBlock(creator.id, true);
     if (!ok) {
-      setBlockError(true);
-      window.setTimeout(() => setBlockError(false), 2400);
+      setActionError(true);
+      window.setTimeout(() => setActionError(false), 2400);
     }
   }
 
   async function handleUnblock() {
     const ok = await toggleBlock(creator.id, false);
     if (!ok) {
-      setBlockError(true);
-      window.setTimeout(() => setBlockError(false), 2400);
+      setActionError(true);
+      window.setTimeout(() => setActionError(false), 2400);
     }
   }
 
@@ -270,6 +286,14 @@ export function ProfileHeader({
               >
                 {following ? "Following" : "Follow"}
               </button>
+              <button
+                onClick={handleMessage}
+                disabled={messaging}
+                aria-label={`Message @${creator.username}`}
+                className="w-9 h-9 rounded-full border border-border flex items-center justify-center shrink-0 hover:bg-card transition-colors disabled:opacity-50"
+              >
+                <MessageCircle size={15} />
+              </button>
               <div className="relative flex-1">
                 <button
                   onClick={handleShare}
@@ -294,7 +318,7 @@ export function ProfileHeader({
             </>
           )}
           <AnimatePresence>
-            {blockError && (
+            {actionError && (
               <motion.span
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}

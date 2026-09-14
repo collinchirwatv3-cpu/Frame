@@ -82,6 +82,11 @@ export const partyCreateRateLimiter = makeLimiter(10, "1 h", "party-create");
  * engagement toggles), tight enough to still bound a scripted mass-block. */
 export const blockRateLimiter = makeLimiter(30, "1 h", "block");
 
+/** Sending a DM — same reasoning as commentRateLimiter (free-text content,
+ * the classic spam-bot target), tight enough to blunt a scripted flood
+ * without constraining a real conversation. */
+export const dmMessageRateLimiter = makeLimiter(30, "1 m", "dm-message");
+
 export type RateLimitResult = { success: boolean; limit: number; remaining: number; reset: number };
 
 export async function checkRateLimit(

@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
 import { ProfileHeader } from "./ProfileHeader";
 import type { Creator } from "@/lib/types";
@@ -7,6 +7,18 @@ import type { Creator } from "@/lib/types";
 let unreadCount = 0;
 vi.mock("@/lib/use-unread-notification-count", () => ({
   useUnreadNotificationCount: () => unreadCount,
+}));
+
+const pushSpy = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pushSpy, replace: vi.fn() }) }));
+
+let getOrCreateThreadResult: string | null = "t1";
+const getOrCreateThreadSpy = vi.fn();
+vi.mock("@/lib/dm", () => ({
+  getOrCreateThread: async (otherUserId: string) => {
+    getOrCreateThreadSpy(otherUserId);
+    return getOrCreateThreadResult;
+  },
 }));
 
 const creator: Creator = {
@@ -20,6 +32,34 @@ const creator: Creator = {
   following: 0,
   totalViews: 0,
 };
+
+beforeEach(() => {
+  pushSpy.mockClear();
+  getOrCreateThreadSpy.mockClear();
+  getOrCreateThreadResult = "t1";
+});
+
+describe("ProfileHeader — Message button", () => {
+  it("navigates to the thread once one is found or created", async () => {
+    render(<ProfileHeader creator={creator} isCreator={false} videoCount={0} own={false} />);
+    fireEvent.click(screen.getByLabelText(`Message @${creator.username}`));
+    await waitFor(() => expect(pushSpy).toHaveBeenCalledWith("/inbox/messages/t1"));
+    expect(getOrCreateThreadSpy).toHaveBeenCalledWith(creator.id);
+  });
+
+  it("shows an error and does not navigate when the thread can't be created (e.g. a blocked pair)", async () => {
+    getOrCreateThreadResult = null;
+    render(<ProfileHeader creator={creator} isCreator={false} videoCount={0} own={false} />);
+    fireEvent.click(screen.getByLabelText(`Message @${creator.username}`));
+    await waitFor(() => expect(screen.getByText("Couldn't update that — try again")).toBeInTheDocument());
+    expect(pushSpy).not.toHaveBeenCalled();
+  });
+
+  it("has no Message button on your own profile", () => {
+    render(<ProfileHeader creator={creator} isCreator videoCount={0} own />);
+    expect(screen.queryByLabelText(`Message @${creator.username}`)).not.toBeInTheDocument();
+  });
+});
 
 describe("ProfileHeader — Inbox unread badge", () => {
   it("shows no dot when there are no unread notifications", () => {

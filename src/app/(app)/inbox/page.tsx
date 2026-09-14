@@ -43,7 +43,7 @@ export default function InboxPage() {
         onMarkRead={markRead}
         onMarkAllRead={markAllRead}
       />
-      <DMThreadList />
+      <DMThreadList userId={userId} />
     </div>
   );
 }
