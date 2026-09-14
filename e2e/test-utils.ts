@@ -36,3 +36,19 @@ export async function skipOnboarding(page: Page) {
     await page.getByRole("button", { name: "Skip for now" }).click();
   }
 }
+
+/** Same end state as skipOnboarding (past both the invite gate and
+ * OnboardingGate), but seeds BOTH localStorage-persisted gates directly via
+ * addInitScript instead of clicking through the UI — for specs that
+ * navigate straight to a deep route (like a specific DM thread) rather
+ * than starting from "/", where skipOnboarding's own navigation and
+ * click-through would be redundant work on every new browser context. */
+export async function bypassOnboardingGate(page: Page) {
+  await bypassInviteGate(page);
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "frame-onboarding",
+      JSON.stringify({ state: { completed: true, interests: [], hasHydrated: true }, version: 0 })
+    );
+  });
+}

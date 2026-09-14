@@ -13,7 +13,11 @@ const URL_BASE = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const admin = createClient(URL_BASE, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
 
+let pass = 0;
+let fail = 0;
 function log(label, ok, extra = "") {
+  if (ok) pass++;
+  else fail++;
   console.log(`${ok ? "PASS" : "FAIL"} — ${label}${extra ? " " + extra : ""}`);
 }
 
@@ -48,7 +52,7 @@ try {
   if (schemaCheckErr && /could not find the function|does not exist/i.test(schemaCheckErr.message)) {
     console.log("BLOCKED — 20260917020000_dm_fixes_2.sql has not been applied to this project yet.");
     console.log("  (" + schemaCheckErr.message + ")");
-    process.exit(0);
+    process.exit(1);
   }
 
   A = await makeUser("a");
@@ -137,10 +141,43 @@ try {
   // itself correctly returns >1 page's worth across repeated calls with an
   // advancing cursor, which the pagination check above already exercises
   // via fetch_dm_messages_before's sibling function.
+} catch (err) {
+  // Surfaced explicitly, not left to propagate past the finally block
+  // below: process.exit() there would otherwise terminate the process
+  // before an exception thrown here ever got printed.
+  console.error("\nSCRIPT ERROR (not a check failure — a setup/assertion step itself threw):", err);
+  fail++;
 } finally {
   console.log("\ncleaning up...");
-  for (const id of cleanupMessageIds) await admin.from("dm_messages").delete().eq("id", id);
-  if (threadId) await admin.from("dm_threads").delete().eq("id", threadId);
-  for (const u of [A, B]) if (u) await admin.auth.admin.deleteUser(u.id);
-  console.log("done.");
+  let cleanupFailed = false;
+  for (const id of cleanupMessageIds) {
+    const { error } = await admin.from("dm_messages").delete().eq("id", id);
+    if (error) {
+      cleanupFailed = true;
+      console.error(`  cleanup FAILED deleting message ${id}: ${error.message}`);
+    }
+  }
+  if (threadId) {
+    const { error } = await admin.from("dm_threads").delete().eq("id", threadId);
+    if (error) {
+      cleanupFailed = true;
+      console.error(`  cleanup FAILED deleting thread ${threadId}: ${error.message}`);
+    }
+  }
+  for (const u of [A, B]) {
+    if (!u) continue;
+    const { error } = await admin.auth.admin.deleteUser(u.id);
+    if (error) {
+      cleanupFailed = true;
+      console.error(`  cleanup FAILED deleting user ${u.id}: ${error.message}`);
+    }
+  }
+  if (cleanupFailed) {
+    fail++;
+    console.error("cleanup reported failures — see above (test data may still be lingering on this project).");
+  } else {
+    console.log("done.");
+  }
+  console.log(`\n${pass} passed, ${fail} failed.`);
+  process.exit(fail > 0 ? 1 : 0);
 }

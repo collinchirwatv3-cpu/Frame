@@ -259,6 +259,20 @@ export default function DMThreadPage() {
     setHasMoreOlder(false);
     setLoadOlderError(false);
     setSyncIncomplete(false);
+    // Every other piece of state tied to an in-flight operation on the OLD
+    // conversation — a send, a history load, a sync retry, the composer's
+    // own draft/error display — reset here too. Without this, a pending
+    // send or loadOlder left running when the user navigates away bails
+    // out of its own epoch check without ever flipping its "in progress"
+    // flag back off (the flag belongs to whichever identity was current
+    // when it was set, and after this reset that's no longer the current
+    // one to update), leaving the composer or "Load earlier" button stuck
+    // disabled on the NEW conversation forever.
+    setSending(false);
+    setSendError(false);
+    setLoadingOlder(false);
+    setSyncRetrying(false);
+    setDraft("");
   }
 
   // The two ref resets tied to the same identity change can't live in the
@@ -294,11 +308,16 @@ export default function DMThreadPage() {
 
   async function retrySync() {
     if (syncRetrying) return;
+    const myEpoch = epochRef.current;
     setSyncRetrying(true);
     try {
       await refresh();
     } finally {
-      setSyncRetrying(false);
+      // Guarded: if the identity changed mid-retry, the reset above already
+      // set syncRetrying back to false for the new conversation, which may
+      // by now have its OWN retry genuinely in progress — this stale
+      // completion must not clear that.
+      if (epochRef.current === myEpoch) setSyncRetrying(false);
     }
   }
 
@@ -360,7 +379,14 @@ export default function DMThreadPage() {
         setMessages((prev) => mergeAndSort(prev, [sent]));
       } else {
         setSendError(true);
-        window.setTimeout(() => setSendError(false), 2400);
+        // Epoch-guarded: an identity change already reset sendError for
+        // the new conversation (and reset it to false regardless), so an
+        // unguarded callback firing later could otherwise clear a genuine
+        // NEW send error that happens to occur within this same 2.4s
+        // window, rather than the stale one it actually belongs to.
+        window.setTimeout(() => {
+          if (epochRef.current === myEpoch) setSendError(false);
+        }, 2400);
       }
     } catch {
       // sendMessage itself never throws (it catches network failures
@@ -371,7 +397,14 @@ export default function DMThreadPage() {
       // cleanup but still re-throws, `catch` actually stops it here.
       if (epochRef.current === myEpoch) {
         setSendError(true);
-        window.setTimeout(() => setSendError(false), 2400);
+        // Epoch-guarded: an identity change already reset sendError for
+        // the new conversation (and reset it to false regardless), so an
+        // unguarded callback firing later could otherwise clear a genuine
+        // NEW send error that happens to occur within this same 2.4s
+        // window, rather than the stale one it actually belongs to.
+        window.setTimeout(() => {
+          if (epochRef.current === myEpoch) setSendError(false);
+        }, 2400);
       }
     } finally {
       if (epochRef.current === myEpoch) setSending(false);

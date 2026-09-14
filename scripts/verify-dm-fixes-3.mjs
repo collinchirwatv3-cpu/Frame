@@ -55,6 +55,17 @@ async function threadBetween(client, otherId) {
   return data;
 }
 
+/** Never assume which of two users lands in user_a_id vs user_b_id —
+ * get_or_create_dm_thread orders by raw UUID comparison (v_me < other_id),
+ * unrelated to which side initiated the call or which JS variable name it
+ * has here. Always read the real row back before deciding which column a
+ * given user's state lives in. */
+async function roleOf(threadId, userId) {
+  const { data, error } = await admin.from("dm_threads").select("user_a_id, user_b_id").eq("id", threadId).single();
+  if (error) throw error;
+  return data.user_a_id === userId ? "a" : "b";
+}
+
 let A, B, C, threadAB, threadAC;
 const cleanupMessageIds = [];
 const cleanupThreadIds = [];
@@ -72,7 +83,7 @@ try {
     console.log("  (" + schemaCheckErr.message + ")");
     console.log("Remaining step: apply supabase/migrations/20260917020000_dm_fixes_2.sql and");
     console.log("20260917030000_dm_fixes_3.sql (in that order) to this project, then re-run this script.");
-    process.exit(0);
+    process.exit(1);
   }
 
   A = await makeUser("a");
@@ -194,6 +205,11 @@ try {
   if (realMsgErr) throw new Error(`setup insert for read-boundary checks failed: ${realMsgErr.message}`);
   cleanupMessageIds.push(realMsg.id);
 
+  // B is not necessarily user_b_id — derive the real column to assert
+  // against rather than assuming.
+  const bRole = await roleOf(threadAB, B.id);
+  const aRole = bRole === "a" ? "b" : "a";
+
   const { error: fakeBoundaryErr } = await B.client.rpc("mark_dm_thread_read", {
     target_thread_id: threadAB,
     p_through_created_at: new Date().toISOString(),
@@ -219,7 +235,7 @@ try {
     .single();
   log(
     "The read call from B only advances B's own read column, never A's (caller-only)",
-    afterRealRead.user_b_last_read_message_id === realMsg.id && afterRealRead.user_a_last_read_message_id !== realMsg.id
+    afterRealRead[`user_${bRole}_last_read_message_id`] === realMsg.id && afterRealRead[`user_${aRole}_last_read_message_id`] !== realMsg.id
   );
 
   // Monotonic: a stale, earlier boundary must not regress what's recorded.
@@ -237,13 +253,13 @@ try {
   });
   const { data: afterStaleRead } = await admin
     .from("dm_threads")
-    .select("user_b_last_read_message_id")
+    .select("user_a_last_read_message_id, user_b_last_read_message_id")
     .eq("id", threadAB)
     .single();
   log(
     "A stale (earlier) read boundary is a no-op — read progress never regresses",
-    afterStaleRead.user_b_last_read_message_id === realMsg.id,
-    `(still ${afterStaleRead.user_b_last_read_message_id})`
+    afterStaleRead[`user_${bRole}_last_read_message_id`] === realMsg.id,
+    `(still ${afterStaleRead[`user_${bRole}_last_read_message_id`]})`
   );
 
   // Tied timestamps + concurrent commits: two messages at the EXACT same
@@ -269,12 +285,12 @@ try {
   });
   const { data: afterTiedFirst } = await admin
     .from("dm_threads")
-    .select("user_b_last_read_message_id")
+    .select("user_a_last_read_message_id, user_b_last_read_message_id")
     .eq("id", threadAB)
     .single();
   log(
     "Marking read through the FIRST of a tied-timestamp pair does not also count the second as read",
-    afterTiedFirst.user_b_last_read_message_id === first.id
+    afterTiedFirst[`user_${bRole}_last_read_message_id`] === first.id
   );
 
   const { error: secondBoundaryErr } = await B.client.rpc("mark_dm_thread_read", {
@@ -284,12 +300,12 @@ try {
   });
   const { data: afterTiedSecond } = await admin
     .from("dm_threads")
-    .select("user_b_last_read_message_id")
+    .select("user_a_last_read_message_id, user_b_last_read_message_id")
     .eq("id", threadAB)
     .single();
   log(
     "Explicitly advancing through the SECOND of the tied pair now succeeds and does advance",
-    !secondBoundaryErr && afterTiedSecond.user_b_last_read_message_id === second.id
+    !secondBoundaryErr && afterTiedSecond[`user_${bRole}_last_read_message_id`] === second.id
   );
 } catch (err) {
   // Surfaced explicitly rather than left to propagate past the finally
@@ -300,13 +316,39 @@ try {
   fail++;
 } finally {
   console.log("\ncleaning up...");
-  for (const id of cleanupMessageIds) await admin.from("dm_messages").delete().eq("id", id);
-  for (const id of cleanupThreadIds) await admin.from("dm_threads").delete().eq("id", id);
-  for (const id of cleanupUserIds) {
-    await admin.from("dm_rate_limit_state").delete().eq("sender_id", id);
-    await admin.auth.admin.deleteUser(id);
+  let cleanupFailed = false;
+  for (const id of cleanupMessageIds) {
+    const { error } = await admin.from("dm_messages").delete().eq("id", id);
+    if (error) {
+      cleanupFailed = true;
+      console.error(`  cleanup FAILED deleting message ${id}: ${error.message}`);
+    }
   }
-  console.log("done.");
+  for (const id of cleanupThreadIds) {
+    const { error } = await admin.from("dm_threads").delete().eq("id", id);
+    if (error) {
+      cleanupFailed = true;
+      console.error(`  cleanup FAILED deleting thread ${id}: ${error.message}`);
+    }
+  }
+  for (const id of cleanupUserIds) {
+    const rl = await admin.from("dm_rate_limit_state").delete().eq("sender_id", id);
+    if (rl.error) {
+      cleanupFailed = true;
+      console.error(`  cleanup FAILED deleting rate-limit state for ${id}: ${rl.error.message}`);
+    }
+    const { error } = await admin.auth.admin.deleteUser(id);
+    if (error) {
+      cleanupFailed = true;
+      console.error(`  cleanup FAILED deleting user ${id}: ${error.message}`);
+    }
+  }
+  if (cleanupFailed) {
+    fail++;
+    console.error("cleanup reported failures — see above (test data may still be lingering on this project).");
+  } else {
+    console.log("done.");
+  }
   console.log(`\n${pass} passed, ${fail} failed.`);
   process.exit(fail > 0 ? 1 : 0);
 }

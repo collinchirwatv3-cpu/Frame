@@ -52,7 +52,14 @@ let fetchMessagesInitialResult: QueuedResult = [MESSAGE_FROM_ME, MESSAGE_FROM_TH
 // thing every call.
 let fetchMessagesAfterQueue: QueuedResult[] = [];
 let fetchMessagesBeforeResult: QueuedResult = [];
+// Awaited before a "before" (loadOlder) call resolves — same pending-gate
+// pattern as fetchThreadGate, for tests that need to navigate away while a
+// history load is genuinely still in flight.
+let fetchMessagesBeforeGate: Promise<void> = Promise.resolve();
 let sendMessageResult: Message | null | "throw" = null;
+// Awaited before sendMessage resolves — same pending-gate pattern, for
+// tests that need to navigate away while a send is genuinely in flight.
+let sendMessageGate: Promise<void> = Promise.resolve();
 const markThreadReadSpy = vi.fn();
 const sendMessageSpy = vi.fn();
 const fetchMessagesSpy = vi.fn();
@@ -79,6 +86,7 @@ vi.mock("@/lib/dm", () => ({
       return next;
     }
     if (options?.before) {
+      await fetchMessagesBeforeGate;
       if (fetchMessagesBeforeResult === "throw") throw new Error("network down");
       return fetchMessagesBeforeResult;
     }
@@ -91,6 +99,7 @@ vi.mock("@/lib/dm", () => ({
   },
   sendMessage: async (threadId: string, text: string) => {
     sendMessageSpy(threadId, text);
+    await sendMessageGate;
     if (sendMessageResult === "throw") throw new Error("network exploded");
     return sendMessageResult;
   },
@@ -129,7 +138,9 @@ beforeEach(() => {
   fetchMessagesInitialResult = [MESSAGE_FROM_ME, MESSAGE_FROM_THEM];
   fetchMessagesAfterQueue = [];
   fetchMessagesBeforeResult = [];
+  fetchMessagesBeforeGate = Promise.resolve();
   sendMessageResult = null;
+  sendMessageGate = Promise.resolve();
   markThreadReadSpy.mockClear();
   sendMessageSpy.mockClear();
   fetchMessagesSpy.mockClear();
@@ -567,6 +578,145 @@ describe("DM thread page", () => {
 
       await waitFor(() => expect(screen.getByText("a different conversation")).toBeInTheDocument());
       expect(screen.queryByText("hey there")).not.toBeInTheDocument();
+    });
+
+    // Fourth-round finding 4: identity changes must reset every
+    // identity-specific operation flag, not just the ones covered above —
+    // otherwise a stale in-flight operation's own epoch-guarded early
+    // return skips clearing its "in progress" flag (it belongs to the OLD
+    // identity, which is no longer whose turn it is to update), leaving
+    // the NEW conversation's composer or "Load earlier" button stuck
+    // disabled with no way to recover short of a full remount.
+    it("navigating away while a send is in flight resets sending — the new conversation's composer isn't stuck disabled", async () => {
+      const { rerender } = render(<DMThreadPage />);
+      await waitFor(() => expect(screen.getByText("hey there")).toBeInTheDocument());
+
+      const gate = createGate();
+      sendMessageGate = gate.promise;
+      sendMessageResult = { id: "mX", threadId: "t1", senderId: "me", text: "stuck in flight", createdAt: "2026-09-01T00:05:00.000Z" };
+      fireEvent.change(screen.getByPlaceholderText("Message…"), { target: { value: "stuck in flight" } });
+      fireEvent.click(screen.getByLabelText("Send message"));
+      await waitFor(() => expect(sendMessageSpy).toHaveBeenCalledTimes(1));
+
+      // Navigate away WHILE the send is still pending behind the gate.
+      currentThreadId = "t2";
+      rerender(<DMThreadPage />);
+      await waitFor(() => expect(screen.getByPlaceholderText("Message…")).toBeInTheDocument());
+
+      // Only now does the stale send resolve — its own epoch check makes
+      // it a no-op, but that must not leave `sending` permanently true.
+      gate.release();
+      await waitFor(() => expect(sendMessageSpy).toHaveBeenCalledTimes(1));
+
+      fireEvent.change(screen.getByPlaceholderText("Message…"), { target: { value: "a message on the new conversation" } });
+      expect(screen.getByLabelText("Send message")).not.toBeDisabled();
+    });
+
+    it("navigating away while loadOlder is in flight resets loadingOlder — 'Load earlier' isn't stuck disabled on the new conversation", async () => {
+      fetchMessagesInitialResult = messagePage(100, 0, "p1-");
+      const { rerender } = render(<DMThreadPage />);
+      await waitFor(() => expect(screen.getByText("Load earlier messages")).toBeInTheDocument());
+
+      const gate = createGate();
+      fetchMessagesBeforeGate = gate.promise;
+      fireEvent.click(screen.getByText("Load earlier messages"));
+      await waitFor(() => expect(screen.getByText("Loading…")).toBeInTheDocument());
+
+      // Navigate away WHILE the history load is still pending behind the
+      // gate — the new thread also has a full page, so "Load earlier"
+      // renders fresh and can be checked as actually enabled, not just
+      // absent.
+      fetchMessagesInitialResult = messagePage(100, 1, "p2-");
+      currentThreadId = "t2";
+      rerender(<DMThreadPage />);
+      await waitFor(() => expect(screen.getByText("Load earlier messages")).toBeInTheDocument());
+
+      // Only now does the stale history load resolve.
+      gate.release();
+
+      // Must still read "Load earlier messages" (enabled), never stuck on
+      // "Loading…" because of the old thread's now-resolving call.
+      expect(screen.getByText("Load earlier messages")).toBeInTheDocument();
+      expect(screen.queryByText("Loading…")).not.toBeInTheDocument();
+    });
+
+    it("navigating to a different thread clears the composer's draft text", async () => {
+      const { rerender } = render(<DMThreadPage />);
+      await waitFor(() => expect(screen.getByText("hey there")).toBeInTheDocument());
+
+      fireEvent.change(screen.getByPlaceholderText("Message…"), { target: { value: "half-typed message for t1" } });
+      expect(screen.getByPlaceholderText("Message…")).toHaveValue("half-typed message for t1");
+
+      currentThreadId = "t2";
+      rerender(<DMThreadPage />);
+
+      await waitFor(() => expect(screen.getByPlaceholderText("Message…")).toHaveValue(""));
+    });
+
+    it("a stale send-error timeout does not clear a genuine error on the new conversation", async () => {
+      // Fake timers give precise control over exactly when each of the two
+      // competing 2.4s auto-dismiss timers (t1's stale one, t2's own
+      // genuine one) fires — a real-time version of this test can't
+      // distinguish "the stale timer incorrectly fired" from "the new
+      // conversation's own legitimate timer fired at roughly the same
+      // moment," since both are scheduled only moments apart. Advancing
+      // fake time also flushes microtasks (the mocked fetch/send promises
+      // all resolve on the microtask queue, never via a real timer), so
+      // it stands in for waitFor here.
+      vi.useFakeTimers();
+      try {
+        const { rerender } = render(<DMThreadPage />);
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+        });
+        expect(screen.getByText("hey there")).toBeInTheDocument();
+
+        // t1's failure at fake time T0 — schedules a clear-at-T0+2400 timer.
+        sendMessageResult = null;
+        fireEvent.change(screen.getByPlaceholderText("Message…"), { target: { value: "fails on t1" } });
+        fireEvent.click(screen.getByLabelText("Send message"));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+        });
+        expect(screen.getByText("Couldn't send that — try again")).toBeInTheDocument();
+
+        // Navigate to t2 a short, fixed 100ms later (T0+100).
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(100);
+        });
+        currentThreadId = "t2";
+        rerender(<DMThreadPage />);
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+        });
+
+        // t2's GENUINE failure at T0+100 — schedules ITS OWN clear-at-
+        // T0+2500 timer.
+        fireEvent.change(screen.getByPlaceholderText("Message…"), { target: { value: "fails on t2" } });
+        fireEvent.click(screen.getByLabelText("Send message"));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+        });
+        expect(screen.getByText("Couldn't send that — try again")).toBeInTheDocument();
+
+        // Advance to exactly T0+2400 — t1's stale timer fires here. An
+        // unguarded version would clear sendError now, 2300ms before t2's
+        // own genuine error is actually due to auto-dismiss.
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(2300);
+        });
+        expect(screen.getByText("Couldn't send that — try again")).toBeInTheDocument();
+
+        // Past T0+2500 (t2's own timer) — the error DOES correctly
+        // auto-dismiss eventually, on its own schedule, proving this isn't
+        // just a permanently-stuck error either.
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(200);
+        });
+        expect(screen.queryByText("Couldn't send that — try again")).not.toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 
