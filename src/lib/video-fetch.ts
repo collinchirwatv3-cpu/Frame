@@ -20,6 +20,7 @@ type Row = {
   comments_count: number;
   shares_count: number;
   saves_count: number;
+  view_count: number;
   profiles: {
     id: string;
     username: string;
@@ -42,7 +43,7 @@ type Row = {
 const SELECT = `
   id, playback_url, poster_url, title, description, category, content_type, sound_name, created_at,
   duration_seconds, width, height, badges,
-  likes_count, comments_count, shares_count, saves_count,
+  likes_count, comments_count, shares_count, saves_count, view_count,
   profiles!videos_creator_id_fkey ( id, username, display_name, avatar_url, banner_url, bio, website, verified, followers_count, following_count, total_views )
 `;
 
@@ -76,6 +77,7 @@ function toVideo(row: Row): Video | null {
     comments: row.comments_count,
     shares: row.shares_count,
     saves: row.saves_count,
+    views: row.view_count,
     durationSeconds: row.duration_seconds,
     width: row.width,
     height: row.height,

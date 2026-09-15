@@ -14,6 +14,7 @@ import { usePlayerStore } from "@/store/player-store";
 import { useCurrentUserStore } from "@/store/current-user-store";
 import { createClient } from "@/lib/supabase/client";
 import { fadeVolume, playWithMutedFallback } from "@/lib/audio";
+import { recordVideoView } from "@/lib/video-views";
 import { FOCUS_PULL_TRANSITION, CHROME_FADE_TRANSITION } from "@/lib/motion";
 import type { Video } from "@/lib/types";
 
@@ -69,10 +70,13 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
 
     if (!active) {
       // Leaving this scene — record it as watched before the position resets
-      // (below), so Home's History section has something real to read.
-      // Below a few seconds is probably a scroll-past, not a watch — not
-      // worth recording. Fire-and-forget: history is a nice-to-have, never
-      // worth blocking or erroring the actual scroll transition over.
+      // (below), so Home's History section has something real to read, and
+      // record a real view (record_video_view is insert-once per viewer per
+      // video server-side, so this is safe to call every time this branch
+      // runs, not just the first). Below a few seconds is probably a
+      // scroll-past, not a watch — not worth recording either. Fire-and-
+      // forget: neither is worth blocking or erroring the actual scroll
+      // transition over.
       if (ownProfile && el.currentTime > 3) {
         const supabase = createClient();
         supabase
@@ -87,6 +91,7 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
             () => {},
             () => {}
           );
+        recordVideoView(video.id);
       }
 
       // Fade audio out before the hard cut, don't just snap silent.

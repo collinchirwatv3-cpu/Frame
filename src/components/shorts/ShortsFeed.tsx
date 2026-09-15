@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
-import { cn } from "@/lib/utils";
+import { cn, formatCount } from "@/lib/utils";
 import { ActionRail } from "@/components/feed/ActionRail";
 import { PlaybackControls } from "@/components/feed/PlaybackControls";
 import { Avatar } from "@/components/ui/Avatar";
@@ -12,7 +12,9 @@ import { CommentDrawer } from "@/components/feed/CommentDrawer";
 import { VideoOptionsSheet } from "@/components/feed/VideoOptionsSheet";
 import { usePlayerStore } from "@/store/player-store";
 import { useEngagementStore } from "@/store/engagement-store";
+import { useCurrentUserStore } from "@/store/current-user-store";
 import { playWithMutedFallback } from "@/lib/audio";
+import { recordVideoView } from "@/lib/video-views";
 import { CHROME_FADE_TRANSITION, FOCUS_PULL_TRANSITION } from "@/lib/motion";
 import { CHROME_TAP_SCALE } from "@/lib/chrome";
 import type { Video } from "@/lib/types";
@@ -68,6 +70,7 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
   // (the main feed's equivalent caption) uses for its own Follow pill.
   const followedCreators = useEngagementStore((s) => s.followedCreators);
   const toggleFollow = useEngagementStore((s) => s.toggleFollow);
+  const ownProfile = useCurrentUserStore((s) => s.profile);
 
   // Director Mode is scoped to whichever feed is actually on screen —
   // don't leave it engaged for some other route after navigating away.
@@ -149,6 +152,12 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
     videoRefs.current.forEach((video, index) => {
       if (!video) return;
       if (index !== activeIndex) {
+        // Same >3s "real watch, not a scroll-past" threshold VideoCard.tsx
+        // uses for watch_progress — record_video_view is insert-once per
+        // viewer per video server-side, so re-firing this on every effect
+        // rerun (e.g. toggling mute) for an already-watched neighbor is a
+        // harmless no-op, not worth deduping client-side.
+        if (ownProfile && video.currentTime > 3) recordVideoView(shorts[index].id);
         video.pause();
         return;
       }
@@ -164,7 +173,7 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
       cancelled = true;
       cleanups.forEach((fn) => fn());
     };
-  }, [activeIndex, shorts.length, muted]);
+  }, [activeIndex, shorts, muted, ownProfile]);
 
   // Had no keyboard path at all before this — SwipeFeed's own arrow-key
   // scroll (src/components/feed/SwipeFeed.tsx) was never mirrored here.
@@ -329,6 +338,11 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
                     </motion.button>
                   </div>
                   <p className="text-xs text-text-secondary leading-tight truncate">{short.title}</p>
+                  {short.views !== undefined && (
+                    <p className="text-[11px] text-text-secondary/80 leading-tight">
+                      {formatCount(short.views)} views
+                    </p>
+                  )}
                 </motion.div>
               </>
             )}

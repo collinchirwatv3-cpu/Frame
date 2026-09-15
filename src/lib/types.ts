@@ -79,6 +79,12 @@ export type Video = {
   comments: number;
   shares: number;
   saves: number;
+  /** Real, from videos.view_count — distinct signed-in viewers who've
+   * watched past 3s (see the record_video_view migration). Optional only
+   * for mock-data/pre-migration fixtures; every real video-fetch.ts row has
+   * it. Unlike the creator-level totalViews below, this one is real and
+   * actually increments — don't conflate the two. */
+  views?: number;
   durationSeconds: number;
   /** Real encoded dimensions — the single source of truth for aspect ratio,
    * classification, and player letterbox/pillarbox behavior. */
@@ -86,13 +92,10 @@ export type Video = {
   height: number;
   badges?: Badge[];
   details?: VideoDetails;
-  /** ISO timestamp — videos.created_at. Real "published time," unlike a
-   * view count: there is no views_count anywhere this app actually
-   * increments (videos.view_count exists in the schema but nothing writes
-   * to it), so this app never displays a views stat rather than showing an
-   * always-zero one. Optional, same as contentType/soundName/badges above —
-   * absent for mock-data/test fixtures and any Video built before this
-   * field existed, present for everything real video-fetch.ts returns. */
+  /** ISO timestamp — videos.created_at. Optional, same as
+   * contentType/soundName/badges/views above — absent for mock-data/test
+   * fixtures and any Video built before this field existed, present for
+   * everything real video-fetch.ts returns. */
   createdAt?: string;
 };
 

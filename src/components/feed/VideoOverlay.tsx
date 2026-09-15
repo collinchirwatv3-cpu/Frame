@@ -7,7 +7,7 @@ import { BadgeRow } from "@/components/ui/BadgeRow";
 import { computeBadges } from "@/lib/badges";
 import { useEngagementStore } from "@/store/engagement-store";
 import { CHROME_TAP_SCALE } from "@/lib/chrome";
-import { cn } from "@/lib/utils";
+import { cn, formatCount } from "@/lib/utils";
 import type { Video } from "@/lib/types";
 
 export function VideoOverlay({
@@ -53,15 +53,20 @@ export function VideoOverlay({
       </div>
       <BadgeRow badges={computeBadges(video)} />
       {/* Title wasn't shown anywhere in this overlay before — only in
-          VideoDetailsSheet and the Discover/Home shelf grids. Kept
-          "Shot details" as the tap label rather than "View full video":
-          this genuinely opens camera/lens/tags details, not a separate
-          full video, and this app has no video.views stat to show either
-          (videos.view_count exists but nothing increments it — see
-          Video.createdAt's own doc comment in lib/types.ts; showing a
-          number here would just be a fake always-zero stat). */}
+          VideoDetailsSheet and the Discover/Home shelf grids. Kept "Shot
+          details" as the tap label rather than "View full video": this
+          genuinely opens camera/lens/tags details, not a separate full
+          video — this app's Community Clips feature already owns that
+          language for the one place it actually applies. views is real now
+          (record_video_view / videos.view_count), shown only when present
+          since mock-data/pre-migration fixtures don't have it — no fake
+          always-zero stat, same principle as before, now with real data
+          instead of an omission. */}
       <button onClick={onOpenDetails} className="text-left">
         <h2 className="font-bold text-lg leading-snug">{video.title}</h2>
+        {video.views !== undefined && (
+          <p className="text-xs text-text-secondary mt-0.5">{formatCount(video.views)} views</p>
+        )}
         {video.description && (
           <p className="text-sm leading-snug text-accent/95 line-clamp-2 mt-0.5">{video.description}</p>
         )}
