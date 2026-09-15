@@ -50,6 +50,7 @@ export function VideoDetailsSheet({
   const d = video.details;
   const fetchClips = useClipsStore((s) => s.fetchClips);
   const clips = useClipsStore((s) => s.byVideoId[video.id] ?? EMPTY_CLIPS);
+  const tagEpoch = useTagsStore((s) => s.epoch);
   const fetchVideoTagTiers = useTagsStore((s) => s.fetchVideoTagTiers);
   const { secondary, technical } = useTagsStore(selectVideoTagTiers(video.id));
 
@@ -60,7 +61,7 @@ export function VideoDetailsSheet({
       fetchClips(video.id);
       fetchVideoTagTiers(video.id);
     }
-  }, [open, video.id, fetchClips, fetchVideoTagTiers]);
+  }, [open, video.id, fetchClips, fetchVideoTagTiers, tagEpoch]);
 
   return (
     <AnimatePresence>

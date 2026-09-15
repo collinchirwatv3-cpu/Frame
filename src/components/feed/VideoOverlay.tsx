@@ -21,6 +21,7 @@ export function VideoOverlay({
 }) {
   const following = useEngagementStore((s) => !!s.followedCreators[video.creator.id]);
   const toggleFollow = useEngagementStore((s) => s.toggleFollow);
+  const tagEpoch = useTagsStore((s) => s.epoch);
   const fetchVideoTagTiers = useTagsStore((s) => s.fetchVideoTagTiers);
   const { primary } = useTagsStore(selectVideoTagTiers(video.id));
 
@@ -29,7 +30,7 @@ export function VideoOverlay({
   // when opened, but the primary chip here needs to show immediately.
   useEffect(() => {
     fetchVideoTagTiers(video.id);
-  }, [video.id, fetchVideoTagTiers]);
+  }, [video.id, fetchVideoTagTiers, tagEpoch]);
 
   return (
     <div className="max-w-[75%] flex flex-col gap-2">

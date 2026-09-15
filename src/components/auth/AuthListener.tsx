@@ -84,7 +84,7 @@ export function AuthListener() {
       // cache on every identity change (including sign-out) stops a
       // previous session's cached fetch from leaking into the next one
       // sharing this browser tab.
-      useTagsStore.getState().reset();
+      useTagsStore.getState().setIdentity(userId);
       if (!userId) {
         setProfile(null, null, false);
         return;

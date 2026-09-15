@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { act, render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthListener } from "./AuthListener";
 import { useEngagementStore } from "@/store/engagement-store";
@@ -16,6 +16,8 @@ import { useInviteStore } from "@/store/invite-store";
 // try/catch at all — a thrown network error there left setProfile never
 // called for that pass, which is exactly what "looks logged out" means to
 // the rest of the app.
+
+import { useTagsStore } from "@/store/tags-store";
 
 const USER_ID = "user-1";
 let getUserResult: { data: { user: { id: string } | null } } = { data: { user: { id: USER_ID } } };
@@ -52,6 +54,7 @@ let fetchCallCount = 0;
 let fetchBehavior: () => Promise<{ ok: boolean; status: number }> = async () => ({ ok: true, status: 200 });
 
 beforeEach(() => {
+  useTagsStore.setState({ userId: undefined, byVideoId: {}, loadingVideoIds: {}, errorVideoIds: {}, epoch: 0 });
   fromSpy.mockClear();
   fetchCallCount = 0;
   getUserResult = { data: { user: { id: USER_ID } } };
@@ -131,4 +134,22 @@ describe("AuthListener invite redemption", () => {
     expect(fetchCallCount).toBe(0);
     expect(useInviteStore.getState().validatedCode).toBe("REAL-CODE-123");
   });
+});
+
+
+it("keeps tags across same-user auth events and clears them on a real identity change", async () => {
+  render(<AuthListener />);
+  await vi.waitFor(() => expect(useTagsStore.getState().userId).toBe(USER_ID));
+  const tiers = { primary: [], secondary: [], technical: [] };
+  useTagsStore.setState({ byVideoId: { video: tiers } });
+  const epoch = useTagsStore.getState().epoch;
+  await act(async () => {
+    authStateChangeCallback?.("TOKEN_REFRESHED", { user: { id: USER_ID } });
+    authStateChangeCallback?.("SIGNED_IN", { user: { id: USER_ID } });
+  });
+  expect(useTagsStore.getState().epoch).toBe(epoch);
+  expect(useTagsStore.getState().byVideoId.video).toBe(tiers);
+  await act(async () => { authStateChangeCallback?.("SIGNED_OUT", null); });
+  expect(useTagsStore.getState().byVideoId).toEqual({});
+  expect(useTagsStore.getState().epoch).toBe(epoch + 1);
 });

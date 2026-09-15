@@ -20,6 +20,9 @@ type TagsState = {
    * tell its own result is stale and discard it instead of repopulating a
    * cache that was just intentionally cleared. */
   epoch: number;
+  /** undefined until auth resolves; null is the signed-out identity. */
+  userId: string | null | undefined;
+  setIdentity: (userId: string | null) => void;
   /** No-op if a fetch for this video is already in flight, or already
    * cached with no error — same "fetch once, cache by video id" shape as
    * clips-store.ts, but per-video and retry-capable on failure. Previously
@@ -39,6 +42,11 @@ export const useTagsStore = create<TagsState>()((set, get) => ({
   loadingVideoIds: {},
   errorVideoIds: {},
   epoch: 0,
+  userId: undefined,
+  setIdentity: (userId) => {
+    if (get().userId === userId) return;
+    set((s) => ({ userId, byVideoId: {}, loadingVideoIds: {}, errorVideoIds: {}, epoch: s.epoch + 1 }));
+  },
 
   fetchVideoTagTiers: async (videoId) => {
     const s = get();

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
 import { VideoDetailsSheet } from "./VideoDetailsSheet";
@@ -66,4 +66,13 @@ describe("VideoDetailsSheet", () => {
       rerender(<VideoDetailsSheet video={video} open onClose={() => {}} onPlayClip={() => {}} />)
     ).not.toThrow();
   });
+});
+
+
+it("refetches tags for an open sheet when the auth cache epoch changes", () => {
+  render(<VideoDetailsSheet video={video} open onClose={() => {}} onPlayClip={() => {}} />);
+  const fetchTags = useTagsStore.getState().fetchVideoTagTiers;
+  expect(fetchTags).toHaveBeenCalledTimes(1);
+  act(() => useTagsStore.getState().reset());
+  expect(fetchTags).toHaveBeenCalledTimes(2);
 });
