@@ -26,6 +26,7 @@ import { CameraCapture } from "./CameraCapture";
 import { ThumbnailPicker } from "./ThumbnailPicker";
 import { ContentTypeSelect } from "./tags/ContentTypeSelect";
 import { TagMultiSelect } from "./tags/TagMultiSelect";
+import { TagDropdownMultiSelect } from "./tags/TagDropdownMultiSelect";
 import { LocationPicker } from "./tags/LocationPicker";
 import { GearPicker } from "./tags/GearPicker";
 import { CollapsibleTagSection } from "./tags/CollapsibleTagSection";
@@ -606,7 +607,7 @@ export function UploadDropzone() {
             <ContentTypeSelect value={contentTypeTagId} onChange={setContentTypeTagId} />
           </div>
 
-          <TagMultiSelect
+          <TagDropdownMultiSelect
             label="Genre"
             categoryIds={["fiction_genre", "documentary_genre"]}
             max={3}
@@ -614,7 +615,7 @@ export function UploadDropzone() {
             onChange={setGenreTagIds}
             required
           />
-          <TagMultiSelect
+          <TagDropdownMultiSelect
             label="Topic"
             categoryIds={["sports", "lifestyle_subject", "music", "gaming", "technology_knowledge"]}
             max={5}

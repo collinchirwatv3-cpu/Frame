@@ -89,6 +89,26 @@ export async function fetchTagsByCategory(categoryId: string, limit = 200): Prom
   return (data as unknown as TagRow[]).map(toTag);
 }
 
+/** Same as fetchTagsByCategory, across multiple categories at once —
+ * Genre (fiction_genre + documentary_genre, ~80 tags combined) and Topic
+ * (5 categories) both need their full option set up front for
+ * TagDropdownMultiSelect, which filters client-side rather than
+ * re-querying per keystroke the way TagTypeahead's server search does. */
+export async function fetchTagsByCategories(categoryIds: string[], limit = 200): Promise<Tag[]> {
+  if (categoryIds.length === 0) return [];
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("tags")
+    .select(TAG_SELECT)
+    .in("category_id", categoryIds)
+    .is("parent_tag_id", null)
+    .eq("active", true)
+    .order("name")
+    .limit(limit);
+  if (error || !data) return [];
+  return (data as unknown as TagRow[]).map(toTag);
+}
+
 /** Every tag directly under a manufacturer/parent tag — used by GearPicker
  * to browse a manufacturer's models without typing anything. */
 export async function fetchChildTags(parentTagId: string): Promise<Tag[]> {
