@@ -18,8 +18,14 @@ vi.mock("@/lib/video-fetch", () => ({
   fetchFeaturedCollections: async () => [],
 }));
 
+vi.mock("@/lib/tags-fetch", () => ({
+  fetchTagCategories: async () => [],
+  fetchTagsByIds: async () => [],
+  searchTags: async () => [],
+}));
+
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ back: vi.fn() }),
+  useRouter: () => ({ back: vi.fn(), replace: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
 }));
 

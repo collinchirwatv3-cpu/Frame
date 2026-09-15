@@ -85,6 +85,23 @@ function toVideo(row: Row): Video | null {
   };
 }
 
+/** Resolves a combined-tag filter into matching video ids via the
+ * match_all_tags RPC — AND semantics (a video must carry every tag in
+ * `tagIds`), matching the spec's own combinable-filter example
+ * (Documentary + Surfing + Cinematic + 16mm + South Africa -> one feed).
+ * Returns null when no filter was requested at all (skip filtering
+ * entirely) — an empty `tagIds` array is "no filter," not "match
+ * nothing," so callers can tell the two apart. */
+async function resolveTagFilterIds(
+  supabase: ReturnType<typeof createClient>,
+  tagIds?: string[]
+): Promise<string[] | null> {
+  if (!tagIds || tagIds.length === 0) return null;
+  const { data, error } = await supabase.rpc("match_all_tags", { p_tag_ids: tagIds });
+  if (error || !data) return [];
+  return data as string[];
+}
+
 /** Public, ready videos only — RLS (videos_select_public) already enforces
  * this, this just fails gracefully instead of returning a half-built Video. */
 export async function fetchVideoById(id: string): Promise<Video | null> {
@@ -97,28 +114,43 @@ export async function fetchVideoById(id: string): Promise<Video | null> {
 /** Recent public films and longform videos — the cinematic library, excludes
  * shorts. Client-side query-filtered against `matchesVideoQuery` by callers
  * (Explore, watch-together's queue picker) rather than a new server-side
- * search feature. */
-export async function fetchPublicVideos(limit = 30): Promise<Video[]> {
+ * search feature. Optional `tagIds` narrows to videos carrying every one of
+ * those tags (see resolveTagFilterIds) — basic combined-tag filtering, not
+ * the full faceted discovery UI. */
+export async function fetchPublicVideos(limit = 30, tagIds?: string[]): Promise<Video[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
+  const filterIds = await resolveTagFilterIds(supabase, tagIds);
+  if (filterIds && filterIds.length === 0) return [];
+
+  let query = supabase
     .from("videos")
     .select(SELECT)
     .in("content_type", ["film", "longform"])
     .order("created_at", { ascending: false })
     .limit(limit);
+  if (filterIds) query = query.in("id", filterIds);
+
+  const { data, error } = await query;
   if (error || !data) return [];
   return (data as unknown as Row[]).map(toVideo).filter((v) => v !== null);
 }
 
-/** Recent public shorts (content_type = 'short') for the Shorts feed. */
-export async function fetchShorts(limit = 30): Promise<Video[]> {
+/** Recent public shorts (content_type = 'short') for the Shorts feed. Same
+ * optional combined-tag filter as fetchPublicVideos. */
+export async function fetchShorts(limit = 30, tagIds?: string[]): Promise<Video[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
+  const filterIds = await resolveTagFilterIds(supabase, tagIds);
+  if (filterIds && filterIds.length === 0) return [];
+
+  let query = supabase
     .from("videos")
     .select(SELECT)
     .eq("content_type", "short")
     .order("created_at", { ascending: false })
     .limit(limit);
+  if (filterIds) query = query.in("id", filterIds);
+
+  const { data, error } = await query;
   if (error || !data) return [];
   return (data as unknown as Row[]).map(toVideo).filter((v) => v !== null);
 }
@@ -193,9 +225,13 @@ export async function fetchFollowingVideos(userId: string, limit = 20): Promise<
  * Two-step rather than a single query: PostgREST's JS client doesn't expose
  * a NOT IN (subquery) filter, so watched ids are fetched first and excluded
  * client-side via .not("id", "in", ...). Fine at this catalog size; would
- * need a real view/RPC if a user's history ever gets large. */
-export async function fetchDiscoverVideos(userId: string | null, limit = 50): Promise<Video[]> {
+ * need a real view/RPC if a user's history ever gets large. Same optional
+ * combined-tag filter as fetchPublicVideos/fetchShorts — makes this shelf
+ * filter-capable; no dedicated filter-chip UI wired up for Discover yet. */
+export async function fetchDiscoverVideos(userId: string | null, limit = 50, tagIds?: string[]): Promise<Video[]> {
   const supabase = createClient();
+  const filterIds = await resolveTagFilterIds(supabase, tagIds);
+  if (filterIds && filterIds.length === 0) return [];
 
   let watchedIds: string[] = [];
   if (userId) {
@@ -213,6 +249,7 @@ export async function fetchDiscoverVideos(userId: string | null, limit = 50): Pr
     .order("created_at", { ascending: false })
     .limit(limit);
 
+  if (filterIds) query = query.in("id", filterIds);
   if (watchedIds.length > 0) {
     query = query.not("id", "in", `(${watchedIds.join(",")})`);
   }

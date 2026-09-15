@@ -4,21 +4,23 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, Search as SearchIcon } from "lucide-react";
+import { ArrowLeft, Search as SearchIcon, X } from "lucide-react";
 import { SwipeFeed } from "@/components/feed/SwipeFeed";
 import { ShortsFeed } from "@/components/shorts/ShortsFeed";
 import { CreatorRow } from "@/components/search/CreatorRow";
 import { FeaturedCollections } from "@/components/search/FeaturedCollections";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { TagTypeahead } from "@/components/upload/tags/TagTypeahead";
 import {
   fetchPublicVideos,
   fetchShorts,
   fetchTopCreators,
   fetchFeaturedCollections,
 } from "@/lib/video-fetch";
+import { fetchTagCategories, fetchTagsByIds } from "@/lib/tags-fetch";
 import { matchesVideoQuery } from "@/lib/search";
-import type { Collection, Creator, Video } from "@/lib/types";
+import type { Collection, Creator, Tag, Video } from "@/lib/types";
 
 /** Mirrors the real results grid (grid-cols-2 md:grid-cols-3, aspect-video
  * cards) so loading doesn't reflow into the eventual layout. */
@@ -60,12 +62,60 @@ export default function SearchPage() {
   const [topCreators, setTopCreators] = useState<Creator[]>([]);
   const [featuredCollections, setFeaturedCollections] = useState<Collection[]>([]);
 
+  // Basic combined-tag filtering (AND — see match_all_tags), not the full
+  // faceted discovery UI from the tag taxonomy spec. The URL is the single
+  // source of truth for which tags are active, same as `v`/selectedId
+  // above — a filtered search is shareable via its link.
+  const filterTagIdsParam = searchParams.get("tags") ?? "";
+  const filterTagIds = useMemo(() => filterTagIdsParam.split(",").filter(Boolean), [filterTagIdsParam]);
+  const [rawFilterTags, setRawFilterTags] = useState<Tag[]>([]);
+  // Derived, not reset via a synchronous setState in an effect — no
+  // active filter means "no chips" instantly.
+  const filterTags = filterTagIds.length === 0 ? [] : rawFilterTags;
+  const [allTagCategoryIds, setAllTagCategoryIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetchTagCategories().then((cats) => setAllTagCategoryIds(cats.map((c) => c.id)));
+  }, []);
+
+  useEffect(() => {
+    if (filterTagIds.length === 0) return;
+    let cancelled = false;
+    fetchTagsByIds(filterTagIds).then((tags) => {
+      if (!cancelled) setRawFilterTags(tags);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [filterTagIds]);
+
+  function addFilterTag(tag: Tag) {
+    if (filterTagIds.includes(tag.id)) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tags", [...filterTagIds, tag.id].join(","));
+    router.replace(`/search?${params.toString()}`);
+  }
+
+  function removeFilterTag(id: string) {
+    const next = filterTagIds.filter((existingId) => existingId !== id);
+    const params = new URLSearchParams(searchParams.toString());
+    if (next.length > 0) params.set("tags", next.join(","));
+    else params.delete("tags");
+    router.replace(`/search?${params.toString()}`);
+  }
+
   // No synchronous setStatus("loading") here — status already starts
   // "loading" on mount; a retry resets it from its own click handler
   // instead (a real event handler, not an effect body).
   useEffect(() => {
     let cancelled = false;
-    Promise.all([fetchPublicVideos(100), fetchShorts(50), fetchTopCreators(12), fetchFeaturedCollections(10)])
+    const tagFilter = filterTagIds.length > 0 ? filterTagIds : undefined;
+    Promise.all([
+      fetchPublicVideos(100, tagFilter),
+      fetchShorts(50, tagFilter),
+      fetchTopCreators(12),
+      fetchFeaturedCollections(10),
+    ])
       .then(([films, shorts, creators, collections]) => {
         if (cancelled) return;
         setVideos([...films, ...shorts]);
@@ -79,7 +129,7 @@ export default function SearchPage() {
     return () => {
       cancelled = true;
     };
-  }, [retryCount]);
+  }, [retryCount, filterTagIds]);
 
   const loading = status === "loading";
 
@@ -116,6 +166,41 @@ export default function SearchPage() {
             className="flex-1 bg-transparent text-sm outline-none"
           />
         </div>
+      </div>
+
+      {/* Combined-tag filter — chips + a typeahead scoped across every
+          taxonomy category (not just one facet, unlike the upload
+          pickers), since Search is meant to filter by anything: genre,
+          gear, location, whatever. */}
+      <div className="px-6 pb-4 flex flex-col gap-2">
+        {filterTags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {filterTags.map((tag) => (
+              <span
+                key={tag.id}
+                className="inline-flex items-center gap-1 pl-3 pr-1.5 py-1 rounded-full bg-card border border-border text-xs"
+              >
+                {tag.name}
+                <button
+                  type="button"
+                  onClick={() => removeFilterTag(tag.id)}
+                  aria-label={`Remove ${tag.name} filter`}
+                  className="w-4 h-4 rounded-full flex items-center justify-center hover:bg-bg transition-colors"
+                >
+                  <X size={11} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        {allTagCategoryIds.length > 0 && (
+          <TagTypeahead
+            categoryIds={allTagCategoryIds}
+            placeholder="Filter by tag…"
+            onSelect={addFilterTag}
+            excludeIds={filterTagIds}
+          />
+        )}
       </div>
 
       {browsing && !loading && (
