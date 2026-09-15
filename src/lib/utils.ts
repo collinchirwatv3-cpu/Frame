@@ -11,6 +11,13 @@ export function formatCount(n: number): string {
   return `${n}`;
 }
 
+/** Joins tag names for display — the spec's own two example separators:
+ * " · " for a secondary-tier line ("Surfing · Adventure · Ocean"), " / "
+ * for the technical "Shot on:" gear line. */
+export function formatTagList(names: string[], separator: " · " | " / " = " · "): string {
+  return names.join(separator);
+}
+
 /** Matches the "2h"/"1d" shorthand style already used across the app's mock
  * timestamps (seeded comments) so real and seeded data read the same. */
 export function formatRelativeTime(date: string | Date): string {

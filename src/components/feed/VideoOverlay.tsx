@@ -1,11 +1,13 @@
 "use client";
 
+import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { Music2 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { BadgeRow } from "@/components/ui/BadgeRow";
 import { computeBadges } from "@/lib/badges";
 import { useEngagementStore } from "@/store/engagement-store";
+import { useTagsStore, selectVideoTagTiers } from "@/store/tags-store";
 import { CHROME_TAP_SCALE } from "@/lib/chrome";
 import { cn, formatCount } from "@/lib/utils";
 import type { Video } from "@/lib/types";
@@ -19,6 +21,15 @@ export function VideoOverlay({
 }) {
   const following = useEngagementStore((s) => !!s.followedCreators[video.creator.id]);
   const toggleFollow = useEngagementStore((s) => s.toggleFollow);
+  const fetchVideoTagTiers = useTagsStore((s) => s.fetchVideoTagTiers);
+  const { primary } = useTagsStore(selectVideoTagTiers(video.id));
+
+  // Fetches once per video id (fetchVideoTagTiers no-ops if already
+  // cached/in-flight — see tags-store.ts) — VideoDetailsSheet only fetches
+  // when opened, but the primary chip here needs to show immediately.
+  useEffect(() => {
+    fetchVideoTagTiers(video.id);
+  }, [video.id, fetchVideoTagTiers]);
 
   return (
     <div className="max-w-[75%] flex flex-col gap-2">
@@ -51,6 +62,11 @@ export function VideoOverlay({
           {following ? "Following" : "Follow"}
         </motion.button>
       </div>
+      {primary.length > 0 && (
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-accent/80 w-fit">
+          {primary[0].name}
+        </span>
+      )}
       <BadgeRow badges={computeBadges(video)} />
       {/* Title wasn't shown anywhere in this overlay before — only in
           VideoDetailsSheet and the Discover/Home shelf grids. Kept "Shot

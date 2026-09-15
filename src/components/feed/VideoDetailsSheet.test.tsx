@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
 import { VideoDetailsSheet } from "./VideoDetailsSheet";
 import { useClipsStore } from "@/store/clips-store";
+import { useTagsStore } from "@/store/tags-store";
 import type { Video } from "@/lib/types";
 
 const video: Video = {
@@ -41,6 +42,10 @@ beforeEach(() => {
   // every call breaks useSyncExternalStore's equality check and React
   // throws "Maximum update depth exceeded" during this exact render.
   useClipsStore.setState({ byVideoId: {}, loadingVideoId: null, fetchClips: vi.fn() });
+  // Same reasoning as useClipsStore above — a real fetchVideoTagTiers would
+  // hit the network (no Supabase env in this test environment); stubbed to
+  // a no-op so the sheet just renders its "no tags yet" fallback instead.
+  useTagsStore.setState({ byVideoId: {}, loadingVideoId: null, fetchVideoTagTiers: vi.fn() });
 });
 
 describe("VideoDetailsSheet", () => {

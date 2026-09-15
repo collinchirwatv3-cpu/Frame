@@ -2,11 +2,12 @@
 
 import { useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Aperture, Clapperboard, Film, MapPin, Play, Scissors, Tag, X } from "lucide-react";
+import { Aperture, Camera, Play, Scissors, X } from "lucide-react";
 import { SHEET_SPRING } from "@/lib/motion";
 import { useEscapeToClose } from "@/lib/use-escape-to-close";
-import { formatRelativeTime, formatTimestamp } from "@/lib/utils";
+import { formatRelativeTime, formatTagList, formatTimestamp } from "@/lib/utils";
 import { useClipsStore } from "@/store/clips-store";
+import { useTagsStore, selectVideoTagTiers } from "@/store/tags-store";
 import type { Clip, Video } from "@/lib/types";
 
 // A stable module-level reference, not an inline `?? []` in the selector
@@ -49,12 +50,17 @@ export function VideoDetailsSheet({
   const d = video.details;
   const fetchClips = useClipsStore((s) => s.fetchClips);
   const clips = useClipsStore((s) => s.byVideoId[video.id] ?? EMPTY_CLIPS);
+  const fetchVideoTagTiers = useTagsStore((s) => s.fetchVideoTagTiers);
+  const { secondary, technical } = useTagsStore(selectVideoTagTiers(video.id));
 
   useEscapeToClose(open, onClose);
 
   useEffect(() => {
-    if (open) fetchClips(video.id);
-  }, [open, video.id, fetchClips]);
+    if (open) {
+      fetchClips(video.id);
+      fetchVideoTagTiers(video.id);
+    }
+  }, [open, video.id, fetchClips, fetchVideoTagTiers]);
 
   return (
     <AnimatePresence>
@@ -114,10 +120,29 @@ export function VideoDetailsSheet({
 
               <p className="text-sm text-accent/90">{video.description}</p>
 
-              {!d && (
-                <p className="text-xs text-text-secondary">
-                  The creator hasn&apos;t shared shooting details for this one.
-                </p>
+              {/* Secondary tier (genre/topic/mood/location) and technical
+                  tier (gear, "Shot on:") from the real tag taxonomy —
+                  supersedes the old free-text camera/lens/fps/codec/
+                  location/tags fields below, which nothing ever wrote to
+                  in the first place (details jsonb has always been a dead
+                  write path — see Video.details' own history). creatorNotes/
+                  behindTheScenes have no taxonomy equivalent, kept as-is. */}
+              {secondary.length === 0 && technical.length === 0 && !d && (
+                <p className="text-xs text-text-secondary">The creator hasn&apos;t added tags for this one.</p>
+              )}
+
+              {secondary.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {secondary.map((tag) => (
+                    <span key={tag.id} className="text-[11px] text-text-secondary bg-bg px-2 py-1 rounded-full">
+                      {tag.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {technical.length > 0 && (
+                <Row icon={Camera} label="Shot on" value={formatTagList(technical.map((t) => t.name), " / ")} />
               )}
 
               {d && (
@@ -125,33 +150,9 @@ export function VideoDetailsSheet({
                   {(d.camera || d.lens) && (
                     <Row
                       icon={Aperture}
-                      label="Camera"
+                      label="Camera (legacy)"
                       value={[d.camera, d.lens].filter(Boolean).join(" · ")}
                     />
-                  )}
-                  {(d.fps || d.codec) && (
-                    <Row
-                      icon={Film}
-                      label="Format"
-                      value={[d.fps ? `${d.fps}fps` : null, d.codec].filter(Boolean).join(" · ")}
-                    />
-                  )}
-                  {d.location && <Row icon={MapPin} label="Location" value={d.location} />}
-                  {d.equipment && d.equipment.length > 0 && (
-                    <Row icon={Clapperboard} label="Equipment" value={d.equipment.join(", ")} />
-                  )}
-                  {d.tags && d.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      {d.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="flex items-center gap-1 text-[11px] text-text-secondary bg-bg px-2 py-1 rounded-full"
-                        >
-                          <Tag size={10} />
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
                   )}
                   {d.creatorNotes && (
                     <div className="pt-2 border-t border-border">
