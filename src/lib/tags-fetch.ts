@@ -153,26 +153,27 @@ type VideoTagRow = {
  * regardless of source. A separate on-demand call, not folded into
  * video-fetch.ts's shared feed-list SELECT — only the detail view needs
  * full tag data. */
-export async function fetchVideoTags(
-  videoId: string
-): Promise<{ primary: Tag[]; secondary: Tag[]; technical: Tag[] }> {
+export type VideoTagTiers = { primary: Tag[]; secondary: Tag[]; technical: Tag[] };
+/** Discriminated so a real fetch failure (network/RLS/500) is never
+ * indistinguishable from a video that genuinely has no tags yet — the
+ * caller (tags-store.ts) needs to know which one happened to decide
+ * whether to cache the result or allow a retry. */
+export type FetchVideoTagsResult = { ok: true; tiers: VideoTagTiers } | { ok: false };
+
+export async function fetchVideoTags(videoId: string): Promise<FetchVideoTagsResult> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("video_tags")
     .select(`source, tags!inner(${TAG_SELECT}, tag_categories!inner(tier))`)
     .eq("video_id", videoId);
-  if (error || !data) return { primary: [], secondary: [], technical: [] };
+  if (error) return { ok: false };
 
-  const rows = data as unknown as VideoTagRow[];
-  const result: { primary: Tag[]; secondary: Tag[]; technical: Tag[] } = {
-    primary: [],
-    secondary: [],
-    technical: [],
-  };
+  const rows = (data ?? []) as unknown as VideoTagRow[];
+  const tiers: VideoTagTiers = { primary: [], secondary: [], technical: [] };
   for (const row of rows) {
     if (!row.tags?.tag_categories) continue;
     if (row.tags.tag_categories.tier === "technical" && row.source !== "creator") continue;
-    result[row.tags.tag_categories.tier].push(toTag(row.tags));
+    tiers[row.tags.tag_categories.tier].push(toTag(row.tags));
   }
-  return result;
+  return { ok: true, tiers };
 }

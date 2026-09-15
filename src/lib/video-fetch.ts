@@ -85,21 +85,77 @@ function toVideo(row: Row): Video | null {
   };
 }
 
-/** Resolves a combined-tag filter into matching video ids via the
- * match_all_tags RPC — AND semantics (a video must carry every tag in
- * `tagIds`), matching the spec's own combinable-filter example
- * (Documentary + Surfing + Cinematic + 16mm + South Africa -> one feed).
- * Returns null when no filter was requested at all (skip filtering
- * entirely) — an empty `tagIds` array is "no filter," not "match
- * nothing," so callers can tell the two apart. */
-async function resolveTagFilterIds(
+/** Combined-tag filtering, ordering, AND pagination in one RPC call — AND
+ * semantics (a video must carry every tag in `tagIds`), matching the
+ * spec's own combinable-filter example (Documentary + Surfing + Cinematic
+ * + 16mm + South Africa -> one feed).
+ *
+ * Replaces the old match_all_tags-then-order-client-side approach, which
+ * had a real bug: match_all_tags has no ORDER BY/LIMIT of its own, so once
+ * a tag combination matched more videos than PostgREST's row cap (1000 by
+ * default), the id list came back silently truncated to an arbitrary,
+ * non-recency-ordered subset *before* the real order/limit on the videos
+ * query ever ran — genuinely recent matching videos could disappear
+ * entirely. search_videos_by_tags does intersection + visibility +
+ * content-type filtering + ordering + pagination server-side in one
+ * query, so the row cap (if it ever applies) only bites after the correct
+ * page has already been selected — it operates on an already-limited
+ * result, not the full unpaginated match set.
+ *
+ * Throws on a genuine fetch error rather than swallowing it — callers
+ * (e.g. search/page.tsx's `Promise.all(...).catch(() => setStatus("error"))`)
+ * already distinguish a rejected promise from a legitimate empty array;
+ * silently returning [] here would make "no matches" and "the request
+ * failed" indistinguishable, which is exactly the failure mode this
+ * fix is for. */
+async function fetchOrderedVideoIds(
   supabase: ReturnType<typeof createClient>,
-  tagIds?: string[]
-): Promise<string[] | null> {
-  if (!tagIds || tagIds.length === 0) return null;
-  const { data, error } = await supabase.rpc("match_all_tags", { p_tag_ids: tagIds });
-  if (error || !data) return [];
-  return data as string[];
+  contentTypes: string[],
+  limit: number,
+  offset: number,
+  tagIds: string[],
+  excludeIds: string[] = []
+): Promise<{ id: string; created_at: string }[]> {
+  const { data, error } = await supabase.rpc("search_videos_by_tags", {
+    p_tag_ids: tagIds,
+    p_content_types: contentTypes,
+    p_limit: limit,
+    p_offset: offset,
+    p_exclude_ids: excludeIds,
+  });
+  if (error) throw error;
+  return (data ?? []) as { id: string; created_at: string }[];
+}
+
+/** PostgREST's `.in("id", ids)` doesn't preserve input order — re-sorts
+ * fetched rows back into the order `orderedIds` specifies, which matters
+ * here because those ids already came from an ordered/paginated RPC
+ * result (fetchOrderedVideoIds) that must not be re-shuffled afterward. */
+function reorderByIds(videos: Video[], orderedIds: string[]): Video[] {
+  const byId = new Map(videos.map((v) => [v.id, v]));
+  return orderedIds.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : []));
+}
+
+/** Shared by every tag-filtered fetch below: resolve the ordered/paginated
+ * id page via the RPC, then fetch full rows for exactly that page through
+ * the existing safe column-list SELECT (never `select v.*` against the
+ * RPC directly — search_videos_by_tags deliberately returns only
+ * (id, created_at), not full video rows, so quality_score and any other
+ * column that must never reach a client-facing response can't leak
+ * through it). */
+async function fetchVideosByTagFilter(
+  supabase: ReturnType<typeof createClient>,
+  contentTypes: string[],
+  limit: number,
+  tagIds: string[],
+  excludeIds: string[] = []
+): Promise<Video[]> {
+  const ordered = await fetchOrderedVideoIds(supabase, contentTypes, limit, 0, tagIds, excludeIds);
+  if (ordered.length === 0) return [];
+  const ids = ordered.map((o) => o.id);
+  const { data, error } = await supabase.from("videos").select(SELECT).in("id", ids);
+  if (error) throw error;
+  return reorderByIds((data as unknown as Row[]).map(toVideo).filter((v) => v !== null), ids);
 }
 
 /** Public, ready videos only — RLS (videos_select_public) already enforces
@@ -115,22 +171,20 @@ export async function fetchVideoById(id: string): Promise<Video | null> {
  * shorts. Client-side query-filtered against `matchesVideoQuery` by callers
  * (Explore, watch-together's queue picker) rather than a new server-side
  * search feature. Optional `tagIds` narrows to videos carrying every one of
- * those tags (see resolveTagFilterIds) — basic combined-tag filtering, not
+ * those tags via search_videos_by_tags — basic combined-tag filtering, not
  * the full faceted discovery UI. */
 export async function fetchPublicVideos(limit = 30, tagIds?: string[]): Promise<Video[]> {
   const supabase = createClient();
-  const filterIds = await resolveTagFilterIds(supabase, tagIds);
-  if (filterIds && filterIds.length === 0) return [];
+  if (tagIds && tagIds.length > 0) {
+    return fetchVideosByTagFilter(supabase, ["film", "longform"], limit, tagIds);
+  }
 
-  let query = supabase
+  const { data, error } = await supabase
     .from("videos")
     .select(SELECT)
     .in("content_type", ["film", "longform"])
     .order("created_at", { ascending: false })
     .limit(limit);
-  if (filterIds) query = query.in("id", filterIds);
-
-  const { data, error } = await query;
   if (error || !data) return [];
   return (data as unknown as Row[]).map(toVideo).filter((v) => v !== null);
 }
@@ -139,18 +193,16 @@ export async function fetchPublicVideos(limit = 30, tagIds?: string[]): Promise<
  * optional combined-tag filter as fetchPublicVideos. */
 export async function fetchShorts(limit = 30, tagIds?: string[]): Promise<Video[]> {
   const supabase = createClient();
-  const filterIds = await resolveTagFilterIds(supabase, tagIds);
-  if (filterIds && filterIds.length === 0) return [];
+  if (tagIds && tagIds.length > 0) {
+    return fetchVideosByTagFilter(supabase, ["short"], limit, tagIds);
+  }
 
-  let query = supabase
+  const { data, error } = await supabase
     .from("videos")
     .select(SELECT)
     .eq("content_type", "short")
     .order("created_at", { ascending: false })
     .limit(limit);
-  if (filterIds) query = query.in("id", filterIds);
-
-  const { data, error } = await query;
   if (error || !data) return [];
   return (data as unknown as Row[]).map(toVideo).filter((v) => v !== null);
 }
@@ -230,8 +282,6 @@ export async function fetchFollowingVideos(userId: string, limit = 20): Promise<
  * filter-capable; no dedicated filter-chip UI wired up for Discover yet. */
 export async function fetchDiscoverVideos(userId: string | null, limit = 50, tagIds?: string[]): Promise<Video[]> {
   const supabase = createClient();
-  const filterIds = await resolveTagFilterIds(supabase, tagIds);
-  if (filterIds && filterIds.length === 0) return [];
 
   let watchedIds: string[] = [];
   if (userId) {
@@ -242,6 +292,10 @@ export async function fetchDiscoverVideos(userId: string | null, limit = 50, tag
     watchedIds = (data ?? []).map((row) => row.video_id as string);
   }
 
+  if (tagIds && tagIds.length > 0) {
+    return fetchVideosByTagFilter(supabase, ["film", "longform"], limit, tagIds, watchedIds);
+  }
+
   let query = supabase
     .from("videos")
     .select(SELECT)
@@ -249,7 +303,6 @@ export async function fetchDiscoverVideos(userId: string | null, limit = 50, tag
     .order("created_at", { ascending: false })
     .limit(limit);
 
-  if (filterIds) query = query.in("id", filterIds);
   if (watchedIds.length > 0) {
     query = query.not("id", "in", `(${watchedIds.join(",")})`);
   }

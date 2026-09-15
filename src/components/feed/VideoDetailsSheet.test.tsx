@@ -45,7 +45,7 @@ beforeEach(() => {
   // Same reasoning as useClipsStore above — a real fetchVideoTagTiers would
   // hit the network (no Supabase env in this test environment); stubbed to
   // a no-op so the sheet just renders its "no tags yet" fallback instead.
-  useTagsStore.setState({ byVideoId: {}, loadingVideoId: null, fetchVideoTagTiers: vi.fn() });
+  useTagsStore.setState({ byVideoId: {}, loadingVideoIds: {}, errorVideoIds: {}, epoch: 0, fetchVideoTagTiers: vi.fn() });
 });
 
 describe("VideoDetailsSheet", () => {

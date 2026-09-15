@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { uploadMetadataSchema, LONGFORM_MIN_DURATION_SECONDS } from "@/lib/validation/upload";
-import { createTusUploadSession } from "@/lib/cloudflare-stream";
+import { createTusUploadSession, deleteStreamVideo } from "@/lib/cloudflare-stream";
 import { uploadRateLimiter, checkRateLimit, rateLimitedResponse } from "@/lib/rate-limit";
 
 // 2x the $5 base advertising CPM — Promote is deliberately pricier than
@@ -68,50 +68,6 @@ export async function POST(request: NextRequest) {
     fileSizeBytes,
   } = parsed.data;
 
-  // Pre-flight tag validation — before createTusUploadSession is even
-  // called, so a bad tag id fails fast with zero side effects, same
-  // "clearer, faster-failing error" reasoning as the invite check above.
-  // zod only checked shape (valid UUIDs, right counts); id-existence and
-  // facet membership (a genre id actually being a genre.tags row, not a
-  // gear id smuggled into the genre slot) needs the DB.
-  const tagSelection: { ids: string[]; facet: string; label: string }[] = [
-    { ids: [contentTypeTagId], facet: "content_type", label: "Content type" },
-    { ids: genreTagIds, facet: "genre", label: "Genre" },
-    { ids: topicTagIds, facet: "topic", label: "Topic" },
-    { ids: moodTagIds, facet: "mood", label: "Mood" },
-    { ids: locationTagId ? [locationTagId] : [], facet: "location", label: "Location" },
-    { ids: gearTagIds, facet: "gear", label: "Gear" },
-  ];
-  const allSubmittedTagIds = [...new Set(tagSelection.flatMap((s) => s.ids))];
-
-  if (allSubmittedTagIds.length > 0) {
-    const { data: validTags, error: tagsError } = await supabase
-      .from("tags")
-      .select("id, tag_categories!inner(facet)")
-      .in("id", allSubmittedTagIds)
-      .eq("active", true);
-    if (tagsError) {
-      return NextResponse.json({ error: "Could not validate tags" }, { status: 500 });
-    }
-    const facetById = new Map(
-      ((validTags ?? []) as unknown as { id: string; tag_categories: { facet: string } }[]).map((t) => [
-        t.id,
-        t.tag_categories.facet,
-      ])
-    );
-    for (const { ids, facet, label } of tagSelection) {
-      for (const id of ids) {
-        const actualFacet = facetById.get(id);
-        if (!actualFacet) {
-          return NextResponse.json({ error: `${label}: one or more tags no longer exist` }, { status: 400 });
-        }
-        if (actualFacet !== facet) {
-          return NextResponse.json({ error: `${label}: invalid tag selection` }, { status: 400 });
-        }
-      }
-    }
-  }
-
   // Authoritative, not client-trusted: under 3 minutes is always "short",
   // full stop — the schema's superRefine already rejects an explicit
   // longform request that's too short, but this covers every other case
@@ -168,87 +124,57 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { data: video, error } = await supabase
-    .from("videos")
-    .insert({
-      creator_id: user.id,
-      stream_uid: session.uid,
-      processing_status: "uploading",
-      content_type: contentTypeFinal,
-      title,
-      description,
-      width,
-      height,
-      duration_seconds: durationSeconds,
-      publish_mode: publishMode,
-      // Required NOT NULL columns with no real value yet — Stream's webhook
-      // overwrites both the moment the encode is ready.
-      playback_url: null,
-      poster_url: null,
-    })
-    .select("id")
-    .single();
+  // Video creation + direct tag writes + resolved gear/location
+  // inheritance all happen inside one atomic function
+  // (create_video_with_tags, 20260917150000_video_tags_atomic_write.sql)
+  // — either the whole thing lands, or none of it does. Direct client
+  // insert/delete on video_tags is revoked by that same migration; this
+  // RPC is the only write path, and it re-validates every tag id's
+  // existence/active flag/facet membership itself rather than trusting
+  // this route's now-removed pre-flight check, so a raw REST call can't
+  // bypass validation the way the old RLS-only policies allowed.
+  const { data: videoId, error: createError } = await supabase.rpc("create_video_with_tags", {
+    p_stream_uid: session.uid,
+    p_content_type: contentTypeFinal,
+    p_title: title,
+    p_description: description,
+    p_width: width,
+    p_height: height,
+    p_duration_seconds: durationSeconds,
+    p_publish_mode: publishMode,
+    p_content_type_tag_id: contentTypeTagId,
+    p_genre_tag_ids: genreTagIds,
+    p_topic_tag_ids: topicTagIds,
+    p_mood_tag_ids: moodTagIds,
+    p_location_tag_id: locationTagId,
+    p_gear_tag_ids: gearTagIds,
+  });
 
-  if (error || !video) {
-    return NextResponse.json({ error: "Could not create the video record" }, { status: 500 });
-  }
-
-  // Write the creator's direct tag selections, then resolve gear
-  // inheritance (tag_implies) and location ancestry (tag_ancestors RPC)
-  // into additional source='inherited' rows. A failure here degrades
-  // gracefully rather than failing the whole upload — same tolerance this
-  // route already has for the campaigns insert below: the video is real
-  // either way, only its tags silently wouldn't have attached. Already
-  // validated to exist/be-active/match-facet above, so this is just the
-  // write.
-  if (allSubmittedTagIds.length > 0) {
-    const { error: directTagsError } = await supabase
-      .from("video_tags")
-      .insert(allSubmittedTagIds.map((tag_id) => ({ video_id: video.id, tag_id, source: "creator" as const })));
-    if (directTagsError) {
-      console.error(`Upload: failed to write direct tags for video ${video.id}:`, directTagsError);
-    } else {
-      const gearIds = gearTagIds;
-      if (gearIds.length > 0) {
-        const { data: implies } = await supabase
-          .from("tag_implies")
-          .select("implied_tag_id")
-          .in("tag_id", gearIds);
-        const impliedIds = [
-          ...new Set(
-            ((implies ?? []) as { implied_tag_id: string }[])
-              .map((i) => i.implied_tag_id)
-              .filter((id) => !allSubmittedTagIds.includes(id))
-          ),
-        ];
-        if (impliedIds.length > 0) {
-          const { error: impliedError } = await supabase
-            .from("video_tags")
-            .insert(impliedIds.map((tag_id) => ({ video_id: video.id, tag_id, source: "inherited" as const })));
-          if (impliedError) {
-            console.error(`Upload: failed to write inherited gear tags for video ${video.id}:`, impliedError);
-          }
-        }
-      }
-
-      if (locationTagId) {
-        const { data: ancestors } = await supabase.rpc("tag_ancestors", { p_tag_id: locationTagId });
-        const ancestorIds = ((ancestors ?? []) as { id: string }[])
-          .map((a) => a.id)
-          .filter((id) => !allSubmittedTagIds.includes(id));
-        if (ancestorIds.length > 0) {
-          const { error: ancestorError } = await supabase
-            .from("video_tags")
-            .insert(ancestorIds.map((tag_id) => ({ video_id: video.id, tag_id, source: "inherited" as const })));
-          if (ancestorError) {
-            console.error(`Upload: failed to write location ancestor tags for video ${video.id}:`, ancestorError);
-          }
-        }
-      }
+  if (createError || !videoId) {
+    // The Stream session (and its associated storage) was already minted
+    // above — since the DB write failed atomically, nothing references
+    // that session, so it's cleaned up rather than left as an orphaned
+    // upload target. A cleanup failure is logged (never the auth token —
+    // deleteStreamVideo's own error message only ever includes the uid
+    // and HTTP status) but doesn't change the response: the upload has
+    // already failed regardless of whether cleanup succeeds.
+    try {
+      await deleteStreamVideo(session.uid);
+    } catch (cleanupErr) {
+      console.error(
+        `Upload: failed to clean up orphaned Stream session ${session.uid} after a failed create_video_with_tags call:`,
+        cleanupErr instanceof Error ? cleanupErr.message : cleanupErr
+      );
     }
+    return NextResponse.json(
+      { error: createError?.message || "Could not create the video record" },
+      { status: 400 }
+    );
   }
 
-  // Same user-scoped client as the videos insert above, not service-role —
+  const video = { id: videoId as string };
+
+  // Same user-scoped client as the RPC call above, not service-role —
   // this genuinely exercises campaigns_insert_own's RLS check
   // (20260808080000_campaigns.sql), rather than bypassing it. A failure
   // here doesn't roll back the video itself — the video is real and

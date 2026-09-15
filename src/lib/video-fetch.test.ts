@@ -8,6 +8,9 @@ type Call = { table: string; method: string; args: unknown[] };
 let calls: Call[] = [];
 let mockResponses: Record<string, { data?: unknown; error?: unknown }> = {};
 
+let rpcResponses: Record<string, { data?: unknown; error?: unknown }> = {};
+let rpcCalls: { fn: string; args: unknown }[] = [];
+
 vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({
     from: (table: string) => {
@@ -28,14 +31,26 @@ vi.mock("@/lib/supabase/client", () => ({
       builder.then = (resolve: (v: unknown) => unknown) => Promise.resolve(response).then(resolve);
       return builder;
     },
+    rpc: (fn: string, args: unknown) => {
+      rpcCalls.push({ fn, args });
+      return Promise.resolve(rpcResponses[fn] ?? { data: [], error: null });
+    },
   }),
 }));
 
-const { fetchTopCreators, fetchFeaturedCollections, fetchCollections, fetchCollectionDetail } = await import("./video-fetch");
+const {
+  fetchTopCreators,
+  fetchFeaturedCollections,
+  fetchCollections,
+  fetchCollectionDetail,
+  fetchPublicVideos,
+} = await import("./video-fetch");
 
 beforeEach(() => {
   calls = [];
   mockResponses = {};
+  rpcCalls = [];
+  rpcResponses = {};
 });
 
 describe("fetchTopCreators", () => {
@@ -152,5 +167,75 @@ describe("live collections", () => {
     expect(result?.videos.map((v) => v.id)).toEqual(["v2", "v1"]);
     expect(calls).toContainEqual({ table: "videos", method: "eq", args: ["visibility", "public"] });
     expect(calls).toContainEqual({ table: "videos", method: "eq", args: ["processing_status", "ready"] });
+  });
+});
+
+// Regression coverage for the resolveTagFilterIds pagination bug: the old
+// match_all_tags-then-order-client-side approach could silently truncate
+// to an arbitrary, non-recency-ordered subset before the real order/limit
+// ever ran. search_videos_by_tags now does intersection + ordering +
+// pagination in one RPC call — these tests cover the JS-side wiring around
+// it (real ordering/RLS/pagination behavior is covered separately by live
+// Postgres tests against the local Supabase instance, not mockable here).
+describe("fetchPublicVideos tag filtering", () => {
+  it("routes through search_videos_by_tags when tagIds is provided, not the plain query", async () => {
+    rpcResponses.search_videos_by_tags = { data: [{ id: "v1", created_at: "2026-01-02" }], error: null };
+    mockResponses.videos = {
+      data: [{ id: "v1", playback_url: "/v", poster_url: "/p", profiles: { id: "c1" } }],
+      error: null,
+    };
+
+    await fetchPublicVideos(30, ["tag-a", "tag-b"]);
+
+    expect(rpcCalls).toHaveLength(1);
+    expect(rpcCalls[0].fn).toBe("search_videos_by_tags");
+    expect(rpcCalls[0].args).toMatchObject({
+      p_tag_ids: ["tag-a", "tag-b"],
+      p_content_types: ["film", "longform"],
+      p_limit: 30,
+    });
+    // The plain (untagged) query path must not also run.
+    expect(calls.some((c) => c.method === "order")).toBe(false);
+  });
+
+  it("re-sorts fetched rows back into the RPC's ordered id sequence, not .in()'s arbitrary order", async () => {
+    rpcResponses.search_videos_by_tags = {
+      data: [
+        { id: "v2", created_at: "2026-01-02" },
+        { id: "v1", created_at: "2026-01-01" },
+      ],
+      error: null,
+    };
+    // Deliberately returned in the opposite order from the RPC's id list —
+    // PostgREST's .in() genuinely doesn't guarantee input order, so this
+    // is the realistic case the reorder step exists to handle.
+    mockResponses.videos = {
+      data: [
+        { id: "v1", playback_url: "/v1", poster_url: "/p1", profiles: { id: "c1" } },
+        { id: "v2", playback_url: "/v2", poster_url: "/p2", profiles: { id: "c1" } },
+      ],
+      error: null,
+    };
+
+    const result = await fetchPublicVideos(30, ["tag-a"]);
+    expect(result.map((v) => v.id)).toEqual(["v2", "v1"]);
+  });
+
+  it("throws (doesn't silently return []) on a genuine RPC failure, so 'no matches' stays distinguishable from a request failure", async () => {
+    rpcResponses.search_videos_by_tags = { data: null, error: new Error("connection reset") };
+    await expect(fetchPublicVideos(30, ["tag-a"])).rejects.toThrow("connection reset");
+  });
+
+  it("returns [] for a legitimate empty match, without treating it as an error", async () => {
+    rpcResponses.search_videos_by_tags = { data: [], error: null };
+    const result = await fetchPublicVideos(30, ["tag-a"]);
+    expect(result).toEqual([]);
+  });
+
+  it("falls back to the plain unfiltered query when tagIds is empty or omitted", async () => {
+    mockResponses.videos = { data: [], error: null };
+    await fetchPublicVideos(30, []);
+    await fetchPublicVideos(30);
+    expect(rpcCalls).toHaveLength(0);
   });
 });

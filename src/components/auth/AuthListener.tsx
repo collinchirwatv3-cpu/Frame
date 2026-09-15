@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useEngagementStore } from "@/store/engagement-store";
 import { useCurrentUserStore } from "@/store/current-user-store";
 import { useInviteStore } from "@/store/invite-store";
+import { useTagsStore } from "@/store/tags-store";
 import type { Creator } from "@/lib/types";
 
 type ProfileRow = {
@@ -78,6 +79,12 @@ export function AuthListener() {
 
     async function syncProfile(userId: string | null) {
       setUser(userId);
+      // A video's tags are readable-but-RLS-scoped (a not-yet-public/own
+      // video's tags are only visible to its owner) — clearing the tags
+      // cache on every identity change (including sign-out) stops a
+      // previous session's cached fetch from leaking into the next one
+      // sharing this browser tab.
+      useTagsStore.getState().reset();
       if (!userId) {
         setProfile(null, null, false);
         return;
