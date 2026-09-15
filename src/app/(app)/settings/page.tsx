@@ -11,12 +11,14 @@ import { createClient } from "@/lib/supabase/client";
 import { useIsModerator } from "@/lib/use-is-moderator";
 import { useCurrentUserStore } from "@/store/current-user-store";
 import { DeleteAccountDialog } from "@/components/settings/DeleteAccountDialog";
+import { PushNotificationSettings } from "@/components/settings/PushNotificationSettings";
 import { Switch } from "@/components/ui/Switch";
 import {
   fetchNotificationPreferences,
   saveNotificationPreferences,
   type NotificationPreferences,
 } from "@/lib/notification-preferences";
+import { unsubscribeFromPush } from "@/lib/push";
 import type { Category } from "@/lib/types";
 
 const DEFAULT_PREFERENCES: NotificationPreferences = { partyStarting: true, comments: true, follows: true };
@@ -78,6 +80,14 @@ export default function SettingsPage() {
   async function handleSignOut() {
     setSigningOut(true);
     try {
+      // Detach this device's push subscription from the current account
+      // *before* the session is cleared — signOut() invalidates the
+      // client's auth token, and removing the server-side row requires an
+      // authenticated call. Skipping this would leave a shared device
+      // still registered to the account that's signing out, so the next
+      // person to sign in on it would silently receive the previous
+      // account's message notifications.
+      await unsubscribeFromPush();
       const supabase = createClient();
       await supabase.auth.signOut();
     } catch (err) {
@@ -153,6 +163,10 @@ export default function SettingsPage() {
             <p className="text-xs text-primary">Couldn&apos;t save that — try again.</p>
           )}
         </div>
+      </SettingsSection>
+
+      <SettingsSection title="Push Notifications">
+        <PushNotificationSettings />
       </SettingsSection>
 
       <SettingsSection title="Privacy">

@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useEscapeToClose } from "@/lib/use-escape-to-close";
+import { unsubscribeFromPush } from "@/lib/push";
 
 const CONFIRM_PHRASE = "DELETE";
 
@@ -29,6 +30,13 @@ export function DeleteAccountDialog({ open, onClose }: { open: boolean; onClose:
     setError("");
 
     try {
+      // Same reasoning as the plain sign-out path (settings/page.tsx): must
+      // run while the session is still valid, since deleting the account
+      // below invalidates it and push_subscriptions' delete-own RLS policy
+      // needs a real auth.uid() to authorize the removal. (The row would
+      // also be cascade-deleted once the account itself is gone — this is
+      // additionally what detaches the local browser subscription object.)
+      await unsubscribeFromPush();
       const res = await fetch("/api/account", { method: "DELETE" });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {

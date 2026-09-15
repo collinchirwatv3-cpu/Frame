@@ -87,6 +87,13 @@ export const blockRateLimiter = makeLimiter(30, "1 h", "block");
  * without constraining a real conversation. */
 export const dmMessageRateLimiter = makeLimiter(30, "1 m", "dm-message");
 
+/** Registering/removing a push subscription — a one-time-per-device action
+ * in normal use, loose enough that a device with a flaky permission prompt
+ * retrying a few times never hits it, tight enough to bound abuse of the
+ * insert path (see register_push_subscription's own endpoint-allowlist
+ * check for the more serious SSRF concern this doesn't cover). */
+export const pushSubscriptionRateLimiter = makeLimiter(20, "1 m", "push-subscription");
+
 export type RateLimitResult = { success: boolean; limit: number; remaining: number; reset: number };
 
 export async function checkRateLimit(
