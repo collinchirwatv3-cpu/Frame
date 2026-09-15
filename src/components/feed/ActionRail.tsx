@@ -218,6 +218,8 @@ export function ActionRail({
         icon={muted ? VolumeX : Volume2}
         label={muted ? "Muted" : "Sound"}
         srLabel={muted ? "Unmute" : "Mute"}
+        active={muted}
+        activeColor="var(--color-accent)"
         onClick={toggleMuted}
         compact={compact}
       />

@@ -11,6 +11,7 @@ import { CommentDrawer } from "@/components/feed/CommentDrawer";
 import { VideoOptionsSheet } from "@/components/feed/VideoOptionsSheet";
 import { usePlayerStore } from "@/store/player-store";
 import { useEngagementStore } from "@/store/engagement-store";
+import { playWithMutedFallback } from "@/lib/audio";
 import { CHROME_FADE_TRANSITION, FOCUS_PULL_TRANSITION } from "@/lib/motion";
 import { CHROME_TAP_SCALE } from "@/lib/chrome";
 import type { Video } from "@/lib/types";
@@ -138,21 +139,11 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
   //    when not ready yet, instead of trying once and giving up.
   useEffect(() => {
     const cleanups: (() => void)[] = [];
-
-    // Mirrors VideoCard.tsx's own play logic: set muted imperatively (not
-    // just via the muted={muted} JSX prop, which React won't re-apply if
-    // the value hasn't changed) and fall back to a muted play if the
-    // browser blocks unmuted autoplay, rather than leaving the short
-    // frozen silent with no gesture to have unlocked sound yet.
-    function attemptPlay(video: HTMLVideoElement) {
-      video.muted = muted;
-      video.play().catch(() => {
-        if (!muted) {
-          video.muted = true;
-          video.play().catch(() => {});
-        }
-      });
-    }
+    // Guards playWithMutedFallback's rejected-play retry (see its own doc
+    // comment) — without it, swiping to the next short before a blocked
+    // unmuted play()'s rejection arrives could silently resume this one
+    // playing off-screen.
+    let cancelled = false;
 
     videoRefs.current.forEach((video, index) => {
       if (!video) return;
@@ -161,14 +152,17 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
         return;
       }
       if (video.readyState >= 3) {
-        attemptPlay(video);
+        playWithMutedFallback(video, muted, () => cancelled);
       } else {
-        const onReady = () => attemptPlay(video);
+        const onReady = () => playWithMutedFallback(video, muted, () => cancelled);
         video.addEventListener("loadeddata", onReady, { once: true });
         cleanups.push(() => video.removeEventListener("loadeddata", onReady));
       }
     });
-    return () => cleanups.forEach((fn) => fn());
+    return () => {
+      cancelled = true;
+      cleanups.forEach((fn) => fn());
+    };
   }, [activeIndex, shorts.length, muted]);
 
   // Had no keyboard path at all before this — SwipeFeed's own arrow-key

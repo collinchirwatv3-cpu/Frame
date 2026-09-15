@@ -31,3 +31,33 @@ export function fadeVolume(el: HTMLMediaElement, from: number, to: number, ms: n
 
   activeFades.set(el, requestAnimationFrame(step));
 }
+
+/** Attempts unmuted playback, falling back to a muted play() if the browser
+ * blocks unmuted autoplay (no user gesture on the domain yet this session)
+ * instead of leaving the element frozen and silent. Shared by VideoCard and
+ * ShortsFeed so their fallback behavior can't drift apart — it used to be
+ * copy-pasted between the two.
+ *
+ * `isCancelled` guards the rejected-play retry: it resolves asynchronously,
+ * and if the caller has since moved on (e.g. the user scrolled past this
+ * element before the browser's rejection arrived), forcing playback back on
+ * here would silently resume an off-screen video. Callers should flip
+ * whatever `isCancelled` reads from true in their own cleanup. */
+export function playWithMutedFallback(
+  el: HTMLMediaElement,
+  muted: boolean,
+  isCancelled: () => boolean,
+  onPlaying?: () => void
+) {
+  el.muted = muted;
+  el.play()
+    .then(() => {
+      if (!muted) onPlaying?.();
+    })
+    .catch(() => {
+      if (!muted && !isCancelled()) {
+        el.muted = true;
+        el.play().catch(() => {});
+      }
+    });
+}
