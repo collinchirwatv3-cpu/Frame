@@ -2,25 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  Bookmark,
-  Check,
-  Heart,
-  Link2,
-  MessageCircle,
-  MoreHorizontal,
-  Scissors,
-  Share2,
-  Volume2,
-  VolumeX,
-} from "lucide-react";
+import { Bookmark, Check, Heart, Link2, MessageCircle, MoreHorizontal, Scissors, Share2 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { cn, formatCount, shareContent } from "@/lib/utils";
 import { DURATION } from "@/lib/motion";
 import { CHROME_GLASS_CLASS, CHROME_TAP_SCALE } from "@/lib/chrome";
 import { useEngagementStore } from "@/store/engagement-store";
 import { useCommentsStore } from "@/store/comments-store";
-import { usePlayerStore } from "@/store/player-store";
 import type { Video } from "@/lib/types";
 
 function RailButton({
@@ -115,8 +103,6 @@ export function ActionRail({
    * shown twice. */
   showAvatar?: boolean;
 }) {
-  const muted = usePlayerStore((s) => s.muted);
-  const toggleMuted = usePlayerStore((s) => s.toggleMuted);
   const liked = useEngagementStore((s) => !!s.likedVideos[video.id]);
   const saved = useEngagementStore((s) => !!s.savedVideos[video.id]);
   const toggleLike = useEngagementStore((s) => s.toggleLike);
@@ -214,15 +200,6 @@ export function ActionRail({
       {onOpenClip && (
         <RailButton icon={Scissors} label="Clip" srLabel="Create a clip" onClick={onOpenClip} compact={compact} />
       )}
-      <RailButton
-        icon={muted ? VolumeX : Volume2}
-        label={muted ? "Muted" : "Sound"}
-        srLabel={muted ? "Unmute" : "Mute"}
-        active={muted}
-        activeColor="var(--color-accent)"
-        onClick={toggleMuted}
-        compact={compact}
-      />
 
       <motion.button
         whileTap={{ scale: CHROME_TAP_SCALE }}

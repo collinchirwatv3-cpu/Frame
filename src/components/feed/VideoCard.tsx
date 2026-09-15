@@ -1,9 +1,9 @@
 "use client";
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
-import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
 import { ActionRail } from "./ActionRail";
+import { PlaybackControls } from "./PlaybackControls";
 import { VideoOverlay } from "./VideoOverlay";
 import { CommentDrawer } from "./CommentDrawer";
 import { VideoOptionsSheet } from "./VideoOptionsSheet";
@@ -197,19 +197,10 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
       data-index={index}
       className="relative h-dvh w-full snap-start snap-always overflow-hidden bg-bg"
     >
-      {/* Cinematic backdrop fills any letterbox space — no black bars. Lighter
-          blur + higher opacity than the original (blur-3xl/opacity-40) so it
-          reads as the frame's own ambient light bleeding to the edges, not a
-          visibly separate hazy image behind a sharp video. */}
-      <div className="absolute inset-0">
-        <Image
-          src={video.posterUrl}
-          alt=""
-          fill
-          className="object-cover scale-110 blur-xl opacity-70"
-          priority={active}
-        />
-      </div>
+      {/* Plain black letterboxing above/below the video (bg-bg on the
+          section itself, set below) — matches ShortsFeed's own treatment,
+          no blurred backdrop image here anymore. The video itself is still
+          never cropped or stretched (object-contain below). */}
 
       {/* centered video at its native aspect ratio, with a gentle focus-pull as it
           becomes the active scene — object-contain means this works unmodified for
@@ -253,13 +244,16 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
                 monitors, so captions/actions stay visually anchored near the video
                 instead of floating at the far edges of a huge viewport. */}
             <div className="absolute inset-0 max-w-[1920px] mx-auto pointer-events-none">
-              {/* search only now — no manual "enter full screen" (Director
-                  Mode is always the resting state, auto-engaged by the
-                  timer) or mute button (removed, see handleTap's doc
-                  comment). Your own profile used to have an avatar link
-                  in this cluster too — now ProfileFloat, fixed a row below
-                  this one, present on every page rather than just while a
+              {/* No manual "enter full screen" (Director Mode is always the
+                  resting state, auto-engaged by the timer). Your own
+                  profile used to have an avatar link in the right-side
+                  cluster too — now ProfileFloat, fixed a row below this
+                  one, present on every page rather than just while a
                   video's on screen. */}
+              <div className="pointer-events-auto absolute top-4 left-4 md:top-6 md:left-6 z-10">
+                <PlaybackControls />
+              </div>
+
               {showSearchButton && (
                 <div className="pointer-events-auto absolute top-4 right-4 md:top-6 md:right-6 z-10 flex items-center gap-2">
                   <SearchButton />

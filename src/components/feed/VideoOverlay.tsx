@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Music2 } from "lucide-react";
+import { Avatar } from "@/components/ui/Avatar";
 import { BadgeRow } from "@/components/ui/BadgeRow";
 import { computeBadges } from "@/lib/badges";
 import { useEngagementStore } from "@/store/engagement-store";
@@ -21,15 +22,18 @@ export function VideoOverlay({
 
   return (
     <div className="max-w-[75%] flex flex-col gap-2">
-      <div className="flex items-center gap-2">
-        <span className="font-bold text-[15px]">@{video.creator.username}</span>
-        <span className="text-xs text-text-secondary">{video.category}</span>
-        {/* Moved here from ActionRail's avatar (was a pill underneath it in
-            the right-side rail) — reads more naturally sitting right next to
-            the name it's about, rather than off in the action rail. Stays
-            visible once followed (relabeled, dimmed) rather than
-            disappearing — same "Follow" -> "Following" convention
-            ProfileHeader.tsx already uses, just as a compact pill here. */}
+      <div className="flex items-center gap-2.5">
+        <Avatar src={video.creator.avatarUrl} alt={video.creator.displayName} size={36} ring />
+        <div className="min-w-0">
+          <p className="font-bold text-[15px] leading-tight truncate">{video.creator.displayName}</p>
+          <p className="text-xs text-text-secondary leading-tight truncate">@{video.creator.username}</p>
+        </div>
+        {/* Moved here from ActionRail's avatar (was the top item in the
+            right-side rail) — reads more naturally sitting right next to
+            the name it's about. Stays visible once followed (relabeled,
+            dimmed) rather than disappearing — same "Follow" -> "Following"
+            convention ProfileHeader.tsx already uses, just as a compact
+            pill here. */}
         <motion.button
           whileTap={{ scale: CHROME_TAP_SCALE }}
           onClick={(e) => {
@@ -48,8 +52,19 @@ export function VideoOverlay({
         </motion.button>
       </div>
       <BadgeRow badges={computeBadges(video)} />
+      {/* Title wasn't shown anywhere in this overlay before — only in
+          VideoDetailsSheet and the Discover/Home shelf grids. Kept
+          "Shot details" as the tap label rather than "View full video":
+          this genuinely opens camera/lens/tags details, not a separate
+          full video, and this app has no video.views stat to show either
+          (videos.view_count exists but nothing increments it — see
+          Video.createdAt's own doc comment in lib/types.ts; showing a
+          number here would just be a fake always-zero stat). */}
       <button onClick={onOpenDetails} className="text-left">
-        <p className="text-sm leading-snug text-accent/95 line-clamp-2">{video.description}</p>
+        <h2 className="font-bold text-lg leading-snug">{video.title}</h2>
+        {video.description && (
+          <p className="text-sm leading-snug text-accent/95 line-clamp-2 mt-0.5">{video.description}</p>
+        )}
         <span className="text-[11px] text-text-secondary underline underline-offset-2 decoration-text-secondary/40">
           Shot details
         </span>

@@ -6,6 +6,7 @@ import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { ActionRail } from "@/components/feed/ActionRail";
+import { PlaybackControls } from "@/components/feed/PlaybackControls";
 import { Avatar } from "@/components/ui/Avatar";
 import { CommentDrawer } from "@/components/feed/CommentDrawer";
 import { VideoOptionsSheet } from "@/components/feed/VideoOptionsSheet";
@@ -224,9 +225,11 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
             className="relative h-dvh w-full snap-start snap-always overflow-hidden bg-bg"
           >
             {/* Plain black letterboxing above/below the video (bg-bg on
-                the section itself) — no blurred backdrop here, unlike
-                VideoCard.tsx's main feed. The video itself is still never
-                cropped or stretched (object-contain below). */}
+                the section itself) — same plain-black treatment
+                VideoCard.tsx's main feed uses now too (it used to have its
+                own blurred backdrop instead; dropped for a consistent
+                letterboxed look across both feeds). The video itself is
+                still never cropped or stretched (object-contain below). */}
             <motion.div
               className="absolute inset-0 flex items-center justify-center"
               animate={{
@@ -290,7 +293,17 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
                         ring
                       />
                     </Link>
-                    <span className="text-sm font-semibold leading-tight">@{short.creator.username}</span>
+                    {/* Display name + handle, same two-line treatment
+                        VideoOverlay.tsx uses now — used to be just
+                        @username on one line. */}
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold leading-tight truncate">
+                        {short.creator.displayName}
+                      </p>
+                      <p className="text-[11px] text-text-secondary leading-tight truncate">
+                        @{short.creator.username}
+                      </p>
+                    </div>
                     {/* Same "Follow" -> "Following" pill as VideoOverlay.tsx's
                         main-feed caption — stays visible once followed
                         (relabeled, dimmed) rather than disappearing. */}
@@ -340,21 +353,32 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
             >
               <AnimatePresence>
                 {showActions && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={CHROME_FADE_TRANSITION}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-auto"
-                  >
-                    <ActionRail
-                      video={shorts[activeIndex]}
-                      onOpenComments={() => setCommentsOpen(true)}
-                      onOpenOptions={() => setOptionsOpen(true)}
-                      compact
-                      showAvatar={false}
-                    />
-                  </motion.div>
+                  <>
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={CHROME_FADE_TRANSITION}
+                      className="absolute left-2 top-4 pointer-events-auto"
+                    >
+                      <PlaybackControls compact />
+                    </motion.div>
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={CHROME_FADE_TRANSITION}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-auto"
+                    >
+                      <ActionRail
+                        video={shorts[activeIndex]}
+                        onOpenComments={() => setCommentsOpen(true)}
+                        onOpenOptions={() => setOptionsOpen(true)}
+                        compact
+                        showAvatar={false}
+                      />
+                    </motion.div>
+                  </>
                 )}
               </AnimatePresence>
             </div>
