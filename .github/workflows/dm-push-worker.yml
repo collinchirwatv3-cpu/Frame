@@ -1,0 +1,50 @@
+name: DM push worker
+
+# Triggers /api/internal/push/process on a schedule. Vercel's own Hobby-plan
+# cron only fires once a day (see that route's own comment, and
+# /api/internal/parties/notify-scheduled's — same constraint, same reason),
+# which is useless for "notify on a new DM." This repo is already on
+# GitHub, so GitHub Actions' own scheduler is a free worker mechanism that
+# needs no new third-party signup and no plan upgrade — a legitimate
+# alternative to a paid Vercel Pro cron or handing CRON_SECRET to an
+# unknown external pinger service.
+#
+# Real constraints on this, worth knowing before relying on it (verified
+# against current GitHub Actions docs):
+#   - 5 minutes is the shortest interval GitHub honors for a scheduled
+#     workflow; a tighter cron expression is silently not triggered any
+#     faster than that.
+#   - Timing is best-effort, not guaranteed — GitHub can delay a scheduled
+#     run by 15+ minutes during periods of high platform load.
+#   - Scheduled workflows only fire from the repository's default branch,
+#     and GitHub auto-disables them after 60 days with no commits to the
+#     repo (a real push resumes them; commenting/dispatching does not).
+#
+# Requires a repo secret named CRON_SECRET, set to the exact same value as
+# the CRON_SECRET environment variable in Vercel's production environment
+# (isAuthorized() in the route only accepts that one shared value).
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: dm-push-worker
+  cancel-in-progress: false
+
+jobs:
+  process-push-jobs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Call the push worker route
+        run: |
+          status=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://getframe.vercel.app/api/internal/push/process)
+          echo "HTTP status: $status"
+          cat /tmp/response.json
+          if [ "$status" != "200" ]; then
+            echo "::error::push worker returned $status"
+            exit 1
+          fi
