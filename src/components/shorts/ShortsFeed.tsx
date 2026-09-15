@@ -15,6 +15,7 @@ import { useEngagementStore } from "@/store/engagement-store";
 import { useCurrentUserStore } from "@/store/current-user-store";
 import { playWithMutedFallback } from "@/lib/audio";
 import { recordVideoView } from "@/lib/video-views";
+import { useCastControl } from "@/lib/cast";
 import { CHROME_FADE_TRANSITION, FOCUS_PULL_TRANSITION } from "@/lib/motion";
 import { CHROME_TAP_SCALE } from "@/lib/chrome";
 import type { Video } from "@/lib/types";
@@ -65,6 +66,9 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
   const enterDirectorMode = usePlayerStore((s) => s.enterDirectorMode);
   const exitDirectorMode = usePlayerStore((s) => s.exitDirectorMode);
   const showActions = !directorMode;
+  const { available: castAvailable, triggerCast } = useCastControl(
+    () => videoRefs.current[activeIndex] ?? null
+  );
 
   // Read once per render, looked up per-tile below — same store VideoOverlay
   // (the main feed's equivalent caption) uses for its own Follow pill.
@@ -375,7 +379,7 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
                       transition={CHROME_FADE_TRANSITION}
                       className="absolute left-2 top-4 pointer-events-auto"
                     >
-                      <PlaybackControls compact />
+                      <PlaybackControls compact castAvailable={castAvailable} onCast={triggerCast} />
                     </motion.div>
                     <motion.div
                       initial={{ opacity: 0 }}

@@ -15,6 +15,7 @@ import { useCurrentUserStore } from "@/store/current-user-store";
 import { createClient } from "@/lib/supabase/client";
 import { fadeVolume, playWithMutedFallback } from "@/lib/audio";
 import { recordVideoView } from "@/lib/video-views";
+import { useCastControl } from "@/lib/cast";
 import { FOCUS_PULL_TRANSITION, CHROME_FADE_TRANSITION } from "@/lib/motion";
 import type { Video } from "@/lib/types";
 
@@ -63,6 +64,7 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
   const setScrubbing = usePlayerStore((s) => s.setScrubbing);
   const ownProfile = useCurrentUserStore((s) => s.profile);
   const displayProgress = seeking ? scrubProgress : progress;
+  const { available: castAvailable, triggerCast } = useCastControl(() => videoRef.current);
 
   useEffect(() => {
     const el = videoRef.current;
@@ -256,7 +258,7 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
                   one, present on every page rather than just while a
                   video's on screen. */}
               <div className="pointer-events-auto absolute top-4 left-4 md:top-6 md:left-6 z-10">
-                <PlaybackControls />
+                <PlaybackControls castAvailable={castAvailable} onCast={triggerCast} />
               </div>
 
               {showSearchButton && (
