@@ -1,6 +1,4 @@
 import { z } from "zod";
-import { categories } from "@/lib/categories";
-import type { Category } from "@/lib/types";
 
 /** Below this, a video is always "short" — see the API route, which
  * re-derives content_type from this same threshold server-side and never
@@ -28,7 +26,21 @@ export const uploadMetadataSchema = z
   .object({
     title: z.string().trim().min(1, "Title is required").max(120, "Title is too long"),
     description: z.string().trim().max(2000, "Description is too long").optional().default(""),
-    category: z.enum(categories as [Category, ...Category[]]),
+    // Replaces the old single `category` enum — real tag ids now, from the
+    // tag taxonomy (see supabase/migrations/20260917100000_tag_taxonomy_schema.sql).
+    // Shape/count only, enforced here; id-existence and category-membership
+    // (does this id actually belong to the genre facet, etc.) is a DB round
+    // trip, done in the route (src/app/api/uploads/route.ts) — same
+    // "zod validates shape, the route re-derives/re-checks anything
+    // DB-dependent" split this file already uses for contentType/duration.
+    contentTypeTagId: z.string().uuid("Pick a content type"),
+    genreTagIds: z.array(z.string().uuid()).min(1, "Pick at least one genre").max(3, "Up to 3 genres"),
+    topicTagIds: z.array(z.string().uuid()).min(1, "Pick at least one topic").max(5, "Up to 5 topics"),
+    moodTagIds: z.array(z.string().uuid()).max(3, "Up to 3 mood/style tags").default([]),
+    locationTagId: z.string().uuid().nullable().default(null),
+    // Optional but encouraged per the spec — generous cap, not a real limit
+    // on how much gear a creator can tag, just a sanity bound.
+    gearTagIds: z.array(z.string().uuid()).max(60, "Too many gear tags").default([]),
     // Films are the cinematic landscape library (the app's core identity);
     // shorts are the separate, also-landscape, non-cinematic Discover feed —
     // see supabase/migrations/20260806120000_shorts_content_type.sql (that

@@ -112,6 +112,35 @@ export type Video = {
   createdAt?: string;
 };
 
+export type TagFacet = "content_type" | "genre" | "topic" | "mood" | "location" | "gear";
+export type TagTier = "primary" | "secondary" | "technical";
+
+/** tag_categories — one row per taxonomy section (content type, genre,
+ * gear/camera-model, etc.), never a native enum on the DB side (see the
+ * tag_taxonomy_schema migration's own comment for why). */
+export type TagCategory = {
+  id: string;
+  sectionNumber: number;
+  name: string;
+  tier: TagTier;
+  facet: TagFacet;
+};
+
+/** A single taxonomy tag — content type, genre, mood, location, or gear
+ * (camera/lens/lighting/audio/etc., down to a specific manufacturer/model).
+ * parentTagId covers two different hierarchies depending on category:
+ * Location's continent->country->region->city chain, and gear's
+ * manufacturer->model grouping. */
+export type Tag = {
+  id: string;
+  categoryId: string;
+  parentTagId?: string;
+  name: string;
+  slug: string;
+  manufacturer?: string;
+  productModel?: string;
+};
+
 export type ShareLinkTTL = "1h" | "24h" | "7d";
 
 export type ShareLink = {

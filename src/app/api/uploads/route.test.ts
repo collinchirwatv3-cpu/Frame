@@ -19,10 +19,24 @@ let videoInsertResult: { data: { id: string } | null; error: { message: string }
 };
 const videosInsertSpy = vi.fn();
 const campaignsInsertSpy = vi.fn();
+const videoTagsInsertSpy = vi.fn();
+
+// Real tag ids aren't needed — the mock "tags" table just needs to answer
+// facet-membership questions the same way the real one would, for
+// whichever placeholder ids the tests below submit.
+const CONTENT_TYPE_TAG_ID = "11111111-1111-4111-8111-111111111111";
+const GENRE_TAG_ID = "22222222-2222-4222-8222-222222222222";
+const TOPIC_TAG_ID = "33333333-3333-4333-8333-333333333333";
+const FACET_BY_TAG_ID: Record<string, string> = {
+  [CONTENT_TYPE_TAG_ID]: "content_type",
+  [GENRE_TAG_ID]: "genre",
+  [TOPIC_TAG_ID]: "topic",
+};
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     auth: { getUser: async () => ({ data: { user: mockUser } }) },
+    rpc: async () => ({ data: [], error: null }),
     from: (table: string) => {
       if (table === "profiles") {
         return { select: () => ({ eq: () => ({ single: async () => ({ data: profileRow, error: null }) }) }) };
@@ -47,6 +61,31 @@ vi.mock("@/lib/supabase/server", () => ({
             return Promise.resolve({ error: null });
           },
         };
+      }
+      if (table === "tags") {
+        return {
+          select: () => ({
+            in: (_col: string, ids: string[]) => ({
+              eq: async () => ({
+                data: ids
+                  .filter((id) => id in FACET_BY_TAG_ID)
+                  .map((id) => ({ id, tag_categories: { facet: FACET_BY_TAG_ID[id] } })),
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "video_tags") {
+        return {
+          insert: (rows: unknown) => {
+            videoTagsInsertSpy(rows);
+            return Promise.resolve({ error: null });
+          },
+        };
+      }
+      if (table === "tag_implies") {
+        return { select: () => ({ in: async () => ({ data: [], error: null }) }) };
       }
       throw new Error(`route.test.ts: unexpected table "${table}"`);
     },
@@ -73,7 +112,9 @@ const { POST } = await import("./route");
 const validBody = {
   title: "Iceland, from 400ft",
   description: "",
-  category: "Travel",
+  contentTypeTagId: CONTENT_TYPE_TAG_ID,
+  genreTagIds: [GENRE_TAG_ID],
+  topicTagIds: [TOPIC_TAG_ID],
   width: 1920,
   height: 1080,
   durationSeconds: 300,
@@ -96,6 +137,7 @@ beforeEach(() => {
   videoInsertResult = { data: { id: "video-1" }, error: null };
   videosInsertSpy.mockClear();
   campaignsInsertSpy.mockClear();
+  videoTagsInsertSpy.mockClear();
 });
 
 describe("POST /api/uploads", () => {

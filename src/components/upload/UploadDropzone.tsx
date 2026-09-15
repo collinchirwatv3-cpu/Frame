@@ -15,7 +15,6 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { categories } from "@/lib/categories";
 import { checkUpload, qualityLabel, type UploadCheck } from "@/lib/video-validation";
 import { deriveTitleFromFilename } from "@/lib/upload";
 import { LONGFORM_MIN_DURATION_SECONDS } from "@/lib/validation/upload";
@@ -25,6 +24,10 @@ import { createClient } from "@/lib/supabase/client";
 import { UploadRejection } from "./UploadRejection";
 import { CameraCapture } from "./CameraCapture";
 import { ThumbnailPicker } from "./ThumbnailPicker";
+import { ContentTypeSelect } from "./tags/ContentTypeSelect";
+import { TagMultiSelect } from "./tags/TagMultiSelect";
+import { LocationPicker } from "./tags/LocationPicker";
+import { GearPicker } from "./tags/GearPicker";
 import type { AspectRatioDef } from "@/lib/aspect-ratio";
 
 type Status =
@@ -92,6 +95,10 @@ export function UploadDropzone() {
   const [videoId, setVideoId] = useState<string | null>(null);
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
+  // Inline, stays on the form — unlike errorMessage above, which only ever
+  // shows on the full-screen status==="failed" view for a real upload/
+  // encode failure.
+  const [tagFormError, setTagFormError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const tusUploadRef = useRef<TusUpload | null>(null);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -102,13 +109,21 @@ export function UploadDropzone() {
   const hasHydrated = useUploadDraftStore((s) => s.hasHydrated);
   const draftTitle = useUploadDraftStore((s) => s.title);
   const draftDescription = useUploadDraftStore((s) => s.description);
-  const draftCategory = useUploadDraftStore((s) => s.category);
   const setDraftTitle = useUploadDraftStore((s) => s.setTitle);
   const setDraftDescription = useUploadDraftStore((s) => s.setDescription);
-  const setDraftCategory = useUploadDraftStore((s) => s.setCategory);
+  const contentTypeTagId = useUploadDraftStore((s) => s.contentTypeTagId);
+  const genreTagIds = useUploadDraftStore((s) => s.genreTagIds);
+  const topicTagIds = useUploadDraftStore((s) => s.topicTagIds);
+  const moodTagIds = useUploadDraftStore((s) => s.moodTagIds);
+  const locationTagId = useUploadDraftStore((s) => s.locationTagId);
+  const gearTagIds = useUploadDraftStore((s) => s.gearTagIds);
+  const setContentTypeTagId = useUploadDraftStore((s) => s.setContentTypeTagId);
+  const setGenreTagIds = useUploadDraftStore((s) => s.setGenreTagIds);
+  const setTopicTagIds = useUploadDraftStore((s) => s.setTopicTagIds);
+  const setMoodTagIds = useUploadDraftStore((s) => s.setMoodTagIds);
+  const setLocationTagId = useUploadDraftStore((s) => s.setLocationTagId);
+  const setGearTagIds = useUploadDraftStore((s) => s.setGearTagIds);
   const clearDraft = useUploadDraftStore((s) => s.clearDraft);
-  // Use the creator's saved choice, or the first supported category.
-  const category = draftCategory ?? categories[0];
 
   // A different table than current-user-store's profile (business_channels
   // isn't part of the profiles row), so it's fetched locally here rather
@@ -242,6 +257,20 @@ export function UploadDropzone() {
 
   async function publish() {
     if (!file || !effectiveDims || !check?.ok) return;
+    // contentTypeTagId is also gated by ContentTypeSelect's native
+    // `required` <select> (blocks the submit event entirely, same as the
+    // title input already relies on) — genre/topic aren't native form
+    // controls, so their own min-1 requirement needs an explicit check
+    // here instead, matching what the server (api/uploads route) enforces
+    // regardless either way. Sets a form-level error, not `status:
+    // "failed"` — that's the full-screen failure view for a real upload/
+    // encode failure, not a spot to bounce someone to for forgetting a
+    // required field while still on the form.
+    if (!contentTypeTagId || genreTagIds.length === 0 || topicTagIds.length === 0) {
+      setTagFormError("Pick a content type, at least one genre, and at least one topic.");
+      return;
+    }
+    setTagFormError("");
     setStatus("minting");
     setErrorMessage("");
 
@@ -252,7 +281,12 @@ export function UploadDropzone() {
         body: JSON.stringify({
           title: draftTitle,
           description: draftDescription,
-          category,
+          contentTypeTagId,
+          genreTagIds,
+          topicTagIds,
+          moodTagIds,
+          locationTagId,
+          gearTagIds,
           // The server re-derives "short" from duration regardless of what's
           // sent here (never client-trusted for that boundary) — this is
           // only the film-vs-longform choice, and only reachable at all
@@ -565,19 +599,87 @@ export function UploadDropzone() {
             />
           </div>
           <div>
-            <label className="text-sm font-medium mb-1.5 block">Category</label>
-            <select
-              value={category}
-              onChange={(e) => setDraftCategory(e.target.value as (typeof categories)[number])}
-              className="w-full bg-card border border-border rounded-xl px-4 py-2.5 text-sm outline-none focus:border-primary transition-colors"
-            >
-              {categories.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+            <label className="text-sm font-medium mb-1.5 block">
+              Content type <span className="text-primary">*</span>
+            </label>
+            <ContentTypeSelect value={contentTypeTagId} onChange={setContentTypeTagId} />
           </div>
+
+          <TagMultiSelect
+            label="Genre"
+            categoryIds={["fiction_genre", "documentary_genre"]}
+            max={3}
+            value={genreTagIds}
+            onChange={setGenreTagIds}
+            required
+          />
+          <TagMultiSelect
+            label="Topic"
+            categoryIds={["sports", "lifestyle_subject", "music", "gaming", "technology_knowledge"]}
+            max={5}
+            value={topicTagIds}
+            onChange={setTopicTagIds}
+            required
+          />
+          <TagMultiSelect
+            label="Mood"
+            categoryIds={["mood_tone", "visual_style"]}
+            max={3}
+            value={moodTagIds}
+            onChange={setMoodTagIds}
+          />
+          <LocationPicker value={locationTagId} onChange={setLocationTagId} />
+
+          {/* Gear — optional but encouraged per the spec; a creator can
+              always skip unknown gear. One picker per sub-facet, each its
+              own set of taxonomy categories. */}
+          <div className="pt-2 border-t border-border">
+            <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary mb-3">
+              Gear (optional)
+            </p>
+            <div className="flex flex-col gap-4">
+              <GearPicker label="Camera" categoryIds={["camera_model"]} value={gearTagIds} onChange={setGearTagIds} />
+              <GearPicker
+                label="Lenses"
+                categoryIds={["lens_family", "lens_type", "lens_manufacturer"]}
+                value={gearTagIds}
+                onChange={setGearTagIds}
+              />
+              <GearPicker
+                label="Lighting"
+                categoryIds={["lighting_fixture", "lighting_manufacturer"]}
+                value={gearTagIds}
+                onChange={setGearTagIds}
+              />
+              <GearPicker
+                label="Audio"
+                categoryIds={["microphone_model", "audio_recorder", "wireless_audio_system"]}
+                value={gearTagIds}
+                onChange={setGearTagIds}
+              />
+              <GearPicker
+                label="Camera movement"
+                categoryIds={["camera_movement", "camera_support"]}
+                value={gearTagIds}
+                onChange={setGearTagIds}
+              />
+              <GearPicker
+                label="Format"
+                categoryIds={["recording_format", "film_gauge", "film_stock"]}
+                value={gearTagIds}
+                onChange={setGearTagIds}
+              />
+              <GearPicker
+                label="Post production"
+                categoryIds={["editing_software", "colour_software", "vfx_software", "audio_post_software"]}
+                value={gearTagIds}
+                onChange={setGearTagIds}
+              />
+              <GearPicker label="Craft" categoryIds={["craft"]} value={gearTagIds} onChange={setGearTagIds} />
+            </div>
+          </div>
+
+          {tagFormError && <p className="text-xs text-red-400">{tagFormError}</p>}
 
           {/* Only reachable once the probed duration actually clears the
               threshold — for anything shorter, LongForm literally isn't a

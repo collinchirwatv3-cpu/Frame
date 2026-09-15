@@ -54,7 +54,12 @@ export async function POST(request: NextRequest) {
   const {
     title,
     description,
-    category,
+    contentTypeTagId,
+    genreTagIds,
+    topicTagIds,
+    moodTagIds,
+    locationTagId,
+    gearTagIds,
     contentType,
     publishMode,
     width,
@@ -62,6 +67,50 @@ export async function POST(request: NextRequest) {
     durationSeconds,
     fileSizeBytes,
   } = parsed.data;
+
+  // Pre-flight tag validation — before createTusUploadSession is even
+  // called, so a bad tag id fails fast with zero side effects, same
+  // "clearer, faster-failing error" reasoning as the invite check above.
+  // zod only checked shape (valid UUIDs, right counts); id-existence and
+  // facet membership (a genre id actually being a genre.tags row, not a
+  // gear id smuggled into the genre slot) needs the DB.
+  const tagSelection: { ids: string[]; facet: string; label: string }[] = [
+    { ids: [contentTypeTagId], facet: "content_type", label: "Content type" },
+    { ids: genreTagIds, facet: "genre", label: "Genre" },
+    { ids: topicTagIds, facet: "topic", label: "Topic" },
+    { ids: moodTagIds, facet: "mood", label: "Mood" },
+    { ids: locationTagId ? [locationTagId] : [], facet: "location", label: "Location" },
+    { ids: gearTagIds, facet: "gear", label: "Gear" },
+  ];
+  const allSubmittedTagIds = [...new Set(tagSelection.flatMap((s) => s.ids))];
+
+  if (allSubmittedTagIds.length > 0) {
+    const { data: validTags, error: tagsError } = await supabase
+      .from("tags")
+      .select("id, tag_categories!inner(facet)")
+      .in("id", allSubmittedTagIds)
+      .eq("active", true);
+    if (tagsError) {
+      return NextResponse.json({ error: "Could not validate tags" }, { status: 500 });
+    }
+    const facetById = new Map(
+      ((validTags ?? []) as unknown as { id: string; tag_categories: { facet: string } }[]).map((t) => [
+        t.id,
+        t.tag_categories.facet,
+      ])
+    );
+    for (const { ids, facet, label } of tagSelection) {
+      for (const id of ids) {
+        const actualFacet = facetById.get(id);
+        if (!actualFacet) {
+          return NextResponse.json({ error: `${label}: one or more tags no longer exist` }, { status: 400 });
+        }
+        if (actualFacet !== facet) {
+          return NextResponse.json({ error: `${label}: invalid tag selection` }, { status: 400 });
+        }
+      }
+    }
+  }
 
   // Authoritative, not client-trusted: under 3 minutes is always "short",
   // full stop — the schema's superRefine already rejects an explicit
@@ -128,7 +177,6 @@ export async function POST(request: NextRequest) {
       content_type: contentTypeFinal,
       title,
       description,
-      category,
       width,
       height,
       duration_seconds: durationSeconds,
@@ -143,6 +191,61 @@ export async function POST(request: NextRequest) {
 
   if (error || !video) {
     return NextResponse.json({ error: "Could not create the video record" }, { status: 500 });
+  }
+
+  // Write the creator's direct tag selections, then resolve gear
+  // inheritance (tag_implies) and location ancestry (tag_ancestors RPC)
+  // into additional source='inherited' rows. A failure here degrades
+  // gracefully rather than failing the whole upload — same tolerance this
+  // route already has for the campaigns insert below: the video is real
+  // either way, only its tags silently wouldn't have attached. Already
+  // validated to exist/be-active/match-facet above, so this is just the
+  // write.
+  if (allSubmittedTagIds.length > 0) {
+    const { error: directTagsError } = await supabase
+      .from("video_tags")
+      .insert(allSubmittedTagIds.map((tag_id) => ({ video_id: video.id, tag_id, source: "creator" as const })));
+    if (directTagsError) {
+      console.error(`Upload: failed to write direct tags for video ${video.id}:`, directTagsError);
+    } else {
+      const gearIds = gearTagIds;
+      if (gearIds.length > 0) {
+        const { data: implies } = await supabase
+          .from("tag_implies")
+          .select("implied_tag_id")
+          .in("tag_id", gearIds);
+        const impliedIds = [
+          ...new Set(
+            ((implies ?? []) as { implied_tag_id: string }[])
+              .map((i) => i.implied_tag_id)
+              .filter((id) => !allSubmittedTagIds.includes(id))
+          ),
+        ];
+        if (impliedIds.length > 0) {
+          const { error: impliedError } = await supabase
+            .from("video_tags")
+            .insert(impliedIds.map((tag_id) => ({ video_id: video.id, tag_id, source: "inherited" as const })));
+          if (impliedError) {
+            console.error(`Upload: failed to write inherited gear tags for video ${video.id}:`, impliedError);
+          }
+        }
+      }
+
+      if (locationTagId) {
+        const { data: ancestors } = await supabase.rpc("tag_ancestors", { p_tag_id: locationTagId });
+        const ancestorIds = ((ancestors ?? []) as { id: string }[])
+          .map((a) => a.id)
+          .filter((id) => !allSubmittedTagIds.includes(id));
+        if (ancestorIds.length > 0) {
+          const { error: ancestorError } = await supabase
+            .from("video_tags")
+            .insert(ancestorIds.map((tag_id) => ({ video_id: video.id, tag_id, source: "inherited" as const })));
+          if (ancestorError) {
+            console.error(`Upload: failed to write location ancestor tags for video ${video.id}:`, ancestorError);
+          }
+        }
+      }
+    }
   }
 
   // Same user-scoped client as the videos insert above, not service-role —
