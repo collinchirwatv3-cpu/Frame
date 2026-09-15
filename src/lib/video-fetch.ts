@@ -276,10 +276,9 @@ export async function fetchProfileByUsername(username: string): Promise<Creator 
 }
 
 /** Top creators by total_views, for Search's creator row. total_views is
- * real schema but currently unwritten anywhere for real users (no
- * trigger/route increments it) — this reads as populated for seed/mock
- * data but stays static for real accounts until real view tracking exists.
- * Known, accepted limitation — not something this function fixes. */
+ * real now — kept current by a trigger on video_views (see the
+ * creator_total_views migration) firing whenever any of a creator's videos
+ * earns a genuine distinct-viewer view. */
 export async function fetchTopCreators(limit = 20): Promise<Creator[]> {
   const supabase = createClient();
   const { data, error } = await supabase

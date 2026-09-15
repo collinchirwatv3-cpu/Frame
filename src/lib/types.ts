@@ -9,6 +9,12 @@ export type Creator = {
   instagramHandle?: string;
   followers: number;
   following: number;
+  /** profiles.total_views — real: kept up to date by a trigger on
+   * video_views (see the creator_total_views migration), a running sum of
+   * every video this creator has ever earned a real, distinct-viewer view
+   * on. Not derivable by summing this creator's currently-fetched videos'
+   * own `views` — it also covers videos not in whatever list is on
+   * screen. */
   totalViews: number;
   verified?: boolean;
   /** profiles.premium_status — real, existing schema, but no real user can
@@ -82,8 +88,9 @@ export type Video = {
   /** Real, from videos.view_count — distinct signed-in viewers who've
    * watched past 3s (see the record_video_view migration). Optional only
    * for mock-data/pre-migration fixtures; every real video-fetch.ts row has
-   * it. Unlike the creator-level totalViews below, this one is real and
-   * actually increments — don't conflate the two. */
+   * it. Creator.totalViews is a real per-video-view sum too now (kept up
+   * to date by the same video_views insert trigger), not a separate,
+   * differently-sourced number. */
   views?: number;
   durationSeconds: number;
   /** Real encoded dimensions — the single source of truth for aspect ratio,
