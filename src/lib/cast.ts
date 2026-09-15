@@ -21,6 +21,22 @@ type AirPlayCapableVideo = HTMLVideoElement & {
  * whenever the API exists, let the OS-native picker itself say "no
  * devices found" if that's actually the case.
  *
+ * KNOWN QUALITY GAP, live-confirmed by a user casting a real video: AirPlay
+ * to an actual Apple TV does genuine source handoff (the TV fetches the
+ * HLS stream itself — full quality, matches what a phone would show, may
+ * even be higher since it picks its own rendition). AirPlay to a Mac
+ * (System Settings' "AirPlay Receiver", macOS Monterey+) does NOT — video
+ * stayed visibly lower quality the entire watch, not just a brief
+ * ABR-ramp-up dip, consistent with Apple's Mac receiver being a
+ * mirroring/relay target rather than a first-class "smart AirPlay video"
+ * receiver the way Apple TV is. This call (`webkitShowPlaybackTargetPicker`)
+ * already requests the smart/direct mode — there is no web API lever to
+ * force better behavior specifically for a Mac target; whatever macOS's
+ * receiver does with that request happens entirely OS-side, outside this
+ * app's control. Don't re-claim "casting never loses quality" as a
+ * blanket fact — it held for testing against Apple TV/Chromecast-style
+ * targets, not for AirPlay-to-Mac.
+ *
  * `getVideo` is a function, not a stable ref — ShortsFeed's active
  * <video> element's identity changes as activeIndex changes, so it needs
  * to re-resolve on every call rather than close over one fixed element the
