@@ -62,7 +62,7 @@ export const metadata: Metadata = {
 // values instead of 0 — required once this runs full-screen with no browser
 // chrome (a Capacitor-wrapped WKWebView, or an installed PWA).
 export const viewport: Viewport = {
-  themeColor: "#090909",
+  themeColor: "#000000",
   viewportFit: "cover",
 };
 

@@ -25,7 +25,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: "#090909",
+            backgroundColor: "#000000",
             color: "#8E8E93",
             fontSize: 32,
           }}
@@ -45,7 +45,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
           height: "100%",
           display: "flex",
           position: "relative",
-          backgroundColor: "#090909",
+          backgroundColor: "#000000",
         }}
       >
         <img
@@ -61,7 +61,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
             inset: 0,
             display: "flex",
             background:
-              "linear-gradient(to top, rgba(9,9,9,0.95) 10%, rgba(9,9,9,0.35) 55%, rgba(9,9,9,0.15) 100%)",
+              "linear-gradient(to top, rgba(0,0,0,0.95) 10%, rgba(0,0,0,0.35) 55%, rgba(0,0,0,0.15) 100%)",
           }}
         />
 

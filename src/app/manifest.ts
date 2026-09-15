@@ -11,8 +11,8 @@ export default function manifest(): MetadataRoute.Manifest {
       "FRAMES is the home for landscape creators. Every Frame full-screen and cinematic — 16:9, 21:9, and 16:10.",
     start_url: "/",
     display: "standalone",
-    background_color: "#090909",
-    theme_color: "#090909",
+    background_color: "#000000",
+    theme_color: "#000000",
     icons: [
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
       { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
