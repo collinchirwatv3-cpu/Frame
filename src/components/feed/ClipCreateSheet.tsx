@@ -16,13 +16,25 @@ const MAX_CLIP_SECONDS = 120; // matches the clips table's own check constraint
  * (backdrop + SHEET_SPRING slide-up + useEscapeToClose + {video, open,
  * onClose}). The two-handle range track is genuinely new UI — no existing
  * component to extend, though the drag math mirrors VideoCard.tsx's own
- * single-thumb scrub bar (pointer capture + getBoundingClientRect fraction). */
+ * single-thumb scrub bar (pointer capture + getBoundingClientRect fraction).
+ *
+ * A single-track scrubber sits above the range track: a plain <video>,
+ * seeked (never played) to whatever position was last touched — dragging
+ * either trim handle previews that boundary's frame, and dragging/tapping
+ * the track itself scrubs a separate playhead anywhere inside the
+ * selected range, so a creator can see what they're actually clipping
+ * instead of guessing from timestamps alone. */
 export function ClipCreateSheet({ video, open, onClose }: { video: Video; open: boolean; onClose: () => void }) {
   const trackRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const [startFraction, setStartFraction] = useState(0);
   const [endFraction, setEndFraction] = useState(() =>
     Math.min(1, (video.durationSeconds > 0 ? 15 : 1) / Math.max(video.durationSeconds, 1))
   );
+  // The scrubber's own position — independent of the two trim handles, but
+  // always clamped inside [start, end] since previewing outside the
+  // selected range isn't a meaningful preview of the clip being created.
+  const [playheadFraction, setPlayheadFraction] = useState(0);
   const [title, setTitle] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -37,6 +49,16 @@ export function ClipCreateSheet({ video, open, onClose }: { video: Video; open: 
   const minGapFraction = duration > 0 ? MIN_CLIP_SECONDS / duration : 0;
   const maxGapFraction = duration > 0 ? MAX_CLIP_SECONDS / duration : 1;
 
+  // Drives the preview <video>'s currentTime — called any time the
+  // playhead, or a trim handle standing in for it, moves. Seeking a plain
+  // <video> element is how the frame preview updates; there's no playback
+  // here, just scrub-to-seek.
+  function previewAt(fraction: number) {
+    setPlayheadFraction(fraction);
+    const el = videoRef.current;
+    if (el && duration > 0) el.currentTime = fraction * duration;
+  }
+
   function fractionFromClientX(clientX: number): number {
     const track = trackRef.current;
     if (!track) return 0;
@@ -45,6 +67,11 @@ export function ClipCreateSheet({ video, open, onClose }: { video: Video; open: 
   }
 
   function handleStartMove(e: React.PointerEvent<HTMLDivElement>) {
+    // Without this, the move bubbles up to the track div's own
+    // onPointerMove (handlePlayheadMove) and clamps against last render's
+    // startFraction/endFraction — both handlers would fire for the same
+    // event, and whichever runs second wins, fighting this one's own seek.
+    e.stopPropagation();
     const f = fractionFromClientX(e.clientX);
     const min = 0;
     const max = endFraction - minGapFraction;
@@ -53,18 +80,42 @@ export function ClipCreateSheet({ video, open, onClose }: { video: Video; open: 
     // rather than refusing the gesture — feels natural for a range selector.
     setStartFraction(clamped);
     if (endFraction - clamped > maxGapFraction) setEndFraction(clamped + maxGapFraction);
+    previewAt(clamped);
   }
 
   function handleEndMove(e: React.PointerEvent<HTMLDivElement>) {
+    e.stopPropagation(); // see handleStartMove's comment
     const f = fractionFromClientX(e.clientX);
     const min = startFraction + minGapFraction;
     const max = 1;
     const clamped = Math.min(Math.max(f, min), max);
     setEndFraction(clamped);
     if (clamped - startFraction > maxGapFraction) setStartFraction(clamped - maxGapFraction);
+    previewAt(clamped);
   }
 
+  function handlePlayheadMove(e: React.PointerEvent<HTMLDivElement>) {
+    const f = fractionFromClientX(e.clientX);
+    previewAt(Math.min(Math.max(f, startFraction), endFraction));
+  }
+
+  // Tapping/dragging anywhere on the track background (not one of the
+  // three handles) scrubs the playhead directly to that point — the actual
+  // "scrub" interaction, rather than only being able to move the trim
+  // boundaries themselves.
+  function handleTrackScrub(e: React.PointerEvent<HTMLDivElement>) {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const f = fractionFromClientX(e.clientX);
+    previewAt(Math.min(Math.max(f, startFraction), endFraction));
+  }
+
+  // stopPropagation here matters: all three handles sit inside the track
+  // div that now also handles tap-to-scrub (handleTrackScrub) — without
+  // this, pressing down on a handle would also fire the track's own
+  // pointerdown and jump the playhead to that exact spot before the drag
+  // even starts.
   function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
   }
 
@@ -127,17 +178,44 @@ export function ClipCreateSheet({ video, open, onClose }: { video: Video; open: 
             </div>
 
             <div className="px-5 py-4 flex flex-col gap-4">
+              <video
+                ref={videoRef}
+                src={video.playbackUrl}
+                poster={video.posterUrl}
+                muted
+                playsInline
+                preload="metadata"
+                onLoadedMetadata={(e) => {
+                  e.currentTarget.currentTime = startSeconds;
+                }}
+                className="w-full aspect-video rounded-xl bg-bg object-contain"
+              />
+
               <div className="flex items-center justify-between text-xs text-text-secondary">
                 <span>{formatTimestamp(startSeconds)}</span>
                 <span className="font-medium text-accent">{formatTimestamp(clipLength)} clip</span>
                 <span>{formatTimestamp(endSeconds)}</span>
               </div>
 
-              <div ref={trackRef} className="relative h-8 flex items-center touch-none">
+              <div
+                ref={trackRef}
+                onPointerDown={handleTrackScrub}
+                onPointerMove={(e) => e.buttons === 1 && handlePlayheadMove(e)}
+                className="relative h-8 flex items-center touch-none cursor-pointer"
+              >
                 <div className="absolute inset-x-0 h-1.5 rounded-full bg-bg" />
                 <div
                   className="absolute h-1.5 rounded-full bg-primary"
                   style={{ left: `${startFraction * 100}%`, right: `${(1 - endFraction) * 100}%` }}
+                />
+                {/* Purely a visual readout of previewAt()'s last position —
+                    not its own control (the track div's pointer handlers
+                    are what's actually draggable), so no slider role here;
+                    that would claim keyboard operability this has none of. */}
+                <div
+                  aria-hidden="true"
+                  className="absolute w-0.5 h-6 bg-white -translate-x-1/2 pointer-events-none"
+                  style={{ left: `${playheadFraction * 100}%` }}
                 />
                 <div
                   onPointerDown={handlePointerDown}
