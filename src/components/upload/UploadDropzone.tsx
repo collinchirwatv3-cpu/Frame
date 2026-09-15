@@ -28,6 +28,7 @@ import { ContentTypeSelect } from "./tags/ContentTypeSelect";
 import { TagMultiSelect } from "./tags/TagMultiSelect";
 import { LocationPicker } from "./tags/LocationPicker";
 import { GearPicker } from "./tags/GearPicker";
+import { CollapsibleTagSection } from "./tags/CollapsibleTagSection";
 import type { AspectRatioDef } from "@/lib/aspect-ratio";
 
 type Status =
@@ -621,22 +622,32 @@ export function UploadDropzone() {
             onChange={setTopicTagIds}
             required
           />
-          <TagMultiSelect
-            label="Mood"
-            categoryIds={["mood_tone", "visual_style"]}
-            max={3}
-            value={moodTagIds}
-            onChange={setMoodTagIds}
-          />
-          <LocationPicker value={locationTagId} onChange={setLocationTagId} />
+          <CollapsibleTagSection
+            title="Mood"
+            summary={moodTagIds.length > 0 ? `${moodTagIds.length} selected` : "Optional"}
+          >
+            <TagMultiSelect
+              label="Mood"
+              categoryIds={["mood_tone", "visual_style"]}
+              max={3}
+              value={moodTagIds}
+              onChange={setMoodTagIds}
+            />
+          </CollapsibleTagSection>
+
+          <CollapsibleTagSection title="Location" summary={locationTagId ? "Set" : "Optional"}>
+            <LocationPicker value={locationTagId} onChange={setLocationTagId} />
+          </CollapsibleTagSection>
 
           {/* Gear — optional but encouraged per the spec; a creator can
               always skip unknown gear. One picker per sub-facet, each its
-              own set of taxonomy categories. */}
-          <div className="pt-2 border-t border-border">
-            <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary mb-3">
-              Gear (optional)
-            </p>
+              own set of taxonomy categories, all collapsed behind a single
+              section so skipping gear entirely doesn't mean scrolling past
+              eight always-open typeaheads first. */}
+          <CollapsibleTagSection
+            title="Gear"
+            summary={gearTagIds.length > 0 ? `${gearTagIds.length} selected` : "Optional"}
+          >
             <div className="flex flex-col gap-4">
               <GearPicker label="Camera" categoryIds={["camera_model"]} value={gearTagIds} onChange={setGearTagIds} />
               <GearPicker
@@ -677,7 +688,7 @@ export function UploadDropzone() {
               />
               <GearPicker label="Craft" categoryIds={["craft"]} value={gearTagIds} onChange={setGearTagIds} />
             </div>
-          </div>
+          </CollapsibleTagSection>
 
           {tagFormError && <p className="text-xs text-red-400">{tagFormError}</p>}
 
