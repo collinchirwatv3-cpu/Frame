@@ -9,6 +9,7 @@ import { navItems } from "./nav-items";
 import { Logo } from "@/components/ui/Logo";
 import { usePlayerStore } from "@/store/player-store";
 import { useIsLandscapeMobile } from "@/lib/use-landscape-mobile";
+import { hidesSideRail } from "@/lib/nav-routes";
 
 // Profile is a real destination in navItems again (it used to be excluded
 // and reached only via the separate floating ProfileFloat/ProfileAvatarLink
@@ -28,6 +29,11 @@ export function SideRail() {
   // so the width/directorMode-driven layout animation stays intact for the
   // cases this rail does apply to.
   if (isLandscapeMobile) return null;
+
+  // Frames/Discover are full-bleed video feeds — see hidesSideRail's own
+  // doc comment for why Director Mode's timed collapse isn't a substitute
+  // for just not reserving this flex column on these two routes at all.
+  if (hidesSideRail(pathname)) return null;
 
   return (
     <motion.aside
