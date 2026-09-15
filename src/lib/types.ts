@@ -72,7 +72,13 @@ export type Video = {
   posterUrl: string;
   title: string;
   description: string;
-  category: Category;
+  /** Legacy single-value classification — videos.category is now nullable
+   * and the new upload flow no longer writes it (see the tag taxonomy's
+   * content_type facet instead, fetched separately via fetchVideoTags).
+   * Old rows keep whatever value they already had; kept here purely as a
+   * fallback for display code that hasn't been updated to prefer the real
+   * content-type tag yet. Never required for a new video going forward. */
+  category?: Category;
   /** Absent on videos built before content_type existed (mock data, some
    * client-side conversions) — always treat a missing value as "film",
    * never as "short"/"longform"; those are always explicitly tagged.

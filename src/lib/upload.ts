@@ -10,10 +10,16 @@ export function deriveTitleFromFilename(fileName: string): string {
 }
 
 /** Defaults the upload category to whatever this creator shoots most, instead
- * of always resetting to the first category in the list. */
+ * of always resetting to the first category in the list. video.category is
+ * optional now (the new upload flow writes a content-type tag instead, see
+ * Video.category's own doc comment) — videos without one just don't count
+ * toward this legacy tally. */
 export function mostUsedCategory(creatorVideos: Video[], fallback: Category): Category {
-  if (creatorVideos.length === 0) return fallback;
   const counts = new Map<Category, number>();
-  for (const v of creatorVideos) counts.set(v.category, (counts.get(v.category) ?? 0) + 1);
+  for (const v of creatorVideos) {
+    if (!v.category) continue;
+    counts.set(v.category, (counts.get(v.category) ?? 0) + 1);
+  }
+  if (counts.size === 0) return fallback;
   return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
 }

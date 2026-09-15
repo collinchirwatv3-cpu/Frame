@@ -90,14 +90,14 @@ export function VideoDetailsSheet({
             </div>
 
             <div className="px-5 py-4 flex flex-col gap-4">
-              {/* Concise metadata row — category always exists; duration
-                  and published time are real values (videos.created_at,
-                  duration_seconds), not decorative. No views count here:
-                  videos.view_count exists in the schema but nothing in
-                  this app ever increments it, so showing it would just be
-                  an always-zero stat — omitted rather than faked. */}
+              {/* Concise metadata row — duration and published time are
+                  real values (videos.created_at, duration_seconds), not
+                  decorative. category is legacy now (videos.category is
+                  nullable, no longer written by the upload flow — see its
+                  doc comment in lib/types.ts) so it's shown only when a
+                  pre-taxonomy video still has one. */}
               <div className="flex items-center gap-2 text-xs text-text-secondary flex-wrap">
-                <span>{video.category}</span>
+                {video.category && <span>{video.category}</span>}
                 {video.durationSeconds > 0 && (
                   <>
                     <span aria-hidden="true">·</span>
