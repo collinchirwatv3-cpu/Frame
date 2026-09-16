@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Bookmark, Check, Heart, Link2, MessageCircle, MoreHorizontal, Scissors, Share2 } from "lucide-react";
-import { Avatar } from "@/components/ui/Avatar";
 import { cn, formatCount, shareContent } from "@/lib/utils";
 import { DURATION } from "@/lib/motion";
 import { CHROME_GLASS_CLASS, CHROME_TAP_SCALE } from "@/lib/chrome";
@@ -80,7 +79,6 @@ export function ActionRail({
   onOpenClip,
   className,
   compact,
-  showAvatar = true,
 }: {
   video: Video;
   onOpenComments: () => void;
@@ -93,15 +91,10 @@ export function ActionRail({
    * leaves it at the default column (its cinematic player keeps a vertical
    * control column even in landscape, per RotateDevicePrompt). */
   className?: string;
-  /** Shrinks every icon/avatar/label and tightens the gaps — Shorts uses
-   * this so the whole rail fits inside its own 16:9 video band instead of
+  /** Shrinks every icon/label and tightens the gaps — Shorts uses this so
+   * the whole rail fits inside its own 16:9 video band instead of
    * spilling into the black letterboxing above/below it. */
   compact?: boolean;
-  /** The main feed keeps the creator's avatar at the top of this rail;
-   * Shorts moves it down into the caption instead, next to the username
-   * (where the Follow pill already lives) — set false there so it isn't
-   * shown twice. */
-  showAvatar?: boolean;
 }) {
   const liked = useEngagementStore((s) => !!s.likedVideos[video.id]);
   const saved = useEngagementStore((s) => !!s.savedVideos[video.id]);
@@ -138,15 +131,15 @@ export function ActionRail({
 
   return (
     <div className={cn("flex flex-col items-center", compact ? "gap-1.5" : "gap-5", className)}>
-      {/* Follow used to be a pill under this avatar — moved to sit next to
-          the username in VideoOverlay.tsx instead, reads more naturally
-          next to the name it's actually about. Avatar stays here on the
-          main feed; Shorts opts out via showAvatar and renders its own in
-          the caption instead. */}
-      {showAvatar && (
-        <Avatar src={video.creator.avatarUrl} alt={video.creator.displayName} size={compact ? 26 : 44} ring />
-      )}
-
+      {/* Follow used to be a pill under an avatar that used to sit here —
+          moved to next to the username in VideoOverlay.tsx instead, reads
+          more naturally next to the name it's actually about. The avatar
+          itself was dropped entirely (not just moved): both feeds render
+          the creator's avatar in their caption now, and this rail's own
+          copy was a second, fully redundant one right next to it — most
+          visible on wider screens (iPad) where caption and rail sit far
+          enough apart to read as "two different profile pictures," not one
+          moved thing. */}
       <RailButton
         icon={Heart}
         label={formatCount(likeCount)}

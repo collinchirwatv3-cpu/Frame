@@ -438,7 +438,6 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
                         onOpenComments={() => setCommentsOpen(true)}
                         onOpenOptions={() => setOptionsOpen(true)}
                         compact
-                        showAvatar={false}
                       />
                     </motion.div>
                   </>
