@@ -624,87 +624,107 @@ export function UploadDropzone() {
             <ContentTypeSelect value={contentTypeTagId} onChange={setContentTypeTagId} />
           </div>
 
-          <TagDropdownMultiSelect
-            label="Genre"
-            categoryIds={["fiction_genre", "documentary_genre"]}
-            max={3}
-            value={genreTagIds}
-            onChange={setGenreTagIds}
-            required
-          />
-          <TagDropdownMultiSelect
-            label="Topic"
-            categoryIds={["sports", "lifestyle_subject", "music", "gaming", "technology_knowledge"]}
-            max={5}
-            value={topicTagIds}
-            onChange={setTopicTagIds}
-            required
-          />
+          {/* One consolidated "Tags" dropdown holding every tag facet
+              (Genre/Topic required, Mood/Location/Gear optional) — each
+              still its own nested dropdown/collapsible inside it, rather
+              than Genre/Topic/Mood/Location/Gear each being a separate
+              top-level block down the page. forceOpen re-expands this the
+              moment a submit attempt fails on a missing genre/topic, so
+              nesting a required field in here never means it gets missed —
+              see CollapsibleTagSection's own doc comment. */}
           <CollapsibleTagSection
-            title="Mood"
-            summary={moodTagIds.length > 0 ? `${moodTagIds.length} selected` : "Optional"}
-          >
-            <TagMultiSelect
-              label="Mood"
-              categoryIds={["mood_tone", "visual_style"]}
-              max={3}
-              value={moodTagIds}
-              onChange={setMoodTagIds}
-            />
-          </CollapsibleTagSection>
-
-          <CollapsibleTagSection title="Location" summary={locationTagId ? "Set" : "Optional"}>
-            <LocationPicker value={locationTagId} onChange={setLocationTagId} />
-          </CollapsibleTagSection>
-
-          {/* Gear — optional but encouraged per the spec; a creator can
-              always skip unknown gear. One picker per sub-facet, each its
-              own set of taxonomy categories, all collapsed behind a single
-              section so skipping gear entirely doesn't mean scrolling past
-              eight always-open typeaheads first. */}
-          <CollapsibleTagSection
-            title="Gear"
-            summary={gearTagIds.length > 0 ? `${gearTagIds.length} selected` : "Optional"}
+            title="Tags"
+            summary={
+              genreTagIds.length === 0 || topicTagIds.length === 0
+                ? "Genre & Topic required"
+                : `${genreTagIds.length + topicTagIds.length + moodTagIds.length + (locationTagId ? 1 : 0) + gearTagIds.length} selected`
+            }
+            forceOpen={!!tagFormError}
           >
             <div className="flex flex-col gap-4">
-              <GearPicker label="Camera" categoryIds={["camera_model"]} value={gearTagIds} onChange={setGearTagIds} />
-              <GearPicker
-                label="Lenses"
-                categoryIds={["lens_family", "lens_type", "lens_manufacturer"]}
-                value={gearTagIds}
-                onChange={setGearTagIds}
+              <TagDropdownMultiSelect
+                label="Genre"
+                categoryIds={["fiction_genre", "documentary_genre"]}
+                max={3}
+                value={genreTagIds}
+                onChange={setGenreTagIds}
+                required
               />
-              <GearPicker
-                label="Lighting"
-                categoryIds={["lighting_fixture", "lighting_manufacturer"]}
-                value={gearTagIds}
-                onChange={setGearTagIds}
+              <TagDropdownMultiSelect
+                label="Topic"
+                categoryIds={["sports", "lifestyle_subject", "music", "gaming", "technology_knowledge"]}
+                max={5}
+                value={topicTagIds}
+                onChange={setTopicTagIds}
+                required
               />
-              <GearPicker
-                label="Audio"
-                categoryIds={["microphone_model", "audio_recorder", "wireless_audio_system"]}
-                value={gearTagIds}
-                onChange={setGearTagIds}
-              />
-              <GearPicker
-                label="Camera movement"
-                categoryIds={["camera_movement", "camera_support"]}
-                value={gearTagIds}
-                onChange={setGearTagIds}
-              />
-              <GearPicker
-                label="Format"
-                categoryIds={["recording_format", "film_gauge", "film_stock"]}
-                value={gearTagIds}
-                onChange={setGearTagIds}
-              />
-              <GearPicker
-                label="Post production"
-                categoryIds={["editing_software", "colour_software", "vfx_software", "audio_post_software"]}
-                value={gearTagIds}
-                onChange={setGearTagIds}
-              />
-              <GearPicker label="Craft" categoryIds={["craft"]} value={gearTagIds} onChange={setGearTagIds} />
+              <CollapsibleTagSection
+                title="Mood"
+                summary={moodTagIds.length > 0 ? `${moodTagIds.length} selected` : "Optional"}
+              >
+                <TagMultiSelect
+                  label="Mood"
+                  categoryIds={["mood_tone", "visual_style"]}
+                  max={3}
+                  value={moodTagIds}
+                  onChange={setMoodTagIds}
+                />
+              </CollapsibleTagSection>
+
+              <CollapsibleTagSection title="Location" summary={locationTagId ? "Set" : "Optional"}>
+                <LocationPicker value={locationTagId} onChange={setLocationTagId} />
+              </CollapsibleTagSection>
+
+              {/* Gear — optional but encouraged per the spec; a creator can
+                  always skip unknown gear. One picker per sub-facet, each
+                  its own set of taxonomy categories, all collapsed behind
+                  a single nested section so skipping gear entirely doesn't
+                  mean scrolling past eight always-open typeaheads first. */}
+              <CollapsibleTagSection
+                title="Gear"
+                summary={gearTagIds.length > 0 ? `${gearTagIds.length} selected` : "Optional"}
+              >
+                <div className="flex flex-col gap-4">
+                  <GearPicker label="Camera" categoryIds={["camera_model"]} value={gearTagIds} onChange={setGearTagIds} />
+                  <GearPicker
+                    label="Lenses"
+                    categoryIds={["lens_family", "lens_type", "lens_manufacturer"]}
+                    value={gearTagIds}
+                    onChange={setGearTagIds}
+                  />
+                  <GearPicker
+                    label="Lighting"
+                    categoryIds={["lighting_fixture", "lighting_manufacturer"]}
+                    value={gearTagIds}
+                    onChange={setGearTagIds}
+                  />
+                  <GearPicker
+                    label="Audio"
+                    categoryIds={["microphone_model", "audio_recorder", "wireless_audio_system"]}
+                    value={gearTagIds}
+                    onChange={setGearTagIds}
+                  />
+                  <GearPicker
+                    label="Camera movement"
+                    categoryIds={["camera_movement", "camera_support"]}
+                    value={gearTagIds}
+                    onChange={setGearTagIds}
+                  />
+                  <GearPicker
+                    label="Format"
+                    categoryIds={["recording_format", "film_gauge", "film_stock"]}
+                    value={gearTagIds}
+                    onChange={setGearTagIds}
+                  />
+                  <GearPicker
+                    label="Post production"
+                    categoryIds={["editing_software", "colour_software", "vfx_software", "audio_post_software"]}
+                    value={gearTagIds}
+                    onChange={setGearTagIds}
+                  />
+                  <GearPicker label="Craft" categoryIds={["craft"]} value={gearTagIds} onChange={setGearTagIds} />
+                </div>
+              </CollapsibleTagSection>
             </div>
           </CollapsibleTagSection>
 

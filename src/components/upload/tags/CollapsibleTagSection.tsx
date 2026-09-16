@@ -4,17 +4,19 @@ import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/** Wraps an optional tag picker (Mood, Location, Gear) so its typeahead
- * isn't taking up scroll space for every creator who has nothing to say
- * there — mirrors OptionCard's collapse pattern (UploadRejection.tsx) for
- * visual consistency with the rest of the upload flow. Required fields
- * (Content type, Genre, Topic) deliberately stay outside this component,
- * always visible — collapsing something a creator MUST fill in just to
- * publish is a good way for it to get missed entirely. */
+/** Collapses a tag picker (or group of pickers) behind a single header —
+ * mirrors OptionCard's collapse pattern (UploadRejection.tsx) for visual
+ * consistency with the rest of the upload flow. Content type stays
+ * outside this entirely (its own always-visible required field, a
+ * single-select native <select> rather than a tag facet); everything else
+ * — including required facets like Genre/Topic — can live inside one of
+ * these, as long as a validation failure can force it back open via
+ * `forceOpen` so a required selection never gets stuck out of sight. */
 export function CollapsibleTagSection({
   title,
   summary,
   defaultOpen = false,
+  forceOpen = false,
   children,
 }: {
   title: string;
@@ -23,9 +25,26 @@ export function CollapsibleTagSection({
    * what the draft store's id arrays already give the parent for free. */
   summary: string;
   defaultOpen?: boolean;
+  /** Set true (e.g. on a submit-time validation error) to force this open
+   * regardless of the user's own last toggle — never used to force it
+   * closed again, so becoming false afterward doesn't re-collapse it. */
+  forceOpen?: boolean;
   children: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [open, setOpen] = useState(defaultOpen || forceOpen);
+  // React's own "adjust state during render" pattern (not an effect — a
+  // setState inside useEffect here would cascade an extra render for no
+  // benefit) for reacting to forceOpen turning true, without needing a
+  // ref: track the last forceOpen value alongside it, and when they
+  // disagree, this render both corrects that tracker and opens the
+  // section in one pass, before anything paints. The `open` initializer
+  // above already covers forceOpen being true from the very first render
+  // (this only needs to catch it becoming true later).
+  const [lastForceOpen, setLastForceOpen] = useState(forceOpen);
+  if (forceOpen !== lastForceOpen) {
+    setLastForceOpen(forceOpen);
+    if (forceOpen) setOpen(true);
+  }
 
   return (
     <div className="border border-border rounded-xl overflow-hidden bg-card/40">
