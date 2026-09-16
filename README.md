@@ -437,6 +437,28 @@ derive, don't duplicate, so nothing can claim a ratio the pixels don't back up.
 Feature evolution *after* launch. For the checklist to actually get from this repo
 to a live production site, see [roadmap.md](roadmap.md).
 
+### Design north star: a professional film suite, not a generic vertical-video app
+
+The target audience is professional film people — working cinematographers,
+editors, and creators who care about proper aspect ratios and real technical
+craft, not the widest possible casual audience. "16:9 fanatics" is the
+literal framing: landscape-only by design (16:9/21:9/16:10, no portrait),
+and every UI decision from here on should read as *professional film
+tooling that happens to be a social app*, not a TikTok clone with a
+different crop.
+
+Already-built work that's consistent with this direction, worth treating as
+precedent rather than one-offs: the tag taxonomy's gear facet (real
+manufacturer/model tags — Sony FX3, ARRI Alexa 35, specific lens/mount
+combinations — with auto-inheritance, not a generic "camera" checkbox), the
+multi-ratio landscape upload gate with rotate/crop recovery, the cinematic
+dark visual language, and the clip-trim sheet's video-preview scrubber
+(`ClipCreateSheet.tsx`) — a real, if minimal, NLE-style interaction rather
+than a bare two-handle slider. Future UI work (the tag-picker dropdowns,
+any further editing-adjacent surfaces) should keep measuring itself against
+"would a working DP/editor find this credible" rather than "does this match
+a generic social app pattern."
+
 - **Phase 1 — MVP** *(this repo)*: swipe feed, multi-ratio landscape upload gate
   (16:9/21:9/16:10) with rotate/crop-preview/guidelines recovery, aspect-ratio +
   category discovery filters, quality/equipment badges, explore, profile, inbox
