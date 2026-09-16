@@ -59,4 +59,9 @@ describe("VideoCard", () => {
     render(<VideoCard video={video} active index={0} sectionRef={() => {}} showSearchButton={false} />);
     expect(screen.getAllByAltText("Milo Aerial")).toHaveLength(1);
   });
+
+  it("hides the search button in landscape so the action rail gets that corner's room — the iPad report", () => {
+    render(<VideoCard video={video} active index={0} sectionRef={() => {}} showSearchButton />);
+    expect(screen.getByLabelText("Search").parentElement).toHaveClass("landscape:hidden");
+  });
 });

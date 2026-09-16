@@ -240,8 +240,23 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
                 <PlaybackControls castAvailable={castAvailable} onCast={triggerCast} />
               </div>
 
+              {/* landscape:hidden — /watch/[id] is the one chrome-free
+                  route with no dock, so this and ProfileFloat are the only
+                  way to reach search/profile there at all in portrait. In
+                  landscape they used to just sit here unconditionally,
+                  same top-right corner the action rail's own column needs
+                  room in — every OTHER landscape accommodation in this app
+                  (useIsLandscapeMobile, RotateDevicePrompt's "full
+                  cinematic view" copy) is scoped to short-height rotated
+                  phones only, so iPad landscape (tall) got none of it and
+                  these two never moved. Hiding them outright rather than
+                  repositioning: landscape is already this app's intended
+                  minimal-chrome cinematic mode, and search/profile from
+                  here are conveniences, not the only way to reach either
+                  (rotate back to portrait, or use the dock on any other
+                  page). */}
               {showSearchButton && (
-                <div className="pointer-events-auto absolute top-4 right-4 md:top-6 md:right-6 z-10 flex items-center gap-2">
+                <div className="pointer-events-auto absolute top-4 right-4 md:top-6 md:right-6 z-10 flex items-center gap-2 landscape:hidden">
                   <SearchButton />
                 </div>
               )}

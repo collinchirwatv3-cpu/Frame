@@ -18,6 +18,12 @@ import { ProfileAvatarLink } from "./ProfileAvatarLink";
  * next to the FRAMES logo — Home has no video chrome to float over, so a
  * normal in-flow element aligned with the logo reads better than a
  * separately-floating one. This component is for /watch/[id] only now.
+ *
+ * landscape:hidden — same reasoning as SearchButton's wrapper in
+ * VideoCard.tsx (that same top-right corner): this used to stay put in
+ * landscape unconditionally, including on iPad, crowding the action
+ * rail's own column. Hidden outright in any landscape orientation now,
+ * not just short-height rotated phones.
  */
 export function ProfileFloat() {
   const directorMode = usePlayerStore((s) => s.directorMode);
@@ -26,7 +32,10 @@ export function ProfileFloat() {
     <motion.div
       animate={{ opacity: directorMode ? 0 : 1 }}
       transition={CHROME_FADE_TRANSITION}
-      className={cn("fixed top-16 right-4 md:top-20 md:right-6 z-30", directorMode && "pointer-events-none")}
+      className={cn(
+        "fixed top-16 right-4 md:top-20 md:right-6 z-30 landscape:hidden",
+        directorMode && "pointer-events-none"
+      )}
     >
       <ProfileAvatarLink />
     </motion.div>
