@@ -94,6 +94,13 @@ export const dmMessageRateLimiter = makeLimiter(30, "1 m", "dm-message");
  * check for the more serious SSRF concern this doesn't cover). */
 export const pushSubscriptionRateLimiter = makeLimiter(20, "1 m", "push-subscription");
 
+/** Editing or deleting your own published video — a deliberate, infrequent
+ * action in normal use (nobody edits a title 30 times a minute), tight
+ * enough to blunt a scripted mass-edit/mass-delete against a compromised
+ * session without constraining real use. Shared by both PATCH and DELETE
+ * on /api/videos/[id] since they're the same class of action. */
+export const videoManageRateLimiter = makeLimiter(20, "1 m", "video-manage");
+
 export type RateLimitResult = { success: boolean; limit: number; remaining: number; reset: number };
 
 export async function checkRateLimit(
