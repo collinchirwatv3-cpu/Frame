@@ -16,6 +16,7 @@ import { useCurrentUserStore } from "@/store/current-user-store";
 import { playWithMutedFallback } from "@/lib/audio";
 import { recordVideoView } from "@/lib/video-views";
 import { useCastControl } from "@/lib/cast";
+import { isTypingTarget } from "@/lib/is-typing-target";
 import { CHROME_FADE_TRANSITION, FOCUS_PULL_TRANSITION } from "@/lib/motion";
 import { CHROME_TAP_SCALE } from "@/lib/chrome";
 import type { Video } from "@/lib/types";
@@ -187,6 +188,14 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
     function onKeyDown(e: KeyboardEvent) {
       const container = containerRef.current;
       if (!container) return;
+
+      // Same guard as SwipeFeed's identical listener — this is on
+      // `window`, so without it, j/k/arrow keys typed into a modal's text
+      // field stacked on top of the feed (Edit Frame's description, a
+      // comment composer, etc.) get eaten and scroll the feed instead of
+      // moving the text cursor.
+      if (isTypingTarget(document.activeElement)) return;
+
       if (e.key === "ArrowDown" || e.key === "j") {
         e.preventDefault();
         container.scrollBy({ top: container.clientHeight, behavior: "smooth" });

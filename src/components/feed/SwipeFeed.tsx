@@ -8,6 +8,7 @@ import { VideoCard, type VideoCardHandle } from "./VideoCard";
 import { VideoPlaceholder } from "./VideoPlaceholder";
 import { RotateDevicePrompt } from "./RotateDevicePrompt";
 import { CHROME_FADE_TRANSITION } from "@/lib/motion";
+import { isTypingTarget } from "@/lib/is-typing-target";
 
 // How many cards stay fully mounted on either side of the active one. Real
 // <video> elements, Framer Motion instances, and sheet components are not
@@ -160,6 +161,17 @@ export function SwipeFeed({
     function onKeyDown(e: KeyboardEvent) {
       const container = containerRef.current;
       if (!container) return;
+
+      // This listener is on `window`, so it fires regardless of what else
+      // is focused — including a textarea/input inside a modal stacked on
+      // top of the feed (EditFrameSheet's description field, a comment
+      // composer, DM composer, ClipCreateSheet's title field, etc.).
+      // Without this guard, typing a space there got eaten by
+      // preventDefault below and silently toggled play/pause on whatever
+      // video was active behind the modal instead of typing a character —
+      // same problem for j/k/arrow keys moving the feed instead of the
+      // text cursor.
+      if (isTypingTarget(document.activeElement)) return;
 
       if (e.key === "ArrowDown" || e.key === "j") {
         e.preventDefault();
