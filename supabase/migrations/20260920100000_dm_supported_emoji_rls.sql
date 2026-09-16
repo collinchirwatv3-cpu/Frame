@@ -1,0 +1,29 @@
+-- FRAME — closes a standing Supabase security-advisor finding:
+-- public.dm_supported_emoji has never had row level security enabled.
+--
+-- Verified before writing this that it's a real (if lower-severity) gap,
+-- not already fully covered: 20260917070000_dm_reaction_emoji_validation.sql
+-- already revokes all table-level privileges from public/anon/authenticated
+-- on dm_supported_emoji, and a live check against a real anon-keyed request
+-- confirms SELECT/INSERT both already fail with permission-denied — so RLS
+-- being off has not, in practice, exposed this table to the anon/service
+-- keys client libraries use. But grants and RLS are two independent layers
+-- for a reason: a future migration or an accidental dashboard grant reset
+-- could silently reopen table-level access without anyone noticing RLS was
+-- never a backstop here. This closes that gap for good, at zero cost to
+-- anything that currently works.
+--
+-- No policies needed (and none added): the only real access path is
+-- is_valid_reaction_emoji() (language sql, security invoker), called
+-- exclusively from inside set_dm_reaction() — security definer — which is
+-- the only way any client role can ever write to dm_reactions at all
+-- (authenticated has select-only there; see 20260917060000_dm_replies_
+-- reactions.sql). A call made from within a security definer function's
+-- execution runs under ITS elevated privileges for calls it makes, so this
+-- lookup bypasses RLS/grants regardless of the enable below — confirmed by
+-- re-running scripts/verify-emoji-validation.mjs (real reactions, blocked
+-- pairs, direct-insert rejection, etc.) against local Postgres after this
+-- migration, all still passing. Enabling RLS with zero policies makes the
+-- table default-deny to every other path, which is exactly the intent —
+-- nothing legitimate goes through any of those paths today.
+alter table dm_supported_emoji enable row level security;
