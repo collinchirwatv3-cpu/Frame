@@ -9,10 +9,12 @@ import {
   AtSign,
   BadgeCheck,
   Ban,
+  Bell,
   Check,
   Link as LinkIcon,
   MessageCircle,
   Settings,
+  Share2,
   Sparkles,
   UploadCloud,
 } from "lucide-react";
@@ -70,13 +72,12 @@ export function ProfileHeader({
   const blocked = useEngagementStore((s) => !!s.blockedUsers[creator.id]);
   const toggleFollow = useEngagementStore((s) => s.toggleFollow);
   const toggleBlock = useEngagementStore((s) => s.toggleBlock);
-  // The Inbox icon leads to /inbox, which shows BOTH a notifications list
-  // and a DM thread list — the badge needs to reflect either, not just
-  // notifications (which was the only signal it used before, so an unread
-  // DM with zero unread notifications used to show no badge at all).
+  // Both icons lead to the same /inbox page (it shows DMs and
+  // notifications together, no separate routes) but get their own badge
+  // each — messages and notifications are two distinct signals, shown as
+  // two icons now instead of one combined count.
   const unreadNotificationCount = useUnreadNotificationCount(own ? creator.id : null);
   const unreadDMCount = useUnreadDMCount(own ? creator.id : null);
-  const unreadCount = unreadNotificationCount + unreadDMCount;
 
   async function handleMessage() {
     setMessaging(true);
@@ -134,31 +135,57 @@ export function ProfileHeader({
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-bg via-transparent to-bg/20" />
         {own && (
-          <Link
-            href="/inbox"
-            aria-label={unreadCount > 0 ? `Inbox, ${unreadCount} unread` : "Inbox"}
-            className="absolute top-4 left-4 w-9 h-9 rounded-full bg-bg/70 backdrop-blur-md flex items-center justify-center relative"
-          >
-            <MessageCircle size={16} />
-            {unreadCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary ring-2 ring-bg" />
-            )}
-          </Link>
+          <div className="absolute top-4 left-4 flex items-center gap-2">
+            {/* Both still lead to the one /inbox page (it shows DMs and
+                notifications together, no separate routes for each) — but
+                shown as two icons with their own unread badges rather than
+                one combined count, so which kind of unread you have is
+                visible before you tap in. */}
+            <Link
+              href="/inbox"
+              aria-label={unreadDMCount > 0 ? `Messages, ${unreadDMCount} unread` : "Messages"}
+              className="w-9 h-9 rounded-full bg-bg/70 backdrop-blur-md flex items-center justify-center relative"
+            >
+              <MessageCircle size={16} />
+              {unreadDMCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary ring-2 ring-bg" />
+              )}
+            </Link>
+            <Link
+              href="/inbox"
+              aria-label={unreadNotificationCount > 0 ? `Notifications, ${unreadNotificationCount} unread` : "Notifications"}
+              className="w-9 h-9 rounded-full bg-bg/70 backdrop-blur-md flex items-center justify-center relative"
+            >
+              <Bell size={16} />
+              {unreadNotificationCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary ring-2 ring-bg" />
+              )}
+            </Link>
+          </div>
         )}
         {own && (
           <div className="absolute top-4 right-4 flex items-center gap-2">
-            {/* Upload's only other entry point is buried in
-                StudioVideoGrid's empty-videos-tab CTA, only shown when the
-                owner has zero public videos — this is the persistent one,
-                always here regardless of catalog size, now that Upload
-                isn't a primary nav destination anymore. */}
-            <Link
-              href="/upload"
-              aria-label="Upload"
-              className="w-9 h-9 rounded-full bg-bg/70 backdrop-blur-md flex items-center justify-center"
-            >
-              <UploadCloud size={16} />
-            </Link>
+            <div className="relative">
+              <button
+                onClick={handleShare}
+                aria-label="Share profile"
+                className="w-9 h-9 rounded-full bg-bg/70 backdrop-blur-md flex items-center justify-center"
+              >
+                {shared ? <Check size={16} className="text-primary" /> : <Share2 size={16} />}
+              </button>
+              <AnimatePresence>
+                {shared && (
+                  <motion.span
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    className="absolute right-0 top-full mt-2 whitespace-nowrap text-xs font-medium bg-card px-2.5 py-1 rounded-full"
+                  >
+                    Profile link copied
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </div>
             <Link
               href="/settings"
               aria-label="Settings"
@@ -265,12 +292,21 @@ export function ProfileHeader({
 
         <div className="relative flex items-center gap-3 mt-5 w-full max-w-xs">
           {own ? (
-            <button
-              onClick={() => setEditing(true)}
-              className="flex-1 py-2 rounded-full bg-primary text-bg text-sm font-semibold"
-            >
-              Edit Profile
-            </button>
+            <>
+              <Link
+                href="/upload"
+                className="flex-1 py-2 rounded-full bg-primary text-bg text-sm font-semibold flex items-center justify-center gap-1.5"
+              >
+                <UploadCloud size={14} />
+                Upload
+              </Link>
+              <button
+                onClick={() => setEditing(true)}
+                className="text-sm font-medium text-text-secondary hover:text-accent transition-colors shrink-0"
+              >
+                Edit Profile
+              </button>
+            </>
           ) : blocked ? (
             <div className="flex-1 flex items-center justify-center gap-3 py-2">
               <span className="text-sm text-text-secondary">Blocked</span>

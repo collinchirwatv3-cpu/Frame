@@ -1,8 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { AlertTriangle, Bookmark, Film, Heart, Loader2, MessageCircle, Play, UploadCloud } from "lucide-react";
-import { BadgeRow } from "@/components/ui/BadgeRow";
-import { computeBadges } from "@/lib/badges";
+import { AlertTriangle, Film, Loader2, UploadCloud } from "lucide-react";
 import { formatCount } from "@/lib/utils";
 import { toDisplayVideo, type OwnVideo } from "@/lib/profile-videos";
 import type { Video } from "@/lib/types";
@@ -21,15 +19,15 @@ function InProgressCard({ video }: { video: OwnVideo }) {
   return (
     <div
       style={{ aspectRatio: `${video.width} / ${video.height}` }}
-      className="relative rounded-xl overflow-hidden bg-card border border-dashed border-border mb-3 break-inside-avoid flex flex-col items-center justify-center gap-2 p-4 text-center"
+      className="relative rounded-xl overflow-hidden bg-card border border-dashed border-border flex flex-col items-center justify-center gap-2 p-4 text-center"
     >
       {failed ? (
         <AlertTriangle size={20} className="text-primary" />
       ) : (
         <Loader2 size={20} className="animate-spin text-text-secondary" />
       )}
-      <p className="text-xs font-semibold truncate max-w-full">{video.title}</p>
-      <p className={failed ? "text-[11px] text-primary" : "text-[11px] text-text-secondary"}>
+      <p className="text-sm font-semibold truncate max-w-full">{video.title}</p>
+      <p className={failed ? "text-xs text-primary" : "text-xs text-text-secondary"}>
         {STATUS_COPY[video.status]}
       </p>
     </div>
@@ -55,53 +53,40 @@ function ReadyCard({ video, isRecentUpload }: { video: Video; isRecentUpload: bo
       // Home instead of this video, with no visible error.
       href={`/watch/${video.id}`}
       aria-label={`Watch ${video.title}`}
-      style={{ aspectRatio: `${video.width} / ${video.height}` }}
-      className="group relative block rounded-xl overflow-hidden bg-card border border-border text-left mb-3 break-inside-avoid"
+      className="block"
     >
-      <Image
-        src={video.posterUrl}
-        alt={video.title}
-        fill
-        className="object-cover transition-transform duration-300 group-hover:scale-105"
-      />
-      <div className="absolute inset-0 bg-gradient-to-t from-bg/85 via-transparent to-transparent" />
-      <Play
-        size={28}
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-accent opacity-0 group-hover:opacity-100 transition-opacity"
-        fill="currentColor"
-      />
-      <BadgeRow badges={computeBadges(video)} max={1} className="absolute top-2 left-2" />
-      {isRecentUpload && (
-        <span className="absolute top-2 right-2 text-[10px] font-bold tracking-wide bg-primary text-bg rounded-full px-2 py-0.5">
-          UPLOAD
-        </span>
-      )}
-      <div className="absolute bottom-0 inset-x-0 p-2.5">
-        <p className="text-xs font-semibold truncate">{video.title}</p>
-        <div className="flex items-center gap-2.5 text-[11px] text-text-secondary mt-0.5">
-          <span className="flex items-center gap-1">
-            <Heart size={11} />
-            {formatCount(video.likes)}
+      <div
+        style={{ aspectRatio: `${video.width} / ${video.height}` }}
+        className="relative rounded-xl overflow-hidden bg-card border border-border"
+      >
+        <Image src={video.posterUrl} alt={video.title} fill className="object-cover" />
+        {isRecentUpload && (
+          <span className="absolute top-2.5 left-2.5 flex items-center gap-1 text-[10px] font-bold tracking-wide bg-primary text-bg rounded-full px-2 py-1">
+            <UploadCloud size={10} />
+            UPLOAD
           </span>
-          <span className="flex items-center gap-1">
-            <MessageCircle size={11} />
-            {formatCount(video.comments)}
-          </span>
-          <span className="flex items-center gap-1">
-            <Bookmark size={11} />
-            {formatCount(video.saves)}
-          </span>
-        </div>
+        )}
+      </div>
+      <div className="pt-2.5">
+        <p className="font-semibold text-[15px] leading-snug line-clamp-2">{video.title}</p>
+        <p className="text-xs text-text-secondary mt-0.5">
+          {video.creator.displayName}
+          {video.views !== undefined && ` · ${formatCount(video.views)} views`}
+        </p>
+        {video.description && (
+          <p className="text-sm text-accent/90 line-clamp-2 mt-1">{video.description}</p>
+        )}
       </div>
     </Link>
   );
 }
 
-/** The owner's own "Videos" tab — like TrendingGrid, but shows every video
- * they own (including in-flight uploads, with status) and real engagement
- * counts instead of the public grid's approximate view heuristic. Only ever
- * rendered for the signed-in user's own profile. */
-export function StudioVideoGrid({ videos, creator }: { videos: OwnVideo[]; creator: Video["creator"] }) {
+/** The owner's own "Channel" tab — like TrendingGrid, but shows every video
+ * they own (including in-flight uploads, with status) and a single-column
+ * list (title/creator/views/description each get real room, rather than a
+ * compact grid tile) matching the reference design's own Channel layout.
+ * Only ever rendered for the signed-in user's own profile. */
+export function ChannelVideoList({ videos, creator }: { videos: OwnVideo[]; creator: Video["creator"] }) {
   if (videos.length === 0) {
     return (
       <div className="flex flex-col items-center gap-3 text-center py-16 px-6">
@@ -124,7 +109,7 @@ export function StudioVideoGrid({ videos, creator }: { videos: OwnVideo[]; creat
   }
 
   return (
-    <div className="columns-2 md:columns-3 lg:columns-4 gap-3 px-6">
+    <div className="flex flex-col gap-6 px-6">
       {videos.map((video) => {
         const displayVideo = toDisplayVideo(video, creator);
         if (!displayVideo) return <InProgressCard key={video.id} video={video} />;

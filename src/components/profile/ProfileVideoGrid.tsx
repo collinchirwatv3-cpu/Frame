@@ -5,7 +5,7 @@ import type { Video } from "@/lib/types";
 
 /** A plain grid of already-resolved Video rows — used by Saved/History,
  * whose fetch functions (fetchSavedVideos/fetchHistoryVideos) already
- * return full playable Video objects, unlike StudioVideoGrid's OwnVideo
+ * return full playable Video objects, unlike ChannelVideoList's OwnVideo
  * (which also tracks in-flight/failed uploads). Same grid-item visual
  * shape already used on Search's results grid and the public [username]
  * profile grid. */

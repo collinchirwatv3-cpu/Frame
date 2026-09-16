@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Bookmark, History as HistoryIcon, LayoutGrid, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { StudioVideoGrid } from "./StudioVideoGrid";
+import { ChannelVideoList } from "./ChannelVideoList";
 import { ProfileVideoGrid } from "./ProfileVideoGrid";
 import { PrivateVideoList } from "./PrivateVideoList";
 import { fetchSavedVideos, fetchHistoryVideos } from "@/lib/video-fetch";
@@ -67,7 +67,7 @@ export function ProfileTabs({
       </div>
 
       <div className="pt-4">
-        {tab === "channel" && <StudioVideoGrid videos={videos} creator={creator} />}
+        {tab === "channel" && <ChannelVideoList videos={videos} creator={creator} />}
         {tab === "saved" && (
           <ProfileVideoGrid
             videos={saved}
