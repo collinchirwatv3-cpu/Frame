@@ -60,10 +60,13 @@ it("pauses, seeks while paused, stays paused when mute changes, and resumes", ()
   expect(videos[0].paused).toBe(false);
   expect(screen.queryByText("FRAMES")).not.toBeInTheDocument();
 });
-it("keeps transport available in Director Mode and targets the newly active video", () => {
+it("hides transport in Director Mode, reveals it on tap, and targets the active video", () => {
   const { container, videos } = setup();
   act(() => usePlayerStore.getState().enterDirectorMode());
-  expect(screen.getByRole("slider")).toBeVisible();
+  expect(screen.queryByRole("slider")).not.toBeInTheDocument();
+  expect(screen.getByRole("group", { hidden: true })).toHaveAttribute("inert");
+  fireEvent.click(screen.getByRole("region"));
+  expect(screen.getByRole("slider")).toBeInTheDocument();
   act(() => intersect([{ isIntersecting: true, target: container.querySelector('[data-index="1"]') }] as IntersectionObserverEntry[], {} as IntersectionObserver));
   fireEvent.change(screen.getByRole("slider"), { target: { value: "40" } });
   expect(videos[1].currentTime).toBe(40);

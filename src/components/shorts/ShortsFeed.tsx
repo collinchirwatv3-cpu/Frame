@@ -456,7 +456,12 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
               </AnimatePresence>
             </div>
           </div>
-          <div
+          <motion.div
+            animate={{ opacity: directorMode ? 0 : 1 }}
+            transition={CHROME_FADE_TRANSITION}
+            aria-hidden={directorMode}
+            inert={directorMode}
+            style={{ pointerEvents: directorMode ? "none" : "auto" }}
             role="group"
             aria-label="Video playback"
             className="fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+6rem)] z-40 flex items-center gap-3 rounded-xl bg-black/70 px-3 backdrop-blur-md [@media(orientation:landscape)_and_(max-height:500px)]:bottom-3 [@media(orientation:landscape)_and_(max-height:500px)]:left-24"
@@ -485,7 +490,7 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
               }}
             />
             <span className="text-xs tabular-nums">{formatTime(duration)}</span>
-          </div>
+          </motion.div>
           <CommentDrawer
             video={shorts[activeIndex]}
             open={commentsOpen}
