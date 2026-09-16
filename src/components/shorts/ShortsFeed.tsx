@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Pause, Play } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
@@ -51,6 +52,7 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
   const containerRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<(HTMLDivElement | null)[]>([]);
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
+  const activeVideoRef = useRef<HTMLVideoElement | null>(null);
   const initialIndex = useMemo(() => {
     if (!initialId) return 0;
     const idx = shorts.findIndex((s) => s.id === initialId);
@@ -58,6 +60,14 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [activeIndex, setActiveIndex] = useState(initialIndex);
+  const [pausedId, setPausedId] = useState<string | null>(null);
+  const pausedIdRef = useRef<string | null>(null);
+  const [playback, setPlayback] = useState<Record<string, { time: number; duration: number; paused: boolean }>>({});
+  const activeShort = shorts[activeIndex];
+  const currentPlayback = activeShort ? playback[activeShort.id] : null;
+  const duration = currentPlayback?.duration ?? 0;
+  const position = Math.min(currentPlayback?.time ?? 0, duration);
+  const setScrubbing = usePlayerStore((s) => s.setScrubbing);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
 
@@ -80,8 +90,8 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
   // Director Mode is scoped to whichever feed is actually on screen —
   // don't leave it engaged for some other route after navigating away.
   useEffect(() => {
-    return () => exitDirectorMode();
-  }, [exitDirectorMode]);
+    return () => { exitDirectorMode(); setScrubbing(false); };
+  }, [exitDirectorMode, setScrubbing]);
 
   // Auto-engage after a beat of no interaction, mirroring SwipeFeed's own
   // effect exactly (see that file for the full reasoning) — deliberately
@@ -147,6 +157,7 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
   //    play() call that landed at the right moment). Waits for loadeddata
   //    when not ready yet, instead of trying once and giving up.
   useEffect(() => {
+    activeVideoRef.current = videoRefs.current[activeIndex] ?? null;
     const cleanups: (() => void)[] = [];
     // Guards playWithMutedFallback's rejected-play retry (see its own doc
     // comment) — without it, swiping to the next short before a blocked
@@ -166,19 +177,25 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
         video.pause();
         return;
       }
+      if (pausedId === shorts[index].id) {
+        video.pause();
+        return;
+      }
+      const isCancelled = () => cancelled || pausedIdRef.current === shorts[index].id;
       if (video.readyState >= 3) {
-        playWithMutedFallback(video, muted, () => cancelled);
+        playWithMutedFallback(video, muted, isCancelled);
       } else {
-        const onReady = () => playWithMutedFallback(video, muted, () => cancelled);
+        const onReady = () => playWithMutedFallback(video, muted, isCancelled);
         video.addEventListener("loadeddata", onReady, { once: true });
         cleanups.push(() => video.removeEventListener("loadeddata", onReady));
       }
     });
     return () => {
       cancelled = true;
+      activeVideoRef.current = null;
       cleanups.forEach((fn) => fn());
     };
-  }, [activeIndex, shorts, muted, ownProfile]);
+  }, [activeIndex, shorts, muted, ownProfile, pausedId]);
 
   // Had no keyboard path at all before this — SwipeFeed's own arrow-key
   // scroll (src/components/feed/SwipeFeed.tsx) was never mirrored here.
@@ -207,6 +224,31 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
+
+  function syncPlayback(video: HTMLVideoElement, id: string, active: boolean) {
+    if (!active) return;
+    const state = { time: video.currentTime, duration: Number.isFinite(video.duration) ? video.duration : 0, paused: video.paused };
+    setPlayback((previous) => ({ ...previous, [id]: state }));
+  }
+
+  function togglePlayback() {
+    const video = videoRefs.current[activeIndex];
+    if (!video || !activeShort) return;
+    if (video.paused) {
+      pausedIdRef.current = null;
+      setPausedId(null);
+      playWithMutedFallback(video, muted, () => activeVideoRef.current !== video || pausedIdRef.current === activeShort.id || !video.isConnected);
+    } else {
+      pausedIdRef.current = activeShort.id;
+      setPausedId(activeShort.id);
+      video.pause();
+    }
+  }
+
+  function formatTime(seconds: number) {
+    const whole = Math.floor(seconds);
+    return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
+  }
 
   if (shorts.length === 0) {
     return (
@@ -266,6 +308,11 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
                   ref={(el) => {
                     videoRefs.current[index] = el;
                   }}
+                  onTimeUpdate={(e) => syncPlayback(e.currentTarget, short.id, active)}
+                  onLoadedMetadata={(e) => syncPlayback(e.currentTarget, short.id, active)}
+                  onDurationChange={(e) => syncPlayback(e.currentTarget, short.id, active)}
+                  onPlay={(e) => syncPlayback(e.currentTarget, short.id, active)}
+                  onPause={(e) => syncPlayback(e.currentTarget, short.id, active)}
                   src={short.playbackUrl}
                   poster={short.posterUrl}
                   className="w-full h-full object-contain"
@@ -276,6 +323,14 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
               ) : (
                 <Image src={short.posterUrl} alt="" fill className="object-contain" />
               )}
+              {active && pausedId === short.id && currentPlayback?.paused && (
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute select-none text-[clamp(2rem,8vw,6rem)] font-bold tracking-[0.18em] text-white/15"
+                >
+                  FRAMES
+                </span>
+              )}
             </motion.div>
 
             {active && (
@@ -284,17 +339,8 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
                 <motion.div
                   animate={{ opacity: directorMode ? 0 : 1 }}
                   transition={CHROME_FADE_TRANSITION}
-                  // Bottom padding clears the floating mobile bottom-nav
-                  // dock — same clearance VideoCard.tsx's own caption uses,
-                  // needed here now that the tile is full-viewport (a small
-                  // cascading card never reached the true screen bottom).
-                  // 6rem, not 5.5rem: measured live at a very short (~400px)
-                  // viewport, 5.5rem left only ~2px of actual gap above the
-                  // dock — the two values happen to nearly cancel out
-                  // regardless of device height, not just at short ones, so
-                  // this is a real fix everywhere, not just a short-screen
-                  // patch.
-                  className="absolute inset-x-0 bottom-0 px-4 pb-[calc(env(safe-area-inset-bottom)+6rem)] md:pb-10 flex flex-col gap-0.5"
+                  // Clear both the transport and the navigation dock.
+                  className="absolute inset-x-0 bottom-0 px-4 pb-[calc(env(safe-area-inset-bottom)+10rem)] [@media(orientation:landscape)_and_(max-height:500px)]:pb-16 flex flex-col gap-0.5"
                 >
                   <div className="flex items-center gap-2">
                     {/* Moved down from the action rail — reads more
@@ -409,6 +455,36 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
                 )}
               </AnimatePresence>
             </div>
+          </div>
+          <div
+            role="group"
+            aria-label="Video playback"
+            className="fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+6rem)] z-40 flex items-center gap-3 rounded-xl bg-black/70 px-3 backdrop-blur-md [@media(orientation:landscape)_and_(max-height:500px)]:bottom-3 [@media(orientation:landscape)_and_(max-height:500px)]:left-24"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button type="button" onClick={togglePlayback}
+              aria-label={currentPlayback?.paused !== false ? "Play video" : "Pause video"}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-accent">
+              {currentPlayback?.paused !== false ? <Play size={20} /> : <Pause size={20} />}
+            </button>
+            <span className="text-xs tabular-nums">{formatTime(position)}</span>
+            <input type="range" min={0} max={duration || 1} step={0.1}
+              value={position} disabled={duration <= 0} aria-label="Seek video"
+              aria-valuetext={`${formatTime(position)} of ${formatTime(duration)}`}
+              className="h-11 min-w-0 flex-1 touch-none accent-accent"
+              onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); setScrubbing(true); }}
+              onPointerUp={() => setScrubbing(false)}
+              onPointerCancel={() => setScrubbing(false)}
+              onLostPointerCapture={() => setScrubbing(false)}
+              onBlur={() => setScrubbing(false)}
+              onChange={(e) => {
+                const video = videoRefs.current[activeIndex];
+                if (!video) return;
+                video.currentTime = Number(e.currentTarget.value);
+                syncPlayback(video, shorts[activeIndex].id, true);
+              }}
+            />
+            <span className="text-xs tabular-nums">{formatTime(duration)}</span>
           </div>
           <CommentDrawer
             video={shorts[activeIndex]}
