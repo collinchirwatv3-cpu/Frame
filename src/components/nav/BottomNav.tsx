@@ -8,7 +8,7 @@ import { navItems } from "./nav-items";
 import { CHROME_FADE_TRANSITION } from "@/lib/motion";
 import { CHROME_GLASS_CLASS, CHROME_TAP_SCALE } from "@/lib/chrome";
 import { usePlayerStore } from "@/store/player-store";
-import { hidesFloatingNav } from "@/lib/nav-routes";
+import { hidesFloatingNav, hidesSideRail } from "@/lib/nav-routes";
 
 // Floating pill instead of the old edge-to-edge bar — icon-only for
 // inactive destinations, inset from every edge rather than flush against
@@ -33,10 +33,11 @@ export function BottomNav() {
       transition={CHROME_FADE_TRANSITION}
       aria-label="Primary"
       className={cn(
-        // landscape:max-md:hidden — a phone turned sideways gets
-        // LandscapeSideRail on the right edge instead (see that
-        // component's comment for why).
-        "md:hidden landscape:max-md:hidden fixed bottom-4 inset-x-4 z-50 mx-auto max-w-sm",
+        // Full-width feed routes have no desktop sidebar, so retain this
+        // navigation at tablet/desktop widths. Only short landscape
+        // viewports hand off to LandscapeSideRail (same media conditions).
+        "[@media(orientation:landscape)_and_(max-height:500px)]:hidden fixed bottom-4 inset-x-4 z-50 mx-auto max-w-sm",
+        !hidesSideRail(pathname) && "md:hidden",
         CHROME_GLASS_CLASS,
         directorMode && "pointer-events-none"
       )}

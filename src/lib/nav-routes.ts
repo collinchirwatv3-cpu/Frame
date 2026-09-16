@@ -33,8 +33,8 @@ export function hidesFloatingNav(pathname: string): boolean {
  * (app) route group entirely; these two can't do that (they still need
  * BottomNav/LandscapeSideRail's floating nav, which /watch/[id] also
  * lacks), so they opt out of just the one flex-space-consuming rail
- * instead. SearchButton/ProfileFloat inside the feed itself remain the
- * way back to navigation, same as they already are on /watch/[id]. */
+ * instead. BottomNav stays available at tablet/desktop widths on these routes,
+ * since there is no sidebar to provide primary navigation. */
 export function hidesSideRail(pathname: string): boolean {
   return /^\/(shorts|discover)(\/|$)/.test(pathname);
 }
