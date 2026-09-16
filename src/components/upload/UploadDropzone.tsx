@@ -72,8 +72,25 @@ type Probe = {
 
 type AppliedFix = { type: "rotate" } | { type: "crop"; target: AspectRatioDef } | null;
 
+// A few different film-lab terms for the same underlying step (Stream
+// transcoding the upload to adaptive HLS) — one picked per upload rather
+// than always "Developing your Frame," so the processing screen reads as
+// a working film suite's voice rather than one fixed line of copy. All
+// describe the same wait; the body text underneath stays generic so it
+// doesn't need to grammatically match whichever one shows.
+const PROCESSING_HEADLINES = [
+  "Developing your Frame",
+  "Processing your dailies",
+  "In the lab",
+  "Striking your print",
+  "Cutting your reel",
+];
+
 export function UploadDropzone() {
   const [status, setStatus] = useState<Status>("idle");
+  const [processingHeadline] = useState(
+    () => PROCESSING_HEADLINES[Math.floor(Math.random() * PROCESSING_HEADLINES.length)]
+  );
   const [source, setSource] = useState<"file" | "camera">("file");
   const [dragOver, setDragOver] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -437,10 +454,10 @@ export function UploadDropzone() {
     return (
       <div className="flex flex-col items-center justify-center gap-4 h-[60vh] text-center px-6">
         <Loader2 size={40} className="animate-spin text-primary" />
-        <h2 className="text-lg font-semibold">Encoding your Frame</h2>
+        <h2 className="text-lg font-semibold">{processingHeadline}</h2>
         <p className="text-text-secondary text-sm max-w-sm">
-          {fileName} finished uploading and is being transcoded to adaptive HLS. This usually
-          takes a few minutes.
+          {fileName} finished uploading and is being prepared for playback. This usually takes a
+          few minutes.
         </p>
       </div>
     );
