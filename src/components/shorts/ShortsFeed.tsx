@@ -296,6 +296,7 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
                 still never cropped or stretched (object-contain below). */}
             <motion.div
               className="absolute inset-0 flex items-center justify-center"
+              onClick={() => { if (active) togglePlayback(); }}
               animate={{
                 opacity: active ? 1 : 0.85,
                 scale: active ? 1 : 0.98,
@@ -326,7 +327,7 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
               {active && pausedId === short.id && currentPlayback?.paused && (
                 <span
                   aria-hidden="true"
-                  className="pointer-events-none absolute select-none text-[clamp(2rem,8vw,6rem)] font-bold tracking-[0.18em] text-white/15"
+                  className="pointer-events-none absolute select-none text-[clamp(2.5rem,10vw,7.5rem)] font-bold tracking-[0.18em] text-white/15"
                 >
                   FRAMES
                 </span>

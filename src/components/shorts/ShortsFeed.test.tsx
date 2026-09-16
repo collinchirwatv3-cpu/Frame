@@ -81,3 +81,19 @@ it("disables seeking until finite duration metadata arrives", () => {
   fireEvent.loadedMetadata(video);
   expect(screen.getByRole("slider")).toBeDisabled();
 });
+
+it("video taps pause and resume while controls do not toggle playback", () => {
+  const { videos } = setup();
+  act(() => usePlayerStore.getState().enterDirectorMode());
+  fireEvent.click(videos[0]);
+  expect(videos[0].paused).toBe(true);
+  expect(screen.getByText("FRAMES")).toBeInTheDocument();
+  expect(usePlayerStore.getState().directorMode).toBe(false);
+  fireEvent.click(screen.getByRole("slider"));
+  expect(videos[0].paused).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "Unmute" }));
+  expect(videos[0].paused).toBe(true);
+  fireEvent.click(videos[0]);
+  expect(videos[0].paused).toBe(false);
+  expect(screen.queryByText("FRAMES")).not.toBeInTheDocument();
+});
