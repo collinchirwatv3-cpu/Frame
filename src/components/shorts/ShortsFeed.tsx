@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Pause, Play } from "lucide-react";
+import { PlayerTransport } from "@/components/player/PlayerTransport";
+import { PausedWatermark } from "@/components/player/PausedWatermark";
 import Link from "next/link";
 import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
@@ -245,11 +246,6 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
     }
   }
 
-  function formatTime(seconds: number) {
-    const whole = Math.floor(seconds);
-    return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
-  }
-
   if (shorts.length === 0) {
     return (
       <div className="relative flex flex-col items-center justify-center h-dvh text-center px-6 gap-2">
@@ -324,14 +320,7 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
               ) : (
                 <Image src={short.posterUrl} alt="" fill className="object-contain" />
               )}
-              {active && pausedId === short.id && currentPlayback?.paused && (
-                <span
-                  aria-hidden="true"
-                  className="pointer-events-none absolute select-none text-[clamp(2.5rem,10vw,7.5rem)] font-bold tracking-[0.18em] text-white/15"
-                >
-                  FRAMES
-                </span>
-              )}
+              <PausedWatermark visible={active && pausedId === short.id && !!currentPlayback?.paused} />
             </motion.div>
 
             {active && (
@@ -457,41 +446,20 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
               </AnimatePresence>
             </div>
           </div>
-          <motion.div
-            animate={{ opacity: directorMode ? 0 : 1 }}
-            transition={CHROME_FADE_TRANSITION}
-            aria-hidden={directorMode}
-            inert={directorMode}
-            style={{ pointerEvents: directorMode ? "none" : "auto" }}
-            role="group"
-            aria-label="Video playback"
-            className="fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+6rem)] z-40 flex items-center gap-3 rounded-xl bg-black/70 px-3 backdrop-blur-md [@media(orientation:landscape)_and_(max-height:500px)]:bottom-3 [@media(orientation:landscape)_and_(max-height:500px)]:left-24"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button type="button" onClick={togglePlayback}
-              aria-label={currentPlayback?.paused !== false ? "Play video" : "Pause video"}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-accent">
-              {currentPlayback?.paused !== false ? <Play size={20} /> : <Pause size={20} />}
-            </button>
-            <span className="text-xs tabular-nums">{formatTime(position)}</span>
-            <input type="range" min={0} max={duration || 1} step={0.1}
-              value={position} disabled={duration <= 0} aria-label="Seek video"
-              aria-valuetext={`${formatTime(position)} of ${formatTime(duration)}`}
-              className="h-11 min-w-0 flex-1 touch-none accent-accent"
-              onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); setScrubbing(true); }}
-              onPointerUp={() => setScrubbing(false)}
-              onPointerCancel={() => setScrubbing(false)}
-              onLostPointerCapture={() => setScrubbing(false)}
-              onBlur={() => setScrubbing(false)}
-              onChange={(e) => {
-                const video = videoRefs.current[activeIndex];
-                if (!video) return;
-                video.currentTime = Number(e.currentTarget.value);
-                syncPlayback(video, shorts[activeIndex].id, true);
-              }}
-            />
-            <span className="text-xs tabular-nums">{formatTime(duration)}</span>
-          </motion.div>
+          <PlayerTransport
+            hidden={directorMode}
+            paused={currentPlayback?.paused !== false}
+            time={position}
+            duration={duration}
+            onToggle={togglePlayback}
+            onSeek={(seconds) => {
+              const video = videoRefs.current[activeIndex];
+              if (!video) return;
+              video.currentTime = seconds;
+              syncPlayback(video, shorts[activeIndex].id, true);
+            }}
+            className="fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+6rem)] z-40 sm:inset-x-6 [@media(orientation:landscape)_and_(max-height:500px)]:bottom-3 [@media(orientation:landscape)_and_(max-height:500px)]:left-24"
+          />
           <CommentDrawer
             video={shorts[activeIndex]}
             open={commentsOpen}

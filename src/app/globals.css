@@ -47,3 +47,43 @@ body {
   outline-offset: 2px;
   border-radius: 2px;
 }
+
+/* Player timeline: 44px touch target, 2px visual track, native keyboard seeking. */
+.player-timeline {
+  appearance: none;
+  height: 44px;
+  background-color: transparent;
+  background-size: 100% 2px;
+  background-position: center;
+  background-repeat: no-repeat;
+  cursor: pointer;
+  touch-action: none;
+}
+.player-timeline::-webkit-slider-runnable-track { height: 2px; background: transparent; }
+.player-timeline::-moz-range-track { height: 2px; background: transparent; }
+.player-timeline::-webkit-slider-thumb {
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: white;
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+.player-timeline::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border: 0;
+  border-radius: 50%;
+  background: white;
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+.player-timeline:is(:hover, :focus-visible, :active)::-webkit-slider-thumb { opacity: 1; }
+.player-timeline:is(:hover, :focus-visible, :active)::-moz-range-thumb { opacity: 1; }
+.player-timeline:disabled { cursor: default; opacity: 0.4; }
+@media (prefers-reduced-motion: reduce) {
+  .player-timeline::-webkit-slider-thumb { transition: none; }
+  .player-timeline::-moz-range-thumb { transition: none; }
+}

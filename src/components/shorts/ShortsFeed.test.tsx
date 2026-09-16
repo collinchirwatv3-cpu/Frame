@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
+import { VideoCard } from "@/components/feed/VideoCard";
 import { ShortsFeed } from "./ShortsFeed";
 import { usePlayerStore } from "@/store/player-store";
 import type { Video } from "@/lib/types";
@@ -11,6 +12,9 @@ vi.mock("@/components/feed/VideoOptionsSheet", () => ({ VideoOptionsSheet: () =>
 vi.mock("@/components/ui/Avatar", () => ({ Avatar: () => null }));
 vi.mock("@/lib/cast", () => ({ useCastControl: () => ({ available: false, triggerCast: vi.fn() }) }));
 vi.mock("@/lib/video-views", () => ({ recordVideoView: vi.fn() }));
+vi.mock("@/components/feed/VideoOverlay", () => ({ VideoOverlay: () => null }));
+vi.mock("@/components/feed/VideoDetailsSheet", () => ({ VideoDetailsSheet: () => null }));
+vi.mock("@/components/feed/ClipCreateSheet", () => ({ ClipCreateSheet: () => null }));
 const shorts = ["one", "two"].map((id) => ({
   id, title: id, playbackUrl: `/${id}.mp4`, posterUrl: `/${id}.jpg`,
   width: 1920, height: 1080, creator: { id: "creator", username: "creator", displayName: "Creator" },
@@ -46,10 +50,10 @@ function setup() {
 }
 it("pauses, seeks while paused, stays paused when mute changes, and resumes", () => {
   const { videos } = setup();
-  expect(screen.queryByText("FRAMES")).not.toBeInTheDocument();
+  expect(document.querySelector('[data-paused-watermark="true"]')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Pause video" }));
   expect(videos[0].paused).toBe(true);
-  expect(screen.getByText("FRAMES")).toHaveClass("text-white/15", "pointer-events-none");
+  expect(document.querySelector('[data-paused-watermark="true"]')).toHaveClass("pointer-events-none");
   fireEvent.change(screen.getByRole("slider", { name: "Seek video" }), { target: { value: "75" } });
   expect(videos[0].currentTime).toBe(75);
   expect(videos[0].paused).toBe(true);
@@ -58,7 +62,7 @@ it("pauses, seeks while paused, stays paused when mute changes, and resumes", ()
   expect(videos[0].paused).toBe(true);
   fireEvent.click(screen.getByRole("button", { name: "Play video" }));
   expect(videos[0].paused).toBe(false);
-  expect(screen.queryByText("FRAMES")).not.toBeInTheDocument();
+  expect(document.querySelector('[data-paused-watermark="true"]')).not.toBeInTheDocument();
 });
 it("hides transport in Director Mode, reveals it on tap, and targets the active video", () => {
   const { container, videos } = setup();
@@ -87,7 +91,7 @@ it("video taps pause and resume while controls do not toggle playback", () => {
   act(() => usePlayerStore.getState().enterDirectorMode());
   fireEvent.click(videos[0]);
   expect(videos[0].paused).toBe(true);
-  expect(screen.getByText("FRAMES")).toBeInTheDocument();
+  expect(document.querySelector('[data-paused-watermark="true"]')).toBeInTheDocument();
   expect(usePlayerStore.getState().directorMode).toBe(false);
   fireEvent.click(screen.getByRole("slider"));
   expect(videos[0].paused).toBe(true);
@@ -95,5 +99,29 @@ it("video taps pause and resume while controls do not toggle playback", () => {
   expect(videos[0].paused).toBe(true);
   fireEvent.click(videos[0]);
   expect(videos[0].paused).toBe(false);
-  expect(screen.queryByText("FRAMES")).not.toBeInTheDocument();
+  expect(document.querySelector('[data-paused-watermark="true"]')).not.toBeInTheDocument();
+});
+
+it("Discover uses the same transport, pause watermark, and paused seeking", () => {
+  const { container } = render(<VideoCard video={shorts[0]} active index={0} sectionRef={() => {}} showSearchButton={false} />);
+  const video = container.querySelector("video")!;
+  Object.defineProperty(video, "duration", { configurable: true, value: 120 });
+  fireEvent.loadedMetadata(video);
+  fireEvent.click(video);
+  expect(video.paused).toBe(true);
+  expect(document.querySelector('[data-paused-watermark="true"]')).toBeInTheDocument();
+  fireEvent.change(screen.getByRole("slider"), { target: { value: "60" } });
+  expect(video.currentTime).toBe(60);
+  act(() => usePlayerStore.getState().toggleMuted());
+  expect(video.paused).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "Play video" }));
+  expect(video.paused).toBe(false);
+});
+it("transport keyboard events do not trigger feed shortcuts", () => {
+  setup();
+  const listener = vi.fn();
+  window.addEventListener("keydown", listener);
+  fireEvent.keyDown(screen.getByRole("button", { name: "Pause video" }), { key: " " });
+  expect(listener).not.toHaveBeenCalled();
+  window.removeEventListener("keydown", listener);
 });

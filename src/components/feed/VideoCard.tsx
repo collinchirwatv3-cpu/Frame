@@ -2,6 +2,8 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { PlayerTransport } from "@/components/player/PlayerTransport";
+import { PausedWatermark } from "@/components/player/PausedWatermark";
 import { ActionRail } from "./ActionRail";
 import { PlaybackControls } from "./PlaybackControls";
 import { VideoOverlay } from "./VideoOverlay";
@@ -20,11 +22,7 @@ import { FOCUS_PULL_TRANSITION, CHROME_FADE_TRANSITION } from "@/lib/motion";
 import type { Video } from "@/lib/types";
 
 export type VideoCardHandle = {
-  /** Tap-equivalent: reveals chrome if Director Mode is hiding it. No other
-   * effect when chrome is already visible — tapping used to also toggle
-   * mute here, pulled out deliberately (sound is on by default now) to be
-   * rewired later. There's no visible pause affordance either; the video
-   * just always plays while active. */
+  /** Toggle playback and reveal the player controls. */
   handleTap: () => void;
 };
 
@@ -45,10 +43,11 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
   ref
 ) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const scrubBarRef = useRef<HTMLDivElement>(null);
   const [progress, setProgress] = useState(0);
-  const [seeking, setSeeking] = useState(false);
-  const [scrubProgress, setScrubProgress] = useState(0);
+  const [paused, setPaused] = useState(true);
+  const [duration, setDuration] = useState(0);
+  const manuallyPaused = useRef(false);
+  const activeRef = useRef(active);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -63,12 +62,12 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
   const toggleDirectorMode = usePlayerStore((s) => s.toggleDirectorMode);
   const setScrubbing = usePlayerStore((s) => s.setScrubbing);
   const ownProfile = useCurrentUserStore((s) => s.profile);
-  const displayProgress = seeking ? scrubProgress : progress;
   const { available: castAvailable, triggerCast } = useCastControl(() => videoRef.current);
 
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
+    activeRef.current = active;
 
     if (!active) {
       // Leaving this scene — record it as watched before the position resets
@@ -109,6 +108,8 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
       return () => window.clearTimeout(t);
     }
 
+    if (manuallyPaused.current) return;
+
     // isCancelled guards playWithMutedFallback's rejected-play retry, which
     // resolves asynchronously — without it, scrolling past this card before
     // that promise settles could silently resume it playing off-screen.
@@ -116,7 +117,7 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
     playWithMutedFallback(
       el,
       muted,
-      () => cancelled,
+      () => cancelled || manuallyPaused.current,
       () => fadeVolume(el, 0, 1, 500)
     );
 
@@ -132,10 +133,11 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
 
   function handleTimeUpdate() {
     const el = videoRef.current;
-    if (!el || !el.duration) return;
+    if (!el || !Number.isFinite(el.duration) || el.duration <= 0) return;
     setProgress(el.currentTime / el.duration);
 
     if (clipEndRef.current !== null && el.currentTime >= clipEndRef.current) {
+      manuallyPaused.current = true;
       el.pause();
       clipEndRef.current = null;
     }
@@ -146,55 +148,27 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
   function playClip(startSeconds: number, endSeconds: number) {
     const el = videoRef.current;
     if (!el) return;
+    manuallyPaused.current = false;
     el.currentTime = startSeconds;
     clipEndRef.current = endSeconds;
     el.play().catch(() => {});
     setDetailsOpen(false);
   }
 
-  // No separate "enter full screen" button — the video is always the
-  // full-bleed cinematic view. Tapping while Director Mode is hiding
-  // chrome just reveals it; there's no pause affordance either, the video
-  // just always plays while it's the active one. Tap used to also toggle
-  // mute once chrome was already visible — pulled out deliberately, to be
-  // rewired later.
   function handleTap() {
-    if (directorMode) {
-      toggleDirectorMode();
+    const el = videoRef.current;
+    if (!el || !active) return;
+    if (directorMode) toggleDirectorMode();
+    if (el.paused) {
+      manuallyPaused.current = false;
+      playWithMutedFallback(el, muted, () => !activeRef.current || manuallyPaused.current || !el.isConnected);
+    } else {
+      manuallyPaused.current = true;
+      el.pause();
     }
   }
 
-  function seekFromPointer(clientX: number) {
-    const el = videoRef.current;
-    const bar = scrubBarRef.current;
-    if (!el || !bar || !el.duration) return;
-    const rect = bar.getBoundingClientRect();
-    const fraction = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-    setScrubProgress(fraction);
-    el.currentTime = fraction * el.duration;
-  }
-
-  function handleScrubStart(e: React.PointerEvent<HTMLDivElement>) {
-    e.stopPropagation();
-    e.currentTarget.setPointerCapture(e.pointerId);
-    setSeeking(true);
-    setScrubbing(true);
-    seekFromPointer(e.clientX);
-  }
-
-  function handleScrubMove(e: React.PointerEvent<HTMLDivElement>) {
-    if (!seeking) return;
-    e.stopPropagation();
-    seekFromPointer(e.clientX);
-  }
-
-  function handleScrubEnd(e: React.PointerEvent<HTMLDivElement>) {
-    if (!seeking) return;
-    e.stopPropagation();
-    setSeeking(false);
-    setScrubbing(false);
-    setProgress(scrubProgress);
-  }
+  useEffect(() => () => { setScrubbing(false); activeRef.current = false; }, [setScrubbing]);
 
   useImperativeHandle(ref, () => ({ handleTap }));
 
@@ -232,7 +206,12 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
           playsInline
           preload={active ? "auto" : "none"}
           onTimeUpdate={handleTimeUpdate}
+          onLoadedMetadata={(e) => setDuration(Number.isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0)}
+          onDurationChange={(e) => setDuration(Number.isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0)}
+          onPlay={() => setPaused(false)}
+          onPause={() => setPaused(true)}
         />
+        <PausedWatermark visible={active && paused && duration > 0} />
       </motion.div>
 
       <AnimatePresence>
@@ -267,12 +246,8 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
                 </div>
               )}
 
-              {/* bottom overlay: creator info + action rail — cleared above the
-                  mobile bottom nav. 6rem, not 5.5rem — measured live at a
-                  very short (~400px) viewport, 5.5rem left only ~2px of
-                  actual gap above the dock regardless of device height, so
-                  this is a real fix everywhere, not just short screens. */}
-              <div className="pointer-events-auto absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 px-4 md:px-8 pb-[calc(env(safe-area-inset-bottom)+6rem)] md:pb-10">
+              {/* Keep attribution above the transport and navigation dock. */}
+              <div className="pointer-events-auto absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 px-4 md:px-8 pb-[calc(env(safe-area-inset-bottom)+10rem)] [@media(orientation:landscape)_and_(max-height:500px)]:pb-16">
                 <VideoOverlay video={video} onOpenDetails={() => setDetailsOpen(true)} />
                 <ActionRail
                   video={video}
@@ -282,44 +257,28 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
                 />
               </div>
 
-              {/* playback scrub bar — sits above the mobile bottom nav. The
-                  outer div is a taller invisible hit target (a 2px line is
-                  too thin to reliably grab); the thin track stays visually
-                  centered inside it. touch-none stops mobile browsers from
-                  interpreting a drag here as a page-scroll gesture. */}
-              <div
-                ref={scrubBarRef}
-                onPointerDown={handleScrubStart}
-                onPointerMove={handleScrubMove}
-                onPointerUp={handleScrubEnd}
-                onPointerCancel={handleScrubEnd}
-                onClick={(e) => e.stopPropagation()}
-                className="pointer-events-auto absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+3.75rem)] md:bottom-0 h-5 md:h-4 flex items-center cursor-pointer touch-none"
-              >
-                <div className="relative w-full h-[2px] bg-border/60">
-                  <div
-                    className="h-full bg-primary"
-                    style={{
-                      width: `${displayProgress * 100}%`,
-                      transition: seeking ? "none" : "width 150ms linear",
-                    }}
-                  />
-                  <div
-                    className="absolute top-1/2 rounded-full bg-primary transition-opacity"
-                    style={{
-                      left: `${displayProgress * 100}%`,
-                      width: 12,
-                      height: 12,
-                      transform: "translate(-50%, -50%)",
-                      opacity: seeking ? 1 : 0,
-                    }}
-                  />
-                </div>
-              </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {active && (
+        <PlayerTransport
+          hidden={directorMode}
+          paused={paused}
+          time={progress * duration}
+          duration={duration}
+          onToggle={handleTap}
+          onSeek={(seconds) => {
+            const el = videoRef.current;
+            if (!el || !duration) return;
+            clipEndRef.current = null;
+            el.currentTime = seconds;
+            setProgress(seconds / duration);
+          }}
+          className="absolute inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+6rem)] z-20 sm:inset-x-6 [@media(orientation:landscape)_and_(max-height:500px)]:bottom-3 [@media(orientation:landscape)_and_(max-height:500px)]:left-24"
+        />
+      )}
 
       <CommentDrawer video={video} open={commentsOpen} onClose={() => setCommentsOpen(false)} />
       <VideoOptionsSheet video={video} open={optionsOpen} onClose={() => setOptionsOpen(false)} />
