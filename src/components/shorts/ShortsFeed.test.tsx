@@ -4,6 +4,7 @@ import "@testing-library/jest-dom/vitest";
 import { VideoCard } from "@/components/feed/VideoCard";
 import { ShortsFeed } from "./ShortsFeed";
 import { usePlayerStore } from "@/store/player-store";
+import { useCurrentUserStore } from "@/store/current-user-store";
 import type { Video } from "@/lib/types";
 
 vi.mock("@/components/feed/ActionRail", () => ({ ActionRail: () => null }));
@@ -22,6 +23,7 @@ const shorts = ["one", "two"].map((id) => ({
 let intersect: IntersectionObserverCallback;
 beforeEach(() => {
   usePlayerStore.setState({ directorMode: false, isScrubbing: false, muted: true });
+  useCurrentUserStore.setState({ profile: null });
   vi.stubGlobal("IntersectionObserver", class {
     constructor(callback: IntersectionObserverCallback) { intersect = callback; }
     observe() {} disconnect() {}
@@ -124,4 +126,17 @@ it("transport keyboard events do not trigger feed shortcuts", () => {
   fireEvent.keyDown(screen.getByRole("button", { name: "Pause video" }), { key: " " });
   expect(listener).not.toHaveBeenCalled();
   window.removeEventListener("keydown", listener);
+});
+
+it("hides the Follow pill on your own short — the database rejects self-follow anyway", () => {
+  useCurrentUserStore.setState({ profile: { id: "creator" } as never }); // same id as shorts[*].creator.id
+  setup();
+  expect(screen.queryByLabelText(/^Follow @/)).not.toBeInTheDocument();
+  expect(screen.queryByLabelText(/^Unfollow @/)).not.toBeInTheDocument();
+});
+
+it("still shows the Follow pill on someone else's short", () => {
+  useCurrentUserStore.setState({ profile: { id: "someone-else" } as never });
+  setup();
+  expect(screen.getByLabelText("Follow @creator")).toBeInTheDocument();
 });

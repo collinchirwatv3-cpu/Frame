@@ -4,6 +4,7 @@ import "@testing-library/jest-dom/vitest";
 import { VideoCard } from "./VideoCard";
 import { useTagsStore } from "@/store/tags-store";
 import { useCommentsStore } from "@/store/comments-store";
+import { useCurrentUserStore } from "@/store/current-user-store";
 import type { Video } from "@/lib/types";
 
 // jsdom doesn't implement real media playback.
@@ -52,6 +53,7 @@ const video: Video = {
 beforeEach(() => {
   useTagsStore.setState({ byVideoId: {}, loadingVideoIds: {}, errorVideoIds: {}, epoch: 0, fetchVideoTagTiers: vi.fn() });
   useCommentsStore.setState({ byVideoId: {}, fetchComments: vi.fn() });
+  useCurrentUserStore.setState({ profile: null });
 });
 
 describe("VideoCard", () => {
@@ -63,5 +65,18 @@ describe("VideoCard", () => {
   it("hides the search button in landscape so the action rail gets that corner's room — the iPad report", () => {
     render(<VideoCard video={video} active index={0} sectionRef={() => {}} showSearchButton />);
     expect(screen.getByLabelText("Search").parentElement).toHaveClass("landscape:hidden");
+  });
+
+  it("hides the Follow pill on your own video — the database rejects self-follow anyway", () => {
+    useCurrentUserStore.setState({ profile: { id: "c1" } as never }); // same id as video.creator.id
+    render(<VideoCard video={video} active index={0} sectionRef={() => {}} showSearchButton={false} />);
+    expect(screen.queryByLabelText(/^Follow @/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Unfollow @/)).not.toBeInTheDocument();
+  });
+
+  it("still shows the Follow pill on someone else's video", () => {
+    useCurrentUserStore.setState({ profile: { id: "someone-else" } as never });
+    render(<VideoCard video={video} active index={0} sectionRef={() => {}} showSearchButton={false} />);
+    expect(screen.getByLabelText("Follow @milo_aerial")).toBeInTheDocument();
   });
 });

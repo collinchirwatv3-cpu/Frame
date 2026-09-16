@@ -364,27 +364,32 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
                     </div>
                     {/* Same "Follow" -> "Following" pill as VideoOverlay.tsx's
                         main-feed caption — stays visible once followed
-                        (relabeled, dimmed) rather than disappearing. */}
-                    <motion.button
-                      whileTap={{ scale: CHROME_TAP_SCALE }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleFollow(short.creator.id);
-                      }}
-                      aria-label={
-                        followedCreators[short.creator.id]
-                          ? `Unfollow @${short.creator.username}`
-                          : `Follow @${short.creator.username}`
-                      }
-                      className={cn(
-                        "px-2.5 py-1 rounded-full backdrop-blur-md border text-[10px] font-semibold shrink-0 transition-colors",
-                        followedCreators[short.creator.id]
-                          ? "bg-card/50 border-border text-text-secondary"
-                          : "bg-card/80 border-border text-accent"
-                      )}
-                    >
-                      {followedCreators[short.creator.id] ? "Following" : "Follow"}
-                    </motion.button>
+                        (relabeled, dimmed) rather than disappearing. Hidden
+                        on your own video, same reasoning as VideoOverlay's:
+                        the DB's no_self_follow check rejects it regardless,
+                        so this isn't a real affordance to offer. */}
+                    {ownProfile?.id !== short.creator.id && (
+                      <motion.button
+                        whileTap={{ scale: CHROME_TAP_SCALE }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFollow(short.creator.id);
+                        }}
+                        aria-label={
+                          followedCreators[short.creator.id]
+                            ? `Unfollow @${short.creator.username}`
+                            : `Follow @${short.creator.username}`
+                        }
+                        className={cn(
+                          "px-2.5 py-1 rounded-full backdrop-blur-md border text-[10px] font-semibold shrink-0 transition-colors",
+                          followedCreators[short.creator.id]
+                            ? "bg-card/50 border-border text-text-secondary"
+                            : "bg-card/80 border-border text-accent"
+                        )}
+                      >
+                        {followedCreators[short.creator.id] ? "Following" : "Follow"}
+                      </motion.button>
+                    )}
                   </div>
                   <p className="text-xs text-text-secondary leading-tight truncate">{short.title}</p>
                   {short.views !== undefined && (

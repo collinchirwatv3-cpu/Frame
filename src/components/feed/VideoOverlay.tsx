@@ -7,6 +7,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { BadgeRow } from "@/components/ui/BadgeRow";
 import { computeBadges } from "@/lib/badges";
 import { useEngagementStore } from "@/store/engagement-store";
+import { useCurrentUserStore } from "@/store/current-user-store";
 import { useTagsStore, selectVideoTagTiers } from "@/store/tags-store";
 import { CHROME_TAP_SCALE } from "@/lib/chrome";
 import { cn, formatCount } from "@/lib/utils";
@@ -21,6 +22,8 @@ export function VideoOverlay({
 }) {
   const following = useEngagementStore((s) => !!s.followedCreators[video.creator.id]);
   const toggleFollow = useEngagementStore((s) => s.toggleFollow);
+  const ownProfileId = useCurrentUserStore((s) => s.profile?.id);
+  const isOwnVideo = ownProfileId === video.creator.id;
   const tagEpoch = useTagsStore((s) => s.epoch);
   const fetchVideoTagTiers = useTagsStore((s) => s.fetchVideoTagTiers);
   const { primary } = useTagsStore(selectVideoTagTiers(video.id));
@@ -45,23 +48,29 @@ export function VideoOverlay({
             the name it's about. Stays visible once followed (relabeled,
             dimmed) rather than disappearing — same "Follow" -> "Following"
             convention ProfileHeader.tsx already uses, just as a compact
-            pill here. */}
-        <motion.button
-          whileTap={{ scale: CHROME_TAP_SCALE }}
-          onClick={(e) => {
-            e.stopPropagation();
-            toggleFollow(video.creator.id);
-          }}
-          aria-label={following ? `Unfollow @${video.creator.username}` : `Follow @${video.creator.username}`}
-          className={cn(
-            "px-2.5 py-1 rounded-full backdrop-blur-md border text-[10px] font-semibold shrink-0 transition-colors",
-            following
-              ? "bg-card/50 border-border text-text-secondary"
-              : "bg-card/80 border-border text-accent"
-          )}
-        >
-          {following ? "Following" : "Follow"}
-        </motion.button>
+            pill here. Hidden entirely on your own video: the database's
+            own no_self_follow check constraint already rejects the write,
+            so tapping it used to just flash "Following" and silently
+            revert once that rejection came back — offering an action
+            that's guaranteed to fail isn't a real affordance. */}
+        {!isOwnVideo && (
+          <motion.button
+            whileTap={{ scale: CHROME_TAP_SCALE }}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleFollow(video.creator.id);
+            }}
+            aria-label={following ? `Unfollow @${video.creator.username}` : `Follow @${video.creator.username}`}
+            className={cn(
+              "px-2.5 py-1 rounded-full backdrop-blur-md border text-[10px] font-semibold shrink-0 transition-colors",
+              following
+                ? "bg-card/50 border-border text-text-secondary"
+                : "bg-card/80 border-border text-accent"
+            )}
+          >
+            {following ? "Following" : "Follow"}
+          </motion.button>
+        )}
       </div>
       {primary.length > 0 && (
         <span className="text-[11px] font-semibold uppercase tracking-wide text-accent/80 w-fit">
