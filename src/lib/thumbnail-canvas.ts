@@ -1,10 +1,11 @@
 /**
- * Client-only canvas compositing for the thumbnail editor — crops an image
- * to 16:9 and/or burns in a text overlay, producing a single flat JPEG
- * ready to upload. Only invoked when there's actually something to
- * composite (a crop or a text overlay); a plain frame pick with no overlay
- * never touches this — it's set server-side straight from Cloudflare
- * Stream's own thumbnail endpoint (see /api/uploads/thumbnail).
+ * Client-only canvas compositing for the thumbnail editor — burns a text
+ * overlay onto a real video frame, producing a single flat JPEG ready to
+ * upload. Only invoked when there's actually a text overlay to add; a
+ * plain frame pick with no overlay never touches this — it's set
+ * server-side straight from Cloudflare Stream's own thumbnail endpoint
+ * (see /api/uploads/thumbnail). No arbitrary-image/crop path exists here
+ * — every thumbnail traces back to a real frame of the video.
  */
 
 export type TextOverlay = {
@@ -17,20 +18,17 @@ export type TextOverlay = {
   fontSizePct: number;
 };
 
-/** All fractions of the *source* image's natural dimensions. */
-export type CropRect = { xPct: number; yPct: number; wPct: number; hPct: number };
-
 const OUTPUT_WIDTH = 1280;
 const OUTPUT_HEIGHT = 720;
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    // Only matters for cross-origin sources (a picked video frame from
-    // Cloudflare Stream) — same-origin blob: URLs (an uploaded file) ignore
-    // this. If Stream's thumbnail endpoint ever doesn't send permissive
-    // CORS headers, toBlob() below will throw on a tainted canvas; callers
-    // should catch that and suggest uploading a custom image instead.
+    // Matters because the source is always a cross-origin Cloudflare
+    // Stream thumbnail URL. If Stream's thumbnail endpoint ever doesn't
+    // send permissive CORS headers, toBlob() below will throw on a
+    // tainted canvas; ThumbnailPicker's confirmFrame surfaces that as an
+    // error suggesting the text overlay be turned off.
     img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error("Could not load the image"));
@@ -45,20 +43,6 @@ function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement, w: numb
   const sx = (img.naturalWidth - sw) / 2;
   const sy = (img.naturalHeight - sh) / 2;
   ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
-}
-
-function drawCrop(ctx: CanvasRenderingContext2D, img: HTMLImageElement, crop: CropRect, w: number, h: number) {
-  ctx.drawImage(
-    img,
-    crop.xPct * img.naturalWidth,
-    crop.yPct * img.naturalHeight,
-    crop.wPct * img.naturalWidth,
-    crop.hPct * img.naturalHeight,
-    0,
-    0,
-    w,
-    h
-  );
 }
 
 function drawTextOverlay(ctx: CanvasRenderingContext2D, overlay: TextOverlay, w: number, h: number) {
@@ -87,7 +71,7 @@ function drawTextOverlay(ctx: CanvasRenderingContext2D, overlay: TextOverlay, w:
 
 export async function compositeThumbnail(
   imageSrc: string,
-  options: { crop?: CropRect; text?: TextOverlay }
+  options: { text?: TextOverlay }
 ): Promise<Blob> {
   const img = await loadImage(imageSrc);
   const canvas = document.createElement("canvas");
@@ -96,11 +80,7 @@ export async function compositeThumbnail(
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas isn't supported in this browser");
 
-  if (options.crop) {
-    drawCrop(ctx, img, options.crop, OUTPUT_WIDTH, OUTPUT_HEIGHT);
-  } else {
-    drawCover(ctx, img, OUTPUT_WIDTH, OUTPUT_HEIGHT);
-  }
+  drawCover(ctx, img, OUTPUT_WIDTH, OUTPUT_HEIGHT);
 
   if (options.text && options.text.text.trim()) {
     drawTextOverlay(ctx, options.text, OUTPUT_WIDTH, OUTPUT_HEIGHT);
