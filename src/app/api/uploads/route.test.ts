@@ -87,7 +87,7 @@ const validBody = {
   topicTagIds: [TOPIC_TAG_ID],
   width: 1920,
   height: 1080,
-  durationSeconds: 300,
+  durationSeconds: 600,
   fileSizeBytes: 1_000_000,
 };
 
@@ -129,6 +129,15 @@ describe("POST /api/uploads", () => {
     const res = await POST(request(validBody));
     expect(res.status).toBe(429);
     expect(createVideoRpcSpy).not.toHaveBeenCalled();
+  });
+
+  it.each([359.9, 360, 360.1])("classifies the six-minute boundary at %s seconds", async (durationSeconds) => {
+    const res = await POST(request({ ...validBody, durationSeconds, contentType: "short" }));
+    expect(res.status).toBe(200);
+    expect(createVideoRpcSpy).toHaveBeenCalledWith(expect.objectContaining({
+      p_content_type: durationSeconds <= 360 ? "short" : "film",
+      p_publish_mode: "post",
+    }));
   });
 
   describe("publishMode: post (default)", () => {

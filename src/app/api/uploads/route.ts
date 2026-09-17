@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { uploadMetadataSchema, LONGFORM_MIN_DURATION_SECONDS } from "@/lib/validation/upload";
+import { uploadMetadataSchema, SHORTS_MAX_DURATION_SECONDS } from "@/lib/validation/upload";
 import { createTusUploadSession, deleteStreamVideo } from "@/lib/cloudflare-stream";
 import { uploadRateLimiter, checkRateLimit, rateLimitedResponse } from "@/lib/rate-limit";
 
@@ -68,13 +68,13 @@ export async function POST(request: NextRequest) {
     fileSizeBytes,
   } = parsed.data;
 
-  // Authoritative, not client-trusted: under 3 minutes is always "short",
+  // Authoritative, not client-trusted: 6 minutes or less is always "short",
   // full stop — the schema's superRefine already rejects an explicit
   // longform request that's too short, but this covers every other case
   // too (e.g. a client that just sent "film" for a 90-second clip). Above
   // the threshold, the schema has already validated contentType is a real
   // choice ("film" or "longform"), so it's trusted as-is here.
-  const contentTypeFinal = durationSeconds < LONGFORM_MIN_DURATION_SECONDS ? "short" : contentType;
+  const contentTypeFinal = durationSeconds <= SHORTS_MAX_DURATION_SECONDS ? "short" : contentType === "short" ? "film" : contentType;
 
   // Same "never trust the client for a derived boundary" posture as
   // contentTypeFinal above: the schema's superRefine only catches

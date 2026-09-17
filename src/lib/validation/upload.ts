@@ -1,10 +1,7 @@
 import { z } from "zod";
 
-/** Below this, a video is always "short" — see the API route, which
- * re-derives content_type from this same threshold server-side and never
- * trusts whatever the client sent for that boundary. Above it, "film" is
- * the default and "longform" is a real, explicit creator choice. */
-export const LONGFORM_MIN_DURATION_SECONDS = 180;
+/** Videos up to and including six minutes are Shorts. */
+export const SHORTS_MAX_DURATION_SECONDS = 360;
 
 /**
  * Server-side validation for upload metadata — the pattern every future
@@ -53,7 +50,7 @@ export const uploadMetadataSchema = z
     // this schema keeps working unchanged. src/app/api/uploads/route.ts
     // re-derives "short" from duration server-side regardless of what's
     // sent here — the client is trusted for the film-vs-longform choice,
-    // never for the short boundary (see LONGFORM_MIN_DURATION_SECONDS
+    // never for the short boundary (see SHORTS_MAX_DURATION_SECONDS
     // below for the one rule this schema *does* enforce: longform requires
     // a video already long enough not to be a short).
     contentType: z.enum(["film", "short", "longform"]).default("film"),
@@ -92,14 +89,14 @@ export const uploadMetadataSchema = z
     // A real rejection (not a silent downgrade) when someone explicitly
     // requests longform on a too-short video — gives the creator actual
     // feedback rather than surprising them with a "film" upload instead.
-    // The separate, unconditional "duration < 180s is always short"
+    // The separate, unconditional "duration <= 360s is always short"
     // derivation lives in the API route, not here — that one silently
     // normalizes rather than rejects, since it's not really a rejected
     // *choice*, just an unspecified/default value getting corrected.
-    if (data.contentType === "longform" && data.durationSeconds < LONGFORM_MIN_DURATION_SECONDS) {
+    if (data.contentType === "longform" && data.durationSeconds <= SHORTS_MAX_DURATION_SECONDS) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "LongForm requires a video at least 3 minutes long",
+        message: "LongForm requires a video longer than 6 minutes",
         path: ["contentType"],
       });
     }

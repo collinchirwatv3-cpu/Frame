@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { uploadMetadataSchema, LONGFORM_MIN_DURATION_SECONDS } from "./upload";
+import { uploadMetadataSchema, SHORTS_MAX_DURATION_SECONDS } from "./upload";
 
 const CONTENT_TYPE_TAG_ID = "11111111-1111-4111-8111-111111111111";
 const GENRE_TAG_ID = "22222222-2222-4222-8222-222222222222";
@@ -114,7 +114,7 @@ describe("uploadMetadataSchema", () => {
       const longform = uploadMetadataSchema.safeParse({
         ...validInput,
         contentType: "longform",
-        durationSeconds: LONGFORM_MIN_DURATION_SECONDS,
+        durationSeconds: SHORTS_MAX_DURATION_SECONDS + 0.1,
       });
       expect(longform.success).toBe(true);
     });
@@ -124,22 +124,22 @@ describe("uploadMetadataSchema", () => {
       expect(result.success).toBe(false);
     });
 
-    it("rejects longform on a video under the 3-minute threshold", () => {
+    it("rejects longform on a video under the 6-minute threshold", () => {
       const result = uploadMetadataSchema.safeParse({
         ...validInput,
         contentType: "longform",
-        durationSeconds: LONGFORM_MIN_DURATION_SECONDS - 1,
+        durationSeconds: SHORTS_MAX_DURATION_SECONDS - 1,
       });
       expect(result.success).toBe(false);
     });
 
-    it("accepts longform right at the threshold, not just above it", () => {
+    it("rejects longform at exactly six minutes", () => {
       const result = uploadMetadataSchema.safeParse({
         ...validInput,
         contentType: "longform",
-        durationSeconds: LONGFORM_MIN_DURATION_SECONDS,
+        durationSeconds: SHORTS_MAX_DURATION_SECONDS,
       });
-      expect(result.success).toBe(true);
+      expect(result.success).toBe(false);
     });
 
     it("does not reject film/short for a short duration — only longform has a duration floor", () => {
@@ -185,7 +185,7 @@ describe("uploadMetadataSchema", () => {
         ...validInput,
         publishMode: "monetise",
         contentType: "film",
-        durationSeconds: LONGFORM_MIN_DURATION_SECONDS,
+        durationSeconds: SHORTS_MAX_DURATION_SECONDS + 0.1,
       });
       expect(result.success).toBe(true);
     });
@@ -195,7 +195,7 @@ describe("uploadMetadataSchema", () => {
         ...validInput,
         publishMode: "monetise",
         contentType: "longform",
-        durationSeconds: LONGFORM_MIN_DURATION_SECONDS,
+        durationSeconds: SHORTS_MAX_DURATION_SECONDS + 0.1,
       });
       expect(result.success).toBe(true);
     });

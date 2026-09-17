@@ -17,7 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { checkUpload, qualityLabel, type UploadCheck } from "@/lib/video-validation";
 import { deriveTitleFromFilename } from "@/lib/upload";
-import { LONGFORM_MIN_DURATION_SECONDS } from "@/lib/validation/upload";
+import { SHORTS_MAX_DURATION_SECONDS } from "@/lib/validation/upload";
 import { useUploadDraftStore } from "@/store/upload-draft-store";
 import { useCurrentUserStore } from "@/store/current-user-store";
 import { createClient } from "@/lib/supabase/client";
@@ -309,7 +309,7 @@ export function UploadDropzone() {
           // The server re-derives "short" from duration regardless of what's
           // sent here (never client-trusted for that boundary) — this is
           // only the film-vs-longform choice, and only reachable at all
-          // when the LongForm toggle is shown (>= 3 minutes).
+          // when the LongForm toggle is shown (> 6 minutes).
           contentType: isLongform ? "longform" : "film",
           publishMode,
           width: effectiveDims.width,
@@ -730,13 +730,21 @@ export function UploadDropzone() {
 
           {tagFormError && <p className="text-xs text-red-400">{tagFormError}</p>}
 
+          {probe && (
+            <p className="text-xs text-text-secondary">
+              {probe.duration <= SHORTS_MAX_DURATION_SECONDS
+                ? "Feed: Shorts · 6:00 or less"
+                : "Feed: Discover · longer than 6:00"}
+            </p>
+          )}
+
           {/* Only reachable once the probed duration actually clears the
               threshold — for anything shorter, LongForm literally isn't a
               selectable option, not just an unenforced client hint (the
               server independently re-derives "short" regardless either
               way). Same pill-toggle pattern as the Upload/Record source
               switch above, not a new UI pattern. */}
-          {probe && probe.duration >= LONGFORM_MIN_DURATION_SECONDS && (
+          {probe && probe.duration > SHORTS_MAX_DURATION_SECONDS && (
             <div>
               <label className="text-sm font-medium mb-1.5 block">Format</label>
               <div className="inline-flex items-center gap-1 p-1 rounded-full bg-card border border-border">
@@ -800,7 +808,7 @@ export function UploadDropzone() {
                   Promote
                 </button>
               )}
-              {probe && probe.duration >= LONGFORM_MIN_DURATION_SECONDS && (
+              {probe && probe.duration > SHORTS_MAX_DURATION_SECONDS && (
                 <button
                   type="button"
                   onClick={() => monetizationEligible && setPublishMode("monetise")}

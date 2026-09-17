@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { verifyStreamWebhookSignature, getStreamVideoDetails } from "@/lib/cloudflare-stream";
-import { LONGFORM_MIN_DURATION_SECONDS } from "@/lib/validation/upload";
+import { SHORTS_MAX_DURATION_SECONDS } from "@/lib/validation/upload";
 
 // Cloudflare Stream calls this once a video finishes encoding (or fails).
 // No user session exists on a webhook request — this uses the service-role
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
     // video's existing film/longform/monetise choice is left untouched —
     // that distinction is a creator choice, not a security boundary.
     const isActuallyShort =
-      details.durationSeconds !== null && details.durationSeconds < LONGFORM_MIN_DURATION_SECONDS;
+      details.durationSeconds !== null && details.durationSeconds <= SHORTS_MAX_DURATION_SECONDS;
 
     const update: Record<string, unknown> = {
       processing_status: "ready",

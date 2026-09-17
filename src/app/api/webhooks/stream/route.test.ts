@@ -22,7 +22,7 @@ let streamDetails: {
   state: "ready",
   playbackHlsUrl: "https://videodelivery.example/1/manifest/video.m3u8",
   thumbnailUrl: "https://videodelivery.example/1/thumbnail.jpg",
-  durationSeconds: 300,
+  durationSeconds: 600,
   width: 1920,
   height: 1080,
 };
@@ -99,7 +99,7 @@ describe("POST /api/webhooks/stream", () => {
 
   it("forces content_type=short and publish_mode=post when the real duration is under the longform threshold — closing the monetised-short bypass", async () => {
     // Simulates the exploit: an upload was inserted as film/monetise using
-    // a forged client-probed duration (>= 180s), but the file actually
+    // a forged client-probed duration (> 360s), but the file actually
     // uploaded to Cloudflare Stream is short.
     streamDetails = { ...streamDetails, durationSeconds: 42 };
 
@@ -114,8 +114,15 @@ describe("POST /api/webhooks/stream", () => {
     expect(videoRow).toEqual({ content_type: "short", publish_mode: "post" });
   });
 
+  it.each([359.9, 360, 360.1])("uses the authoritative six-minute boundary at %s seconds", async (durationSeconds) => {
+    streamDetails = { ...streamDetails, durationSeconds };
+    const res = await POST(signedRequest(JSON.stringify({ uid: "stream-uid-1" })));
+    expect(res.status).toBe(200);
+    expect(updateSpy.mock.calls[0][0].content_type).toBe(durationSeconds <= 360 ? "short" : undefined);
+  });
+
   it("does not touch content_type/publish_mode for a genuinely long video", async () => {
-    streamDetails = { ...streamDetails, durationSeconds: 300 };
+    streamDetails = { ...streamDetails, durationSeconds: 600 };
 
     const res = await POST(signedRequest(JSON.stringify({ uid: "stream-uid-1" })));
 
