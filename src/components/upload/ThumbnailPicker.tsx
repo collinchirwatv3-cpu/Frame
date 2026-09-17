@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { Loader2, Type } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { ImageIcon, Loader2, Type } from "lucide-react";
+import { cn, formatTimestamp } from "@/lib/utils";
 import { compositeThumbnail } from "@/lib/thumbnail-canvas";
 
 type Props = {
@@ -71,8 +71,9 @@ export function ThumbnailPicker({ videoId, durationSeconds, posterUrl, onDone, o
     </div>
   );
 
-  const [pendingTime, setPendingTime] = useState(() => Math.round(durationSeconds / 2));
-  const [frameTime, setFrameTime] = useState<number | null>(null);
+  const lastFrameTime = Math.max(0, durationSeconds - 0.01);
+  const [pendingTime, setPendingTime] = useState(() => Math.min(lastFrameTime, Math.round(durationSeconds / 2)));
+  const [frameTime, setFrameTime] = useState(pendingTime);
   const scrubDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function handleScrub(value: number) {
@@ -84,8 +85,13 @@ export function ThumbnailPicker({ videoId, durationSeconds, posterUrl, onDone, o
     if (scrubDebounce.current) clearTimeout(scrubDebounce.current);
   }, []);
 
-  const frameSrc =
-    frameTime === null ? posterUrl : `${posterUrl}?time=${frameTime.toFixed(2)}s&height=480`;
+  function frameUrl(seconds: number) {
+    const url = new URL(posterUrl);
+    url.searchParams.set("time", `${seconds.toFixed(2)}s`);
+    url.searchParams.set("height", "480");
+    return url.toString();
+  }
+  const frameSrc = frameUrl(frameTime);
 
   async function submitImage(blob: Blob) {
     const form = new FormData();
@@ -102,7 +108,7 @@ export function ThumbnailPicker({ videoId, durationSeconds, posterUrl, onDone, o
     setError(null);
     try {
       if (textEnabled && text.trim()) {
-        const blob = await compositeThumbnail(frameSrc, {
+        const blob = await compositeThumbnail(frameUrl(pendingTime), {
           text: { text: text.trim(), xPct: textPos.xPct, yPct: textPos.yPct, fontSizePct: 0.09 },
         });
         await submitImage(blob);
@@ -110,7 +116,7 @@ export function ThumbnailPicker({ videoId, durationSeconds, posterUrl, onDone, o
         const res = await fetch("/api/uploads/thumbnail", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ videoId, timeSeconds: frameTime ?? pendingTime }),
+          body: JSON.stringify({ videoId, timeSeconds: pendingTime }),
         });
         const body = await res.json().catch(() => null);
         if (!res.ok) throw new Error(body?.error ?? "Could not save the thumbnail");
@@ -128,8 +134,8 @@ export function ThumbnailPicker({ videoId, durationSeconds, posterUrl, onDone, o
   }
 
   return (
-    <div className="max-w-lg mx-auto px-6 py-8">
-      <h2 className="text-lg font-semibold mb-1">Choose a thumbnail</h2>
+    <div className="max-w-2xl mx-auto px-4 py-8 pb-28 sm:px-6">
+      <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight mb-1"><ImageIcon size={20} className="text-primary" />Choose a cover frame</h2>
       <p className="text-text-secondary text-sm mb-5">
         Pick a frame from the video. This is what people see before they press play.
       </p>
@@ -140,18 +146,27 @@ export function ThumbnailPicker({ videoId, durationSeconds, posterUrl, onDone, o
           className="relative rounded-2xl overflow-hidden bg-card border border-border aspect-video"
         >
           {/* eslint-disable-next-line @next/next/no-img-element -- editor surface needs direct pixel/canvas access, not next/image's optimization pipeline */}
-          <img src={frameSrc} alt="" className="w-full h-full object-cover" />
+          <img src={frameSrc} alt="" className="w-full h-full object-contain" />
           {textOverlayNode}
+        </div>
+        <div className="mt-4 rounded-2xl border border-border bg-card/50 px-4 py-3">
+        <div className="flex items-center justify-between text-xs">
+          <span className="font-medium">Cover frame</span>
+          <output className="tabular-nums text-text-secondary">{formatTimestamp(pendingTime)}</output>
         </div>
         <input
           type="range"
           min={0}
-          max={Math.max(1, Math.floor(durationSeconds))}
+          max={lastFrameTime}
+          step={0.01}
           value={pendingTime}
           onChange={(e) => handleScrub(Number(e.target.value))}
-          className="w-full mt-3 accent-primary"
+          className="w-full h-11 accent-primary cursor-pointer"
           aria-label="Scrub to a frame"
+          aria-valuetext={formatTimestamp(pendingTime)}
         />
+        <div className="flex justify-between text-[11px] tabular-nums text-text-secondary"><span>0:00</span><span>{formatTimestamp(durationSeconds)}</span></div>
+        </div>
       </div>
 
       <div className="flex items-center gap-2 mt-4">

@@ -14,7 +14,7 @@ import {
   Video,
   X,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatTimestamp } from "@/lib/utils";
 import { checkUpload, qualityLabel, type UploadCheck } from "@/lib/video-validation";
 import { deriveTitleFromFilename } from "@/lib/upload";
 import { SHORTS_MAX_DURATION_SECONDS } from "@/lib/validation/upload";
@@ -527,8 +527,16 @@ export function UploadDropzone() {
     const dims = appliedFix?.type === "crop" ? null : effectiveDims;
 
     return (
-      <div className="grid md:grid-cols-2 gap-8 px-6 py-8 max-w-4xl mx-auto">
-        <div>
+      <div className="grid gap-6 px-4 py-6 pb-28 sm:px-6 md:grid-cols-2 md:gap-8 max-w-5xl mx-auto">
+        <header className="md:col-span-2 flex items-center gap-3 border-b border-border pb-5">
+          <UploadCloud size={22} className="text-primary" />
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight">Publish a Frame</h1>
+            <p className="mt-1 text-xs text-text-secondary">Preview your video, add details, then choose a cover after processing.</p>
+          </div>
+        </header>
+        <div className="min-w-0 md:sticky md:top-6 md:self-start">
+          <h2 className="mb-3 text-xs font-medium uppercase tracking-widest text-text-secondary">Preview</h2>
           {appliedFix?.type === "rotate" && probe ? (
             <div className="relative w-40 h-64 mx-auto overflow-hidden rounded-2xl bg-card border border-border">
               <video
@@ -577,17 +585,9 @@ export function UploadDropzone() {
                 </span>
               </>
             )}
-            {probe && <span>{probe.duration.toFixed(0)}s</span>}
+            {probe && <span className="tabular-nums">{formatTimestamp(probe.duration)}</span>}
           </div>
 
-          <div className="mt-4 pt-4 border-t border-border">
-            <p className="text-[11px] text-text-secondary mb-2">Detected after upload</p>
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-secondary/70">
-              <span>FPS —</span>
-              <span>Codec —</span>
-              <span>Bitrate —</span>
-            </div>
-          </div>
         </div>
 
         <form
@@ -595,12 +595,15 @@ export function UploadDropzone() {
             e.preventDefault();
             publish();
           }}
-          className="flex flex-col gap-4"
+          className="flex min-w-0 flex-col gap-5 rounded-2xl border border-border bg-card/30 p-4 sm:p-5"
         >
+          <h2 className="text-sm font-semibold">Frame details</h2>
           <div>
-            <label className="text-sm font-medium mb-1.5 block">Title</label>
+            <label htmlFor="frame-title" className="text-sm font-medium mb-1.5 block">Title</label>
             <input
+              id="frame-title"
               required
+              maxLength={120}
               value={draftTitle}
               onChange={(e) => setDraftTitle(e.target.value)}
               placeholder="Give your Frame a title"
@@ -608,9 +611,11 @@ export function UploadDropzone() {
             />
           </div>
           <div>
-            <label className="text-sm font-medium mb-1.5 block">Description</label>
+            <label htmlFor="frame-description" className="text-sm font-medium mb-1.5 block">Description <span className="text-text-secondary font-normal">(optional)</span></label>
             <textarea
+              id="frame-description"
               rows={3}
+              maxLength={2000}
               value={draftDescription}
               onChange={(e) => setDraftDescription(e.target.value)}
               placeholder="What are we watching?"
