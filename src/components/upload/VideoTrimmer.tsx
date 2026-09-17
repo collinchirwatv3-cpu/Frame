@@ -97,20 +97,20 @@ export function VideoTrimmer({ durationSeconds, start, end, onChange, onScrub }:
         ))}
       </div>
 
-      <div ref={trackRef} className="relative h-8 flex items-center touch-none">
-        <div className="absolute inset-x-0 h-2 rounded-full bg-bg overflow-hidden flex items-center justify-between px-px" aria-hidden="true">
+      <div ref={trackRef} className="relative h-9 touch-none">
+        <div className="absolute inset-0 rounded-full border border-border bg-bg overflow-hidden flex items-center justify-between px-px" aria-hidden="true">
           {MINOR_TICK_FRACTIONS.map((f) => (
             <span key={f} className="w-px h-1.5 bg-border shrink-0" />
           ))}
         </div>
         <div
-          className="absolute h-2 rounded-full bg-primary/30"
+          className="absolute inset-y-0 rounded-full bg-primary/25"
           style={{ left: `${startFraction * 100}%`, right: `${(1 - endFraction) * 100}%` }}
         />
         <div
           onPointerDown={handlePointerDown}
           onPointerMove={(e) => e.buttons === 1 && handleStartMove(e)}
-          className="absolute w-1.5 h-8 rounded-full bg-primary -translate-x-1/2 cursor-grab active:cursor-grabbing touch-none"
+          className="absolute inset-y-0 w-1.5 rounded-full bg-primary -translate-x-1/2 cursor-grab active:cursor-grabbing touch-none"
           style={{ left: `${startFraction * 100}%` }}
           role="slider"
           aria-label="Trim start"
@@ -122,7 +122,7 @@ export function VideoTrimmer({ durationSeconds, start, end, onChange, onScrub }:
         <div
           onPointerDown={handlePointerDown}
           onPointerMove={(e) => e.buttons === 1 && handleEndMove(e)}
-          className="absolute w-1.5 h-8 rounded-full bg-primary -translate-x-1/2 cursor-grab active:cursor-grabbing touch-none"
+          className="absolute inset-y-0 w-1.5 rounded-full bg-primary -translate-x-1/2 cursor-grab active:cursor-grabbing touch-none"
           style={{ left: `${endFraction * 100}%` }}
           role="slider"
           aria-label="Trim end"

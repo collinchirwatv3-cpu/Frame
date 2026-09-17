@@ -133,15 +133,15 @@ export function CoverFramePicker({
         ref={trackRef}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
-        className="relative h-8 flex items-center touch-none cursor-pointer"
+        className="relative h-9 touch-none cursor-pointer"
       >
-        <div className="absolute inset-x-0 h-2 rounded-full bg-bg overflow-hidden flex items-center justify-between px-px" aria-hidden="true">
+        <div className="absolute inset-0 rounded-full border border-border bg-bg overflow-hidden flex items-center justify-between px-px" aria-hidden="true">
           {MINOR_TICK_FRACTIONS.map((f) => (
             <span key={f} className="w-px h-1.5 bg-border shrink-0" />
           ))}
         </div>
         <div
-          className="absolute w-1.5 h-8 rounded-full bg-emerald-400 -translate-x-1/2 cursor-grab active:cursor-grabbing touch-none"
+          className="absolute inset-y-0 w-1.5 rounded-full bg-emerald-400 -translate-x-1/2 cursor-grab active:cursor-grabbing touch-none"
           style={{ left: `${positionFraction * 100}%` }}
           role="slider"
           aria-label="Cover frame position"
