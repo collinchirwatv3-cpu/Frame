@@ -18,6 +18,7 @@ import { createClient } from "@/lib/supabase/client";
 import { fadeVolume, playWithMutedFallback } from "@/lib/audio";
 import { recordVideoView } from "@/lib/video-views";
 import { useCastControl } from "@/lib/cast";
+import { getTrimBounds } from "@/lib/video-trim";
 import { FOCUS_PULL_TRANSITION, CHROME_FADE_TRANSITION } from "@/lib/motion";
 import type { Video } from "@/lib/types";
 
@@ -63,6 +64,7 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
   const setScrubbing = usePlayerStore((s) => s.setScrubbing);
   const ownProfile = useCurrentUserStore((s) => s.profile);
   const { available: castAvailable, triggerCast } = useCastControl(() => videoRef.current);
+  const trim = getTrimBounds(video);
 
   useEffect(() => {
     const el = videoRef.current;
@@ -100,8 +102,8 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
       const t = window.setTimeout(
         () => {
           el.pause();
-          el.currentTime = 0;
-          setProgress(0);
+          el.currentTime = trim.start;
+          setProgress(trim.start / (duration || video.durationSeconds || 1));
         },
         muted ? 0 : 250
       );
@@ -140,6 +142,14 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
       manuallyPaused.current = true;
       el.pause();
       clipEndRef.current = null;
+      return;
+    }
+
+    // Trimmed videos don't use the native `loop` attribute (see the <video>
+    // below) — this is what actually loops them, within [trim.start,
+    // trim.end] instead of the whole underlying file.
+    if (clipEndRef.current === null && trim.isTrimmed && el.currentTime >= trim.end) {
+      el.currentTime = trim.start;
     }
   }
 
@@ -202,11 +212,14 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
           poster={video.posterUrl}
           className="w-full h-full object-contain"
           muted={muted}
-          loop
+          loop={!trim.isTrimmed}
           playsInline
           preload={active ? "auto" : "none"}
           onTimeUpdate={handleTimeUpdate}
-          onLoadedMetadata={(e) => setDuration(Number.isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0)}
+          onLoadedMetadata={(e) => {
+            setDuration(Number.isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0);
+            if (trim.start > 0) e.currentTarget.currentTime = trim.start;
+          }}
           onDurationChange={(e) => setDuration(Number.isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0)}
           onPlay={() => setPaused(false)}
           onPause={() => setPaused(true)}
@@ -281,15 +294,16 @@ export const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function Vi
         <PlayerTransport
           hidden={directorMode}
           paused={paused}
-          time={progress * duration}
-          duration={duration}
+          time={trim.isTrimmed ? Math.max(0, progress * duration - trim.start) : progress * duration}
+          duration={trim.isTrimmed ? Math.max(0, trim.end - trim.start) : duration}
           onToggle={handleTap}
           onSeek={(seconds) => {
             const el = videoRef.current;
             if (!el || !duration) return;
             clipEndRef.current = null;
-            el.currentTime = seconds;
-            setProgress(seconds / duration);
+            const absolute = trim.isTrimmed ? trim.start + seconds : seconds;
+            el.currentTime = absolute;
+            setProgress(absolute / duration);
           }}
           className="absolute inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+6rem)] z-20 sm:inset-x-6 [@media(orientation:landscape)_and_(max-height:500px)]:bottom-3 [@media(orientation:landscape)_and_(max-height:500px)]:left-24"
         />

@@ -99,6 +99,42 @@ describe("uploadMetadataSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  describe("trim bounds", () => {
+    it("defaults trimStartSeconds to 0 and leaves trimEndSeconds undefined — untrimmed", () => {
+      const result = uploadMetadataSchema.safeParse(validInput);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.trimStartSeconds).toBe(0);
+        expect(result.data.trimEndSeconds).toBeUndefined();
+      }
+    });
+
+    it("accepts a real trim window inside the video's duration", () => {
+      const result = uploadMetadataSchema.safeParse({ ...validInput, trimStartSeconds: 2, trimEndSeconds: 30 });
+      expect(result.success).toBe(true);
+    });
+
+    it("rejects a trim end at or before trim start", () => {
+      const result = uploadMetadataSchema.safeParse({ ...validInput, trimStartSeconds: 10, trimEndSeconds: 10 });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects a trim end past the video's duration", () => {
+      const result = uploadMetadataSchema.safeParse({ ...validInput, trimEndSeconds: validInput.durationSeconds + 5 });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects a trim start at or past the video's duration", () => {
+      const result = uploadMetadataSchema.safeParse({ ...validInput, trimStartSeconds: validInput.durationSeconds });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects a negative trim start", () => {
+      const result = uploadMetadataSchema.safeParse({ ...validInput, trimStartSeconds: -1 });
+      expect(result.success).toBe(false);
+    });
+  });
+
   describe("contentType", () => {
     it("defaults a missing contentType to film", () => {
       const result = uploadMetadataSchema.safeParse(validInput);

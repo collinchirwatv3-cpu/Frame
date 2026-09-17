@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
 import { VideoCard } from "./VideoCard";
@@ -78,5 +78,45 @@ describe("VideoCard", () => {
     useCurrentUserStore.setState({ profile: { id: "someone-else" } as never });
     render(<VideoCard video={video} active index={0} sectionRef={() => {}} showSearchButton={false} />);
     expect(screen.getByLabelText("Follow @milo_aerial")).toBeInTheDocument();
+  });
+
+  describe("trim bounds", () => {
+    it("keeps native looping for an untrimmed video", () => {
+      const { container } = render(
+        <VideoCard video={video} active index={0} sectionRef={() => {}} showSearchButton={false} />
+      );
+      expect(container.querySelector("video")).toHaveProperty("loop", true);
+    });
+
+    it("disables native looping for a trimmed video — the timeupdate handler loops it within bounds instead", () => {
+      const trimmed = { ...video, trimStartSeconds: 10, trimEndSeconds: 50 };
+      const { container } = render(
+        <VideoCard video={trimmed} active index={0} sectionRef={() => {}} showSearchButton={false} />
+      );
+      expect(container.querySelector("video")).toHaveProperty("loop", false);
+    });
+
+    it("loops back to trimStartSeconds once playback reaches trimEndSeconds", () => {
+      const trimmed = { ...video, trimStartSeconds: 10, trimEndSeconds: 50 };
+      const { container } = render(
+        <VideoCard video={trimmed} active index={0} sectionRef={() => {}} showSearchButton={false} />
+      );
+      const el = container.querySelector("video") as HTMLVideoElement;
+      Object.defineProperty(el, "duration", { value: 125, configurable: true });
+      el.currentTime = 50;
+      fireEvent.timeUpdate(el);
+      expect(el.currentTime).toBe(10);
+    });
+
+    it("seeds the starting position at trimStartSeconds once metadata loads", () => {
+      const trimmed = { ...video, trimStartSeconds: 10, trimEndSeconds: 50 };
+      const { container } = render(
+        <VideoCard video={trimmed} active index={0} sectionRef={() => {}} showSearchButton={false} />
+      );
+      const el = container.querySelector("video") as HTMLVideoElement;
+      Object.defineProperty(el, "duration", { value: 125, configurable: true });
+      fireEvent.loadedMetadata(el);
+      expect(el.currentTime).toBe(10);
+    });
   });
 });

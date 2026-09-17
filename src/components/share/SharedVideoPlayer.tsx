@@ -6,11 +6,13 @@ import Link from "next/link";
 import { Volume2, VolumeX } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import { Avatar } from "@/components/ui/Avatar";
+import { getTrimBounds } from "@/lib/video-trim";
 import type { Video } from "@/lib/types";
 
 export function SharedVideoPlayer({ video }: { video: Video }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [muted, setMuted] = useState(true);
+  const trim = getTrimBounds(video);
 
   useEffect(() => {
     videoRef.current?.play().catch(() => {});
@@ -29,9 +31,17 @@ export function SharedVideoPlayer({ video }: { video: Video }) {
           poster={video.posterUrl}
           className="w-full h-full object-contain"
           muted={muted}
-          loop
+          loop={!trim.isTrimmed}
           playsInline
           controls
+          onLoadedMetadata={(e) => {
+            if (trim.start > 0) e.currentTarget.currentTime = trim.start;
+          }}
+          onTimeUpdate={(e) => {
+            if (trim.isTrimmed && e.currentTarget.currentTime >= trim.end) {
+              e.currentTarget.currentTime = trim.start;
+            }
+          }}
         />
       </div>
 

@@ -66,6 +66,8 @@ export async function POST(request: NextRequest) {
     height,
     durationSeconds,
     fileSizeBytes,
+    trimStartSeconds,
+    trimEndSeconds,
   } = parsed.data;
 
   // Authoritative, not client-trusted: 6 minutes or less is always "short",
@@ -148,6 +150,8 @@ export async function POST(request: NextRequest) {
     p_mood_tag_ids: moodTagIds,
     p_location_tag_id: locationTagId,
     p_gear_tag_ids: gearTagIds,
+    p_trim_start_seconds: trimStartSeconds,
+    p_trim_end_seconds: trimEndSeconds ?? null,
   });
 
   if (createError || !videoId) {

@@ -54,7 +54,7 @@ export function buildContentSecurityPolicy(nonce: string): string {
     "img-src": [
       "'self'",
       "data:",
-      // ThumbnailPicker previews the creator's selected image locally.
+      // UploadDropzone's local file preview and captured cover-frame swatch.
       "blob:",
       "https://*.supabase.co",
       "https://*.r2.dev",

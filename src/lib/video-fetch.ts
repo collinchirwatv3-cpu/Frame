@@ -13,6 +13,8 @@ type Row = {
   sound_name: string | null;
   created_at: string;
   duration_seconds: number;
+  trim_start_seconds: number | null;
+  trim_end_seconds: number | null;
   width: number;
   height: number;
   badges: string[] | null;
@@ -42,7 +44,7 @@ type Row = {
 // PGRST201 ("more than one relationship was found"). Confirmed live.
 const SELECT = `
   id, playback_url, poster_url, title, description, category, content_type, sound_name, created_at,
-  duration_seconds, width, height, badges,
+  duration_seconds, trim_start_seconds, trim_end_seconds, width, height, badges,
   likes_count, comments_count, shares_count, saves_count, view_count,
   profiles!videos_creator_id_fkey ( id, username, display_name, avatar_url, banner_url, bio, website, verified, followers_count, following_count, total_views )
 `;
@@ -79,6 +81,8 @@ function toVideo(row: Row): Video | null {
     saves: row.saves_count,
     views: row.view_count,
     durationSeconds: row.duration_seconds,
+    trimStartSeconds: row.trim_start_seconds ?? undefined,
+    trimEndSeconds: row.trim_end_seconds ?? undefined,
     width: row.width,
     height: row.height,
     badges: (row.badges ?? []) as Video["badges"],

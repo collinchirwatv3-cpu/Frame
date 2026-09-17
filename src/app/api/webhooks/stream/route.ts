@@ -45,6 +45,27 @@ export async function POST(request: NextRequest) {
   );
 
   if (details.readyToStream && details.playbackHlsUrl) {
+    // Trim bounds were set at insert time against the CLIENT-PROBED
+    // duration (src/app/api/uploads/route.ts) — almost always accurate,
+    // but Cloudflare's own measured duration is the authoritative one, same
+    // reasoning as isActuallyShort below. A player seeking past the real
+    // media duration just clamps harmlessly (see src/lib/video-trim.ts), so
+    // this only needs to guard the one case that isn't harmless: a stored
+    // trim_start_seconds at or past the real duration, which would make a
+    // video permanently unplayable rather than just imprecisely trimmed.
+    //
+    // poster_url is read here too: UploadDropzone.tsx submits a client-
+    // captured cover frame to /api/uploads/thumbnail right after minting
+    // the video (fire-and-forget, alongside the main TUS upload — see
+    // publish()), well before Stream finishes encoding in virtually every
+    // real case. Without this check, this webhook would unconditionally
+    // overwrite that creator-chosen cover with Cloudflare's own generic
+    // auto-thumbnail the moment encoding finishes.
+    const { data: existing } = await supabase
+      .from("videos")
+      .select("trim_start_seconds, trim_end_seconds, poster_url")
+      .eq("stream_uid", uid)
+      .maybeSingle();
     // /api/uploads/route.ts derives content_type/publish_mode from the
     // CLIENT-PROBED duration at insert time — real for a genuine upload,
     // but a hand-crafted request can claim any durationSeconds it likes
@@ -63,14 +84,24 @@ export async function POST(request: NextRequest) {
     const update: Record<string, unknown> = {
       processing_status: "ready",
       playback_url: details.playbackHlsUrl,
-      poster_url: details.thumbnailUrl,
       width: details.width,
       height: details.height,
       duration_seconds: details.durationSeconds,
     };
+    if (!existing?.poster_url) {
+      update.poster_url = details.thumbnailUrl;
+    }
     if (isActuallyShort) {
       update.content_type = "short";
       update.publish_mode = "post";
+    }
+    if (
+      existing &&
+      details.durationSeconds !== null &&
+      existing.trim_start_seconds >= details.durationSeconds
+    ) {
+      update.trim_start_seconds = 0;
+      update.trim_end_seconds = null;
     }
 
     const { error } = await supabase.from("videos").update(update).eq("stream_uid", uid);

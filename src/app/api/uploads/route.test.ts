@@ -154,6 +154,22 @@ describe("POST /api/uploads", () => {
       );
       expect(campaignsInsertSpy).not.toHaveBeenCalled();
     });
+
+    it("defaults an omitted trim window to untrimmed (start 0, end null)", async () => {
+      const res = await POST(request(validBody));
+      expect(res.status).toBe(200);
+      expect(createVideoRpcSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ p_trim_start_seconds: 0, p_trim_end_seconds: null })
+      );
+    });
+
+    it("passes a real trim window through to the RPC", async () => {
+      const res = await POST(request({ ...validBody, trimStartSeconds: 5, trimEndSeconds: 90 }));
+      expect(res.status).toBe(200);
+      expect(createVideoRpcSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ p_trim_start_seconds: 5, p_trim_end_seconds: 90 })
+      );
+    });
   });
 
   // Atomicity: create_video_with_tags failing (invalid/missing tags, a DB

@@ -69,6 +69,16 @@ export const uploadMetadataSchema = z
     width: z.number().int().positive(),
     height: z.number().int().positive(),
     durationSeconds: z.number().positive(),
+    // The primary video's own playback bounds — same (start, end) shape as
+    // a Community Clip, chosen client-side in UploadDropzone.tsx against
+    // the locally-probed file. Defaults keep every existing caller of this
+    // schema (before trimming existed) working unchanged: 0/undefined is
+    // "untrimmed." Existence/id-membership isn't relevant here (unlike the
+    // tag id fields above) — these are just numeric bounds, re-checked
+    // against durationSeconds below and again, authoritatively, against
+    // Cloudflare's own measured duration once the webhook lands.
+    trimStartSeconds: z.number().min(0).default(0),
+    trimEndSeconds: z.number().positive().optional(),
     // Cloudflare Stream's TUS session needs the byte length up front
     // (`Upload-Length` header) — capped well above any real phone-recorded
     // clip so a crafted request can't claim an absurd size.
@@ -111,6 +121,33 @@ export const uploadMetadataSchema = z
         message: "Monetise is for long-form videos — Shorts earn through the creator pool instead",
         path: ["publishMode"],
       });
+    }
+
+    if (data.trimStartSeconds >= data.durationSeconds) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Trim start must be before the video ends",
+        path: ["trimStartSeconds"],
+      });
+    }
+    if (data.trimEndSeconds !== undefined) {
+      if (data.trimEndSeconds <= data.trimStartSeconds) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Trim end must be after trim start",
+          path: ["trimEndSeconds"],
+        });
+      }
+      // Small tolerance for float drift between the client-probed duration
+      // and the same file's re-measured duration a moment later — not a
+      // real boundary, just rounding.
+      if (data.trimEndSeconds > data.durationSeconds + 0.5) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Trim end can't exceed the video's length",
+          path: ["trimEndSeconds"],
+        });
+      }
     }
   });
 

@@ -140,3 +140,17 @@ it("still shows the Follow pill on someone else's short", () => {
   setup();
   expect(screen.getByLabelText("Follow @creator")).toBeInTheDocument();
 });
+
+it("seeds a trimmed short at its trim start and loops it within bounds instead of the whole file", () => {
+  const trimmedShorts = [{ ...shorts[0], trimStartSeconds: 10, trimEndSeconds: 50 }, shorts[1]];
+  const { container } = render(<ShortsFeed shorts={trimmedShorts} />);
+  const video = container.querySelector("video")!;
+  Object.defineProperty(video, "duration", { configurable: true, value: 120 });
+  Object.defineProperty(video, "readyState", { configurable: true, value: 4 });
+  fireEvent.loadedMetadata(video);
+  expect(video.loop).toBe(false);
+  expect(video.currentTime).toBe(10);
+  video.currentTime = 50;
+  fireEvent.timeUpdate(video);
+  expect(video.currentTime).toBe(10);
+});

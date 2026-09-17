@@ -35,7 +35,19 @@ vi.mock("@/lib/cloudflare-stream", async (importOriginal) => {
   };
 });
 
-let videoRow: { content_type: string; publish_mode: string } = { content_type: "film", publish_mode: "monetise" };
+let videoRow: {
+  content_type: string;
+  publish_mode: string;
+  trim_start_seconds: number;
+  trim_end_seconds: number | null;
+  poster_url: string | null;
+} = {
+  content_type: "film",
+  publish_mode: "monetise",
+  trim_start_seconds: 0,
+  trim_end_seconds: null,
+  poster_url: null,
+};
 const updateSpy = vi.fn();
 
 vi.mock("@supabase/supabase-js", () => ({
@@ -43,12 +55,19 @@ vi.mock("@supabase/supabase-js", () => ({
     from: (table: string) => {
       if (table !== "videos") throw new Error(`unexpected table: ${table}`);
       return {
+        // The route's own pre-update read (clamping a stale trim window
+        // against the real duration) — same videoRow fixture, not a
+        // separate table.
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: videoRow, error: null }) }) }),
         update: (values: Record<string, unknown>) => {
           updateSpy(values);
           // Applying the forced fields to videoRow lets assertions read
           // back "what the row would end up as" without a real database.
           if (typeof values.content_type === "string") videoRow.content_type = values.content_type;
           if (typeof values.publish_mode === "string") videoRow.publish_mode = values.publish_mode;
+          if ("trim_start_seconds" in values) videoRow.trim_start_seconds = values.trim_start_seconds as number;
+          if ("trim_end_seconds" in values) videoRow.trim_end_seconds = values.trim_end_seconds as number | null;
+          if ("poster_url" in values) videoRow.poster_url = values.poster_url as string | null;
           return { eq: async () => ({ error: null }) };
         },
       };
@@ -71,7 +90,13 @@ function signedRequest(body: string) {
 }
 
 beforeEach(() => {
-  videoRow = { content_type: "film", publish_mode: "monetise" };
+  videoRow = {
+    content_type: "film",
+    publish_mode: "monetise",
+    trim_start_seconds: 0,
+    trim_end_seconds: null,
+    poster_url: null,
+  };
   updateSpy.mockClear();
   vi.stubEnv("CLOUDFLARE_STREAM_WEBHOOK_SECRET", SECRET);
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
@@ -111,7 +136,13 @@ describe("POST /api/webhooks/stream", () => {
     expect(update.content_type).toBe("short");
     expect(update.publish_mode).toBe("post");
     expect(update.duration_seconds).toBe(42);
-    expect(videoRow).toEqual({ content_type: "short", publish_mode: "post" });
+    expect(videoRow).toEqual({
+      content_type: "short",
+      publish_mode: "post",
+      trim_start_seconds: 0,
+      trim_end_seconds: null,
+      poster_url: streamDetails.thumbnailUrl,
+    });
   });
 
   it.each([359.9, 360, 360.1])("uses the authoritative six-minute boundary at %s seconds", async (durationSeconds) => {
@@ -130,17 +161,88 @@ describe("POST /api/webhooks/stream", () => {
     const update = updateSpy.mock.calls[0][0];
     expect(update.content_type).toBeUndefined();
     expect(update.publish_mode).toBeUndefined();
-    // The row (inserted as film/monetise) is left exactly as it was.
-    expect(videoRow).toEqual({ content_type: "film", publish_mode: "monetise" });
+    // The row (inserted as film/monetise) is left exactly as it was, except
+    // poster_url — this test's videoRow had none set, so Cloudflare's own
+    // auto-thumbnail applies.
+    expect(videoRow).toEqual({
+      content_type: "film",
+      publish_mode: "monetise",
+      trim_start_seconds: 0,
+      trim_end_seconds: null,
+      poster_url: streamDetails.thumbnailUrl,
+    });
   });
 
   it("forces short/post even for a video inserted as a short-but-not-post edge case", async () => {
-    videoRow = { content_type: "film", publish_mode: "promote" };
+    videoRow = {
+      content_type: "film",
+      publish_mode: "promote",
+      trim_start_seconds: 0,
+      trim_end_seconds: null,
+      poster_url: null,
+    };
     streamDetails = { ...streamDetails, durationSeconds: 10 };
 
     await POST(signedRequest(JSON.stringify({ uid: "stream-uid-1" })));
 
-    expect(videoRow).toEqual({ content_type: "short", publish_mode: "post" });
+    expect(videoRow).toEqual({
+      content_type: "short",
+      publish_mode: "post",
+      trim_start_seconds: 0,
+      trim_end_seconds: null,
+      poster_url: streamDetails.thumbnailUrl,
+    });
+  });
+
+  describe("poster_url — a client-captured cover must survive this webhook", () => {
+    it("sets Cloudflare's own auto-thumbnail when no cover was captured", async () => {
+      videoRow = { content_type: "film", publish_mode: "post", trim_start_seconds: 0, trim_end_seconds: null, poster_url: null };
+      const res = await POST(signedRequest(JSON.stringify({ uid: "stream-uid-1" })));
+      expect(res.status).toBe(200);
+      expect(updateSpy.mock.calls[0][0].poster_url).toBe(streamDetails.thumbnailUrl);
+    });
+
+    it("never overwrites a poster_url a creator already captured before encoding finished", async () => {
+      videoRow = {
+        content_type: "film",
+        publish_mode: "post",
+        trim_start_seconds: 0,
+        trim_end_seconds: null,
+        poster_url: "https://r2.example/covers/creator-captured.jpg",
+      };
+      const res = await POST(signedRequest(JSON.stringify({ uid: "stream-uid-1" })));
+      expect(res.status).toBe(200);
+      expect(updateSpy.mock.calls[0][0].poster_url).toBeUndefined();
+      expect(videoRow.poster_url).toBe("https://r2.example/covers/creator-captured.jpg");
+    });
+  });
+
+  it("resets a stale trim window when it no longer fits the real (webhook-authoritative) duration", async () => {
+    videoRow = { content_type: "film", publish_mode: "post", trim_start_seconds: 50, trim_end_seconds: 55, poster_url: null };
+    // The client-probed duration this trim was set against was longer than
+    // what Cloudflare actually measured — trim_start_seconds (50) is now
+    // past the real duration, which would make the video unplayable rather
+    // than just imprecisely trimmed.
+    streamDetails = { ...streamDetails, durationSeconds: 42 };
+
+    const res = await POST(signedRequest(JSON.stringify({ uid: "stream-uid-1" })));
+
+    expect(res.status).toBe(200);
+    const update = updateSpy.mock.calls[0][0];
+    expect(update.trim_start_seconds).toBe(0);
+    expect(update.trim_end_seconds).toBeNull();
+  });
+
+  it("leaves a trim window untouched when it still fits the real duration", async () => {
+    videoRow = { content_type: "film", publish_mode: "post", trim_start_seconds: 5, trim_end_seconds: 30, poster_url: null };
+    streamDetails = { ...streamDetails, durationSeconds: 600 };
+
+    const res = await POST(signedRequest(JSON.stringify({ uid: "stream-uid-1" })));
+
+    expect(res.status).toBe(200);
+    const update = updateSpy.mock.calls[0][0];
+    expect(update.trim_start_seconds).toBeUndefined();
+    expect(update.trim_end_seconds).toBeUndefined();
   });
 
   it("marks the video failed when Stream reports an error state", async () => {

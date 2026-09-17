@@ -19,6 +19,7 @@ import { playWithMutedFallback } from "@/lib/audio";
 import { recordVideoView } from "@/lib/video-views";
 import { useCastControl } from "@/lib/cast";
 import { isTypingTarget } from "@/lib/is-typing-target";
+import { getTrimBounds } from "@/lib/video-trim";
 import { CHROME_FADE_TRANSITION, FOCUS_PULL_TRANSITION } from "@/lib/motion";
 import { CHROME_TAP_SCALE } from "@/lib/chrome";
 import type { Video } from "@/lib/types";
@@ -68,6 +69,9 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
   const currentPlayback = activeShort ? playback[activeShort.id] : null;
   const duration = currentPlayback?.duration ?? 0;
   const position = Math.min(currentPlayback?.time ?? 0, duration);
+  const activeTrim = activeShort ? getTrimBounds(activeShort) : null;
+  const displayDuration = activeTrim?.isTrimmed ? Math.max(0, activeTrim.end - activeTrim.start) : duration;
+  const displayPosition = activeTrim?.isTrimmed ? Math.max(0, position - activeTrim.start) : position;
   const setScrubbing = usePlayerStore((s) => s.setScrubbing);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
@@ -266,6 +270,7 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
       {shorts.map((short, index) => {
         const active = index === activeIndex;
         const withinRenderWindow = Math.abs(index - activeIndex) <= RENDER_WINDOW;
+        const trim = getTrimBounds(short);
 
         return (
           <div
@@ -305,8 +310,20 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
                   ref={(el) => {
                     videoRefs.current[index] = el;
                   }}
-                  onTimeUpdate={(e) => syncPlayback(e.currentTarget, short.id, active)}
-                  onLoadedMetadata={(e) => syncPlayback(e.currentTarget, short.id, active)}
+                  onTimeUpdate={(e) => {
+                    // Trimmed shorts don't use the native `loop` attribute
+                    // (see below) — this is what actually loops them within
+                    // [trim.start, trim.end] instead of the whole file, same
+                    // approach as VideoCard.tsx's main-feed player.
+                    if (trim.isTrimmed && e.currentTarget.currentTime >= trim.end) {
+                      e.currentTarget.currentTime = trim.start;
+                    }
+                    syncPlayback(e.currentTarget, short.id, active);
+                  }}
+                  onLoadedMetadata={(e) => {
+                    if (trim.start > 0) e.currentTarget.currentTime = trim.start;
+                    syncPlayback(e.currentTarget, short.id, active);
+                  }}
                   onDurationChange={(e) => syncPlayback(e.currentTarget, short.id, active)}
                   onPlay={(e) => syncPlayback(e.currentTarget, short.id, active)}
                   onPause={(e) => syncPlayback(e.currentTarget, short.id, active)}
@@ -314,7 +331,7 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
                   poster={short.posterUrl}
                   className="w-full h-full object-contain"
                   muted={muted}
-                  loop
+                  loop={!trim.isTrimmed}
                   playsInline
                 />
               ) : (
@@ -453,13 +470,14 @@ export function ShortsFeed({ shorts, initialId }: { shorts: Video[]; initialId?:
           <PlayerTransport
             hidden={directorMode}
             paused={currentPlayback?.paused !== false}
-            time={position}
-            duration={duration}
+            time={displayPosition}
+            duration={displayDuration}
             onToggle={togglePlayback}
             onSeek={(seconds) => {
               const video = videoRefs.current[activeIndex];
               if (!video) return;
-              video.currentTime = seconds;
+              const absolute = activeTrim?.isTrimmed ? activeTrim.start + seconds : seconds;
+              video.currentTime = absolute;
               syncPlayback(video, shorts[activeIndex].id, true);
             }}
             className="fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+6rem)] z-40 sm:inset-x-6 [@media(orientation:landscape)_and_(max-height:500px)]:bottom-3 [@media(orientation:landscape)_and_(max-height:500px)]:left-24"

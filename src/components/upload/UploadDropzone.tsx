@@ -23,7 +23,8 @@ import { useCurrentUserStore } from "@/store/current-user-store";
 import { createClient } from "@/lib/supabase/client";
 import { UploadRejection } from "./UploadRejection";
 import { CameraCapture } from "./CameraCapture";
-import { ThumbnailPicker } from "./ThumbnailPicker";
+import { VideoTrimmer } from "./VideoTrimmer";
+import { CoverFramePicker } from "./CoverFramePicker";
 import { ContentTypeSelect } from "./tags/ContentTypeSelect";
 import { TagMultiSelect } from "./tags/TagMultiSelect";
 import { TagDropdownMultiSelect } from "./tags/TagDropdownMultiSelect";
@@ -42,7 +43,6 @@ type Status =
   | "uploading"
   | "processing"
   | "failed"
-  | "thumbnail"
   | "published";
 
 // `file.type` is frequently empty or unreliable on mobile — Android content
@@ -71,6 +71,12 @@ type Probe = {
 };
 
 type AppliedFix = { type: "rotate" } | { type: "crop"; target: AspectRatioDef } | null;
+
+type Pct = { xPct: number; yPct: number };
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
 
 // A few different film-lab terms for the same underlying step (Stream
 // transcoding the upload to adaptive HLS) — one picked per upload rather
@@ -109,10 +115,34 @@ export function UploadDropzone() {
   // Same reasoning as isLongform above — a lightweight toggle, not draft
   // state worth persisting across reloads.
   const [publishMode, setPublishMode] = useState<"post" | "promote" | "monetise">("post");
+  // Not draft state either, same reasoning as isLongform/publishMode above
+  // — only meaningful once a real file is probed, reset with everything
+  // else in reset(). Seeded to the full [0, duration] range the moment
+  // that duration is known (analyzeFile's onloadedmetadata below).
+  const [trimStart, setTrimStart] = useState(0);
+  const [trimEnd, setTrimEnd] = useState(0);
+  const previewVideoRef = useRef<HTMLVideoElement>(null);
+  const previewContainerRef = useRef<HTMLDivElement>(null);
+  // Cover frame — captured client-side from the same local file/preview as
+  // Trim (src/lib/thumbnail-canvas.ts), so it can live on this same
+  // pre-upload screen instead of a separate step after Stream processing.
+  // coverBlob is optional: if the creator never taps "Capture cover",
+  // publish() simply never calls /api/uploads/thumbnail, and Cloudflare's
+  // own auto-generated poster applies once the video is ready — same
+  // graceful fallback the old post-processing picker's "Skip for now" gave.
+  const [coverTime, setCoverTime] = useState(0);
+  const [coverBlob, setCoverBlob] = useState<Blob | null>(null);
+  // Bumped on reset() to remount CoverFramePicker, clearing its own
+  // internal captured-preview state along with everything reset() already
+  // clears here.
+  const [coverResetKey, setCoverResetKey] = useState(0);
+  const [textEnabled, setTextEnabled] = useState(false);
+  const [text, setText] = useState("");
+  const [textPos, setTextPos] = useState<Pct>({ xPct: 0.5, yPct: 0.82 });
+  const textDrag = useRef<{ start: { x: number; y: number }; startPos: Pct } | null>(null);
   const [isApprovedBusiness, setIsApprovedBusiness] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [videoId, setVideoId] = useState<string | null>(null);
-  const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   // Inline, stays on the form — unlike errorMessage above, which only ever
   // shows on the full-screen status==="failed" view for a real upload/
@@ -200,6 +230,9 @@ export function UploadDropzone() {
       setFile(pickedFile);
       setProbe({ width, height, duration, url });
       setEffectiveDims({ width, height });
+      setTrimStart(0);
+      setTrimEnd(duration);
+      setCoverTime(Math.min(duration, duration / 2));
       const result = checkUpload(width, height);
       setCheck(result);
       setStatus(result.ok ? "valid" : "rejected");
@@ -229,11 +262,41 @@ export function UploadDropzone() {
     setFileName("");
     setUploadProgress(0);
     setVideoId(null);
-    setPosterUrl(null);
     setErrorMessage("");
     setIsLongform(false);
     setPublishMode("post");
+    setTrimStart(0);
+    setTrimEnd(0);
+    setCoverTime(0);
+    setCoverBlob(null);
+    setCoverResetKey((k) => k + 1);
+    setTextEnabled(false);
+    setText("");
+    setTextPos({ xPct: 0.5, yPct: 0.82 });
     if (inputRef.current) inputRef.current.value = "";
+  }
+
+  // Draggable text-overlay position over the preview video, ported from the
+  // old post-processing ThumbnailPicker's identical drag math — now
+  // anchored to previewContainerRef instead of a frame <img>, since the
+  // capture source is the local preview <video> itself.
+  function handleTextPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    textDrag.current = { start: { x: e.clientX, y: e.clientY }, startPos: textPos };
+  }
+  function handleTextPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!textDrag.current || !previewContainerRef.current) return;
+    const rect = previewContainerRef.current.getBoundingClientRect();
+    const dx = (e.clientX - textDrag.current.start.x) / rect.width;
+    const dy = (e.clientY - textDrag.current.start.y) / rect.height;
+    setTextPos({
+      xPct: clamp(textDrag.current.startPos.xPct + dx, 0.05, 0.95),
+      yPct: clamp(textDrag.current.startPos.yPct + dy, 0.08, 0.92),
+    });
+  }
+  function handleTextPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    if (textDrag.current) e.currentTarget.releasePointerCapture(e.pointerId);
+    textDrag.current = null;
   }
 
   function handleAcceptRotate(width: number, height: number) {
@@ -256,7 +319,7 @@ export function UploadDropzone() {
     pollIntervalRef.current = setInterval(async () => {
       const { data, error } = await supabase
         .from("videos")
-        .select("processing_status, poster_url")
+        .select("processing_status")
         .eq("id", id)
         .single();
 
@@ -264,8 +327,10 @@ export function UploadDropzone() {
 
       if (data.processing_status === "ready") {
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-        setPosterUrl(data.poster_url);
-        setStatus("thumbnail");
+        // Cover frame (if any) was already captured and submitted at
+        // publish time — nothing left to pick here now that it's ready.
+        clearDraft();
+        setStatus("published");
       } else if (data.processing_status === "failed") {
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
         setErrorMessage("Cloudflare Stream couldn't encode this Frame.");
@@ -316,6 +381,8 @@ export function UploadDropzone() {
           height: effectiveDims.height,
           durationSeconds: probe?.duration ?? 0,
           fileSizeBytes: file.size,
+          trimStartSeconds: trimStart,
+          trimEndSeconds: trimEnd,
         }),
       });
 
@@ -333,6 +400,19 @@ export function UploadDropzone() {
       setVideoId(newVideoId);
       setStatus("uploading");
       setUploadProgress(0);
+
+      // Fire-and-forget, same tolerance this route already has for the
+      // campaigns insert (src/app/api/uploads/route.ts): a captured cover
+      // is a nice-to-have, not worth failing the whole publish over. The
+      // main video upload below doesn't wait on it either — they run
+      // side by side, same as the reference flow shows a progress bar and
+      // the cover/trim panels present at once rather than sequentially.
+      if (coverBlob) {
+        const coverForm = new FormData();
+        coverForm.append("videoId", newVideoId);
+        coverForm.append("image", coverBlob, "cover.jpg");
+        fetch("/api/uploads/thumbnail", { method: "POST", body: coverForm }).catch(() => {});
+      }
 
       const upload = new TusUpload(file, {
         uploadUrl,
@@ -367,25 +447,6 @@ export function UploadDropzone() {
     setVideoId(null);
     setUploadProgress(0);
     setStatus("valid");
-  }
-
-  if (status === "thumbnail" && videoId && posterUrl) {
-    const finish = () => {
-      clearDraft();
-      setStatus("published");
-    };
-    return (
-      <ThumbnailPicker
-        videoId={videoId}
-        durationSeconds={probe?.duration ?? 0}
-        posterUrl={posterUrl}
-        onDone={(newPosterUrl) => {
-          setPosterUrl(newPosterUrl);
-          finish();
-        }}
-        onSkip={finish}
-      />
-    );
   }
 
   if (status === "published") {
@@ -532,7 +593,7 @@ export function UploadDropzone() {
           <UploadCloud size={22} className="text-primary" />
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Publish a Frame</h1>
-            <p className="mt-1 text-xs text-text-secondary">Preview your video, add details, then choose a cover after processing.</p>
+            <p className="mt-1 text-xs text-text-secondary">Preview your video, trim it, pick a cover, then add the details.</p>
           </div>
         </header>
         <div className="min-w-0 md:sticky md:top-6 md:self-start">
@@ -540,6 +601,7 @@ export function UploadDropzone() {
           {appliedFix?.type === "rotate" && probe ? (
             <div className="relative w-40 h-64 mx-auto overflow-hidden rounded-2xl bg-card border border-border">
               <video
+                ref={previewVideoRef}
                 src={probe.url}
                 controls
                 muted
@@ -549,7 +611,8 @@ export function UploadDropzone() {
             </div>
           ) : (
             <div
-              className="rounded-2xl overflow-hidden bg-card border border-border"
+              ref={previewContainerRef}
+              className="relative rounded-2xl overflow-hidden bg-card border border-border"
               style={{
                 aspectRatio:
                   appliedFix?.type === "crop" && probe
@@ -558,15 +621,66 @@ export function UploadDropzone() {
               }}
             >
               {probe && (
-                <video src={probe.url} className="w-full h-full object-contain" controls muted />
+                <video ref={previewVideoRef} src={probe.url} className="w-full h-full object-contain" controls muted />
+              )}
+              {textEnabled && text.trim() && (
+                <div
+                  onPointerDown={handleTextPointerDown}
+                  onPointerMove={handleTextPointerMove}
+                  onPointerUp={handleTextPointerUp}
+                  className="absolute -translate-x-1/2 -translate-y-1/2 px-3 py-1.5 rounded-md bg-black/55 text-white font-extrabold text-center cursor-grab active:cursor-grabbing select-none touch-none"
+                  style={{ left: `${textPos.xPct * 100}%`, top: `${textPos.yPct * 100}%`, fontSize: "clamp(11px, 3.4vw, 22px)" }}
+                >
+                  {text}
+                </div>
               )}
             </div>
+          )}
+
+          {probe && (
+            <VideoTrimmer
+              durationSeconds={probe.duration}
+              start={trimStart}
+              end={trimEnd}
+              onChange={(s, e) => {
+                setTrimStart(s);
+                setTrimEnd(Math.max(s + 0.01, e));
+                setCoverTime((t) => clamp(t, s, Math.max(s + 0.01, e)));
+              }}
+              onScrub={(seconds) => {
+                if (previewVideoRef.current) previewVideoRef.current.currentTime = seconds;
+              }}
+            />
+          )}
+
+          {/* Cover-frame capture reads the raw, un-rotated local <video> via
+              canvas — for a video queued for server-side rotation, that
+              capture would come out sideways (the rotation only happens
+              during Stream processing), so this is skipped for that one
+              case and Cloudflare's own auto-generated poster applies once
+              ready instead, same graceful fallback as never capturing at
+              all. */}
+          {probe && appliedFix?.type !== "rotate" && (
+            <CoverFramePicker
+              key={coverResetKey}
+              videoRef={previewVideoRef}
+              trimStart={trimStart}
+              trimEnd={trimEnd}
+              time={coverTime}
+              onTimeChange={setCoverTime}
+              textEnabled={textEnabled}
+              onTextEnabledChange={setTextEnabled}
+              text={text}
+              onTextChange={setText}
+              textPos={textPos}
+              onCapture={setCoverBlob}
+            />
           )}
 
           {appliedFix && (
             <p className="text-xs text-primary mt-2">
               {appliedFix.type === "rotate"
-                ? "This Frame will be rotated 90° during processing."
+                ? "This Frame will be rotated 90° during processing — its cover will be picked automatically."
                 : `This video will be cropped to ${appliedFix.target.label} during processing.`}
             </p>
           )}

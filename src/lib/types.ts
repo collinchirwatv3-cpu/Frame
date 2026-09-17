@@ -99,6 +99,14 @@ export type Video = {
    * differently-sourced number. */
   views?: number;
   durationSeconds: number;
+  /** videos.trim_start_seconds/trim_end_seconds — the primary video's own
+   * playback bounds, same mechanism as a Community Clip's (start, end)
+   * pointer (see the Clip type below): no re-encoding, no separate asset,
+   * every player just seeks/loops within these bounds against the same
+   * playbackUrl. trimEndSeconds absent/undefined means "play to the end."
+   * Optional only for mock-data/pre-migration fixtures. */
+  trimStartSeconds?: number;
+  trimEndSeconds?: number;
   /** Real encoded dimensions — the single source of truth for aspect ratio,
    * classification, and player letterbox/pillarbox behavior. */
   width: number;

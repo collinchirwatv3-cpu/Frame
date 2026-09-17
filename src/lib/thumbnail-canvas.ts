@@ -1,11 +1,13 @@
 /**
- * Client-only canvas compositing for the thumbnail editor — burns a text
- * overlay onto a real video frame, producing a single flat JPEG ready to
- * upload. Only invoked when there's actually a text overlay to add; a
- * plain frame pick with no overlay never touches this — it's set
- * server-side straight from Cloudflare Stream's own thumbnail endpoint
- * (see /api/uploads/thumbnail). No arbitrary-image/crop path exists here
- * — every thumbnail traces back to a real frame of the video.
+ * Client-only canvas compositing for the upload flow's cover-frame picker —
+ * captures the LOCAL preview <video>'s current frame (whatever it's
+ * scrubbed to), optionally burning a text overlay on top, producing a
+ * single flat JPEG ready to upload via /api/uploads/thumbnail's image path.
+ * Capturing from the local file (rather than requesting a frame from
+ * Cloudflare Stream after encoding finishes) is what lets cover-frame
+ * selection happen on the same screen as Trim, before the upload even
+ * starts — no arbitrary-image/crop path exists here either way, every
+ * thumbnail still traces back to a real frame of the video.
  */
 
 export type TextOverlay = {
@@ -21,28 +23,13 @@ export type TextOverlay = {
 const OUTPUT_WIDTH = 1280;
 const OUTPUT_HEIGHT = 720;
 
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    // Matters because the source is always a cross-origin Cloudflare
-    // Stream thumbnail URL. If Stream's thumbnail endpoint ever doesn't
-    // send permissive CORS headers, toBlob() below will throw on a
-    // tainted canvas; ThumbnailPicker's confirmFrame surfaces that as an
-    // error suggesting the text overlay be turned off.
-    img.crossOrigin = "anonymous";
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("Could not load the image"));
-    img.src = src;
-  });
-}
-
-function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement, w: number, h: number) {
-  const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+function drawCover(ctx: CanvasRenderingContext2D, video: HTMLVideoElement, w: number, h: number) {
+  const scale = Math.max(w / video.videoWidth, h / video.videoHeight);
   const sw = w / scale;
   const sh = h / scale;
-  const sx = (img.naturalWidth - sw) / 2;
-  const sy = (img.naturalHeight - sh) / 2;
-  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+  const sx = (video.videoWidth - sw) / 2;
+  const sy = (video.videoHeight - sh) / 2;
+  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, w, h);
 }
 
 function drawTextOverlay(ctx: CanvasRenderingContext2D, overlay: TextOverlay, w: number, h: number) {
@@ -70,17 +57,16 @@ function drawTextOverlay(ctx: CanvasRenderingContext2D, overlay: TextOverlay, w:
 }
 
 export async function compositeThumbnail(
-  imageSrc: string,
+  video: HTMLVideoElement,
   options: { text?: TextOverlay }
 ): Promise<Blob> {
-  const img = await loadImage(imageSrc);
   const canvas = document.createElement("canvas");
   canvas.width = OUTPUT_WIDTH;
   canvas.height = OUTPUT_HEIGHT;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas isn't supported in this browser");
 
-  drawCover(ctx, img, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+  drawCover(ctx, video, OUTPUT_WIDTH, OUTPUT_HEIGHT);
 
   if (options.text && options.text.text.trim()) {
     drawTextOverlay(ctx, options.text, OUTPUT_WIDTH, OUTPUT_HEIGHT);
