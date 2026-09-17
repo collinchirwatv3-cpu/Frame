@@ -77,7 +77,9 @@ export function VideoTrimmer({ durationSeconds, start, end, onChange, onScrub }:
         <span className="text-text-secondary">
           IN <span className="tabular-nums text-text font-medium">{formatTimestamp(start)}</span>
         </span>
-        <span className="tabular-nums text-primary font-semibold">{formatTimestamp(end - start)} selected</span>
+        <span className="tabular-nums text-text font-semibold">
+          {formatTimestamp(end - start)} <span className="uppercase text-text-secondary font-medium tracking-wide">selected</span>
+        </span>
         <span className="text-text-secondary">
           OUT <span className="tabular-nums text-text font-medium">{formatTimestamp(end)}</span>
         </span>

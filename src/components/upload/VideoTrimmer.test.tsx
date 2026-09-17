@@ -26,7 +26,7 @@ function stubTrackRect() {
 describe("VideoTrimmer", () => {
   it("shows the IN/selected-duration/OUT readout and duration", () => {
     const { container } = render(<VideoTrimmer durationSeconds={60} start={0} end={60} onChange={vi.fn()} />);
-    expect(screen.getByText("1:00 selected")).toBeInTheDocument();
+    expect(container.textContent).toMatch(/1:00\s*selected/i);
     expect(container.textContent).toMatch(/IN\s*0:00/);
     expect(container.textContent).toMatch(/OUT\s*1:00/);
     expect(screen.getByRole("slider", { name: "Trim start" })).toHaveAttribute("aria-valuenow", "0");
