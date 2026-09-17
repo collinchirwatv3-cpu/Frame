@@ -24,11 +24,21 @@ function stubTrackRect() {
 }
 
 describe("VideoTrimmer", () => {
-  it("shows the full trim window and duration", () => {
-    render(<VideoTrimmer durationSeconds={60} start={0} end={60} onChange={vi.fn()} />);
-    expect(screen.getByText("0:00 – 1:00")).toBeInTheDocument();
+  it("shows the IN/selected-duration/OUT readout and duration", () => {
+    const { container } = render(<VideoTrimmer durationSeconds={60} start={0} end={60} onChange={vi.fn()} />);
+    expect(screen.getByText("1:00 selected")).toBeInTheDocument();
+    expect(container.textContent).toMatch(/IN\s*0:00/);
+    expect(container.textContent).toMatch(/OUT\s*1:00/);
     expect(screen.getByRole("slider", { name: "Trim start" })).toHaveAttribute("aria-valuenow", "0");
     expect(screen.getByRole("slider", { name: "Trim end" })).toHaveAttribute("aria-valuenow", "60");
+  });
+
+  it("shows ruler tick labels scaled to the video's duration", () => {
+    render(<VideoTrimmer durationSeconds={1200} start={0} end={1200} onChange={vi.fn()} />);
+    // pickTicks(1200) -> [0, 300, 600, 900] -> 0:00, 5:00, 10:00, 15:00
+    expect(screen.getByText("5:00")).toBeInTheDocument();
+    expect(screen.getByText("10:00")).toBeInTheDocument();
+    expect(screen.getByText("15:00")).toBeInTheDocument();
   });
 
   it("dragging the start handle moves it but never past the end handle's minimum gap", () => {

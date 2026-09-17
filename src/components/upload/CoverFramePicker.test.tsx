@@ -60,10 +60,20 @@ beforeEach(() => {
 
 describe("CoverFramePicker", () => {
   it("shows the current position bounded to the trim window", () => {
-    setup({ trimStart: 10, trimEnd: 60, time: 30 });
+    const { container } = setup({ trimStart: 10, trimEnd: 60, time: 30 });
     expect(screen.getByRole("slider", { name: "Cover frame position" })).toHaveAttribute("aria-valuenow", "30");
-    expect(screen.getByText("0:10")).toBeInTheDocument();
-    expect(screen.getByText("1:00")).toBeInTheDocument();
+    expect(screen.getAllByText("0:10").length).toBeGreaterThan(0);
+    expect(container.textContent).toContain("1:00");
+  });
+
+  it("shows ruler tick labels scaled to the trim window, not the full clip", () => {
+    // trim window is 1200s wide (min 0, max 1200) -> pickTicks(1200) -> 5:00/10:00/15:00.
+    // time is deliberately off any tick (650s), so the "current position"
+    // readout next to Capture cover can't collide with a tick label.
+    setup({ trimStart: 0, trimEnd: 1200, time: 650 });
+    expect(screen.getByText("5:00")).toBeInTheDocument();
+    expect(screen.getByText("10:00")).toBeInTheDocument();
+    expect(screen.getByText("15:00")).toBeInTheDocument();
   });
 
   it("clamps a time outside the trim window into range for display", () => {

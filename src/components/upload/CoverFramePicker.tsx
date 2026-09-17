@@ -1,9 +1,10 @@
 "use client";
 
 import { useRef, useState, type RefObject } from "react";
-import { Loader2, Type } from "lucide-react";
+import { ImageIcon, Loader2, Type } from "lucide-react";
 import { formatTimestamp } from "@/lib/utils";
 import { compositeThumbnail } from "@/lib/thumbnail-canvas";
+import { pickTicks, MINOR_TICK_FRACTIONS } from "@/lib/time-ruler";
 
 type Props = {
   /** The shared local preview <video> in UploadDropzone (probe.url) — this
@@ -39,7 +40,9 @@ type Props = {
  * precisely what frame was grabbed. The draggable text-overlay position
  * itself lives one level up (UploadDropzone), anchored over the actual
  * preview video — this component only owns the position track, the
- * text/enabled inputs, and the capture action. */
+ * text/enabled inputs, and the capture action. Green accents (marker,
+ * icon) deliberately distinguish this from Trim's amber — same two-tone
+ * convention the reference uses across its own panels. */
 export function CoverFramePicker({
   videoRef,
   trimStart,
@@ -62,6 +65,7 @@ export function CoverFramePicker({
   const max = Math.max(trimStart, trimEnd, min + 0.01);
   const clampedTime = Math.min(Math.max(time, min), max);
   const positionFraction = (clampedTime - min) / (max - min);
+  const ticks = pickTicks(max - min);
 
   function fractionFromClientX(clientX: number): number {
     const track = trackRef.current;
@@ -108,9 +112,21 @@ export function CoverFramePicker({
 
   return (
     <div className="mt-4 rounded-2xl border border-border bg-card/50 px-4 py-3">
-      <div className="flex items-center justify-between text-xs mb-2">
-        <span className="font-medium">Cover frame</span>
-        <output className="tabular-nums text-text-secondary">{formatTimestamp(clampedTime)}</output>
+      <div className="flex items-center gap-1.5 text-xs font-medium mb-2.5">
+        <ImageIcon size={13} className="text-emerald-400" />
+        Cover frame
+      </div>
+
+      <div className="relative h-3 mb-1 text-[10px] text-text-secondary select-none" aria-hidden="true">
+        {ticks.map((t) => (
+          <span
+            key={t}
+            className="absolute -translate-x-1/2 tabular-nums first:translate-x-0"
+            style={{ left: `${(t / Math.max(max - min, 0.01)) * 100}%` }}
+          >
+            {formatTimestamp(min + t)}
+          </span>
+        ))}
       </div>
 
       <div
@@ -119,9 +135,13 @@ export function CoverFramePicker({
         onPointerMove={handlePointerMove}
         className="relative h-8 flex items-center touch-none cursor-pointer"
       >
-        <div className="absolute inset-x-0 h-1.5 rounded-full bg-bg" />
+        <div className="absolute inset-x-0 h-2 rounded-full bg-bg overflow-hidden flex items-center justify-between px-px" aria-hidden="true">
+          {MINOR_TICK_FRACTIONS.map((f) => (
+            <span key={f} className="w-px h-1.5 bg-border shrink-0" />
+          ))}
+        </div>
         <div
-          className="absolute w-6 h-6 rounded-full bg-accent border-2 border-primary -translate-x-1/2 cursor-grab active:cursor-grabbing touch-none"
+          className="absolute w-1.5 h-8 rounded-full bg-emerald-400 -translate-x-1/2 cursor-grab active:cursor-grabbing touch-none"
           style={{ left: `${positionFraction * 100}%` }}
           role="slider"
           aria-label="Cover frame position"
@@ -134,6 +154,19 @@ export function CoverFramePicker({
       <div className="flex justify-between text-[11px] tabular-nums text-text-secondary mt-1">
         <span>{formatTimestamp(min)}</span>
         <span>{formatTimestamp(max)}</span>
+      </div>
+
+      <div className="flex items-center gap-2 mt-3">
+        <button
+          type="button"
+          onClick={handleCapture}
+          disabled={capturing}
+          className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-full border border-emerald-400/60 text-emerald-400 text-xs font-semibold disabled:opacity-70"
+        >
+          {capturing && <Loader2 size={13} className="animate-spin" />}
+          {capturing ? "Capturing…" : "Capture cover"}
+        </button>
+        <output className="tabular-nums text-xs text-text-secondary">{formatTimestamp(clampedTime)}</output>
       </div>
 
       <div className="flex items-center gap-2 mt-3">
@@ -156,15 +189,6 @@ export function CoverFramePicker({
             className="flex-1 min-w-0 bg-card border border-border rounded-full px-4 py-2 text-xs outline-none focus:border-primary transition-colors"
           />
         )}
-        <button
-          type="button"
-          onClick={handleCapture}
-          disabled={capturing}
-          className="ml-auto shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-primary text-bg text-xs font-semibold disabled:opacity-70"
-        >
-          {capturing && <Loader2 size={13} className="animate-spin" />}
-          {capturing ? "Capturing…" : "Capture cover"}
-        </button>
       </div>
 
       {capturedUrl && (

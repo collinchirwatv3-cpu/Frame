@@ -1,7 +1,9 @@
 "use client";
 
 import { useRef } from "react";
+import { Scissors } from "lucide-react";
 import { formatTimestamp } from "@/lib/utils";
+import { pickTicks, MINOR_TICK_FRACTIONS } from "@/lib/time-ruler";
 
 const MIN_TRIM_SECONDS = 1;
 
@@ -21,14 +23,15 @@ type Props = {
  * (pointer capture + getBoundingClientRect fraction), but bounds what the
  * *published* video itself plays back (src/lib/video-trim.ts), not a
  * separate viewer-created clip. No dedicated playhead here: the caller's
- * own preview <video> (already visible above this, with native controls)
- * doubles as the scrub preview via onScrub. */
+ * own preview <video> (already visible above this) doubles as the scrub
+ * preview via onScrub. */
 export function VideoTrimmer({ durationSeconds, start, end, onChange, onScrub }: Props) {
   const trackRef = useRef<HTMLDivElement>(null);
   const duration = Math.max(durationSeconds, 0.01);
   const startFraction = start / duration;
   const endFraction = end / duration;
   const minGapFraction = Math.min(MIN_TRIM_SECONDS / duration, 1);
+  const ticks = pickTicks(durationSeconds);
 
   function fractionFromClientX(clientX: number): number {
     const track = trackRef.current;
@@ -65,22 +68,49 @@ export function VideoTrimmer({ durationSeconds, start, end, onChange, onScrub }:
 
   return (
     <div className="mt-4 rounded-2xl border border-border bg-card/50 px-4 py-3">
-      <div className="flex items-center justify-between text-xs mb-2">
-        <span className="font-medium">Trim</span>
-        <output className="tabular-nums text-text-secondary">
-          {formatTimestamp(start)} – {formatTimestamp(end)}
-        </output>
+      <div className="flex items-center gap-1.5 text-xs font-medium mb-2.5">
+        <Scissors size={13} className="text-primary" />
+        Trim
       </div>
+
+      <div className="flex items-center justify-between text-[11px] mb-2">
+        <span className="text-text-secondary">
+          IN <span className="tabular-nums text-text font-medium">{formatTimestamp(start)}</span>
+        </span>
+        <span className="tabular-nums text-primary font-semibold">{formatTimestamp(end - start)} selected</span>
+        <span className="text-text-secondary">
+          OUT <span className="tabular-nums text-text font-medium">{formatTimestamp(end)}</span>
+        </span>
+      </div>
+
+      {/* Labeled ruler ticks (nice round numbers, scaled to duration) —
+          purely a readout, not interactive. */}
+      <div className="relative h-3 mb-1 text-[10px] text-text-secondary select-none" aria-hidden="true">
+        {ticks.map((t) => (
+          <span
+            key={t}
+            className="absolute -translate-x-1/2 tabular-nums first:translate-x-0"
+            style={{ left: `${(t / duration) * 100}%` }}
+          >
+            {formatTimestamp(t)}
+          </span>
+        ))}
+      </div>
+
       <div ref={trackRef} className="relative h-8 flex items-center touch-none">
-        <div className="absolute inset-x-0 h-1.5 rounded-full bg-bg" />
+        <div className="absolute inset-x-0 h-2 rounded-full bg-bg overflow-hidden flex items-center justify-between px-px" aria-hidden="true">
+          {MINOR_TICK_FRACTIONS.map((f) => (
+            <span key={f} className="w-px h-1.5 bg-border shrink-0" />
+          ))}
+        </div>
         <div
-          className="absolute h-1.5 rounded-full bg-primary"
+          className="absolute h-2 rounded-full bg-primary/30"
           style={{ left: `${startFraction * 100}%`, right: `${(1 - endFraction) * 100}%` }}
         />
         <div
           onPointerDown={handlePointerDown}
           onPointerMove={(e) => e.buttons === 1 && handleStartMove(e)}
-          className="absolute w-6 h-6 rounded-full bg-accent border-2 border-primary -translate-x-1/2 cursor-grab active:cursor-grabbing touch-none"
+          className="absolute w-1.5 h-8 rounded-full bg-primary -translate-x-1/2 cursor-grab active:cursor-grabbing touch-none"
           style={{ left: `${startFraction * 100}%` }}
           role="slider"
           aria-label="Trim start"
@@ -92,7 +122,7 @@ export function VideoTrimmer({ durationSeconds, start, end, onChange, onScrub }:
         <div
           onPointerDown={handlePointerDown}
           onPointerMove={(e) => e.buttons === 1 && handleEndMove(e)}
-          className="absolute w-6 h-6 rounded-full bg-accent border-2 border-primary -translate-x-1/2 cursor-grab active:cursor-grabbing touch-none"
+          className="absolute w-1.5 h-8 rounded-full bg-primary -translate-x-1/2 cursor-grab active:cursor-grabbing touch-none"
           style={{ left: `${endFraction * 100}%` }}
           role="slider"
           aria-label="Trim end"

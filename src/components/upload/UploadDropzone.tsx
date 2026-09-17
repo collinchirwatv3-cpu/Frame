@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   Film,
   Loader2,
+  Play,
   RectangleHorizontal,
   UploadCloud,
   Video,
@@ -123,6 +124,10 @@ export function UploadDropzone() {
   const [trimEnd, setTrimEnd] = useState(0);
   const previewVideoRef = useRef<HTMLVideoElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
+  // Minimal custom play/pause (no native scrubber/volume/fullscreen chrome)
+  // — dragging the Trim/Cover frame tracks already seeks this same video,
+  // so the only other control it needs is play/pause to preview normally.
+  const [previewPlaying, setPreviewPlaying] = useState(false);
   // Cover frame — captured client-side from the same local file/preview as
   // Trim (src/lib/thumbnail-canvas.ts), so it can live on this same
   // pre-upload screen instead of a separate step after Stream processing.
@@ -297,6 +302,13 @@ export function UploadDropzone() {
   function handleTextPointerUp(e: React.PointerEvent<HTMLDivElement>) {
     if (textDrag.current) e.currentTarget.releasePointerCapture(e.pointerId);
     textDrag.current = null;
+  }
+
+  function togglePreviewPlayback() {
+    const el = previewVideoRef.current;
+    if (!el) return;
+    if (el.paused) el.play().catch(() => {});
+    else el.pause();
   }
 
   function handleAcceptRotate(width: number, height: number) {
@@ -603,11 +615,26 @@ export function UploadDropzone() {
               <video
                 ref={previewVideoRef}
                 src={probe.url}
-                controls
                 muted
-                className="absolute top-1/2 left-1/2 origin-center object-contain"
+                playsInline
+                onClick={togglePreviewPlayback}
+                onPlay={() => setPreviewPlaying(true)}
+                onPause={() => setPreviewPlaying(false)}
+                className="absolute top-1/2 left-1/2 origin-center object-contain cursor-pointer"
                 style={{ width: 256, height: 160, transform: "translate(-50%, -50%) rotate(90deg)" }}
               />
+              {!previewPlaying && (
+                <button
+                  type="button"
+                  onClick={togglePreviewPlayback}
+                  aria-label="Play preview"
+                  className="absolute inset-0 flex items-center justify-center"
+                >
+                  <span className="w-14 h-14 rounded-full bg-black/50 flex items-center justify-center">
+                    <Play size={24} className="text-white translate-x-0.5" fill="white" />
+                  </span>
+                </button>
+              )}
             </div>
           ) : (
             <div
@@ -621,7 +648,28 @@ export function UploadDropzone() {
               }}
             >
               {probe && (
-                <video ref={previewVideoRef} src={probe.url} className="w-full h-full object-contain" controls muted />
+                <video
+                  ref={previewVideoRef}
+                  src={probe.url}
+                  muted
+                  playsInline
+                  onClick={togglePreviewPlayback}
+                  onPlay={() => setPreviewPlaying(true)}
+                  onPause={() => setPreviewPlaying(false)}
+                  className="w-full h-full object-contain cursor-pointer"
+                />
+              )}
+              {!previewPlaying && (
+                <button
+                  type="button"
+                  onClick={togglePreviewPlayback}
+                  aria-label="Play preview"
+                  className="absolute inset-0 flex items-center justify-center"
+                >
+                  <span className="w-16 h-16 rounded-full bg-black/50 flex items-center justify-center">
+                    <Play size={28} className="text-white translate-x-0.5" fill="white" />
+                  </span>
+                </button>
               )}
               {textEnabled && text.trim() && (
                 <div
